@@ -531,70 +531,84 @@
 
 .handbook-page-rich-frame:focus-within { border-color: rgba(53, 213, 114, 0.45); }
 
-/* Grows with the page; drag the corner to make it taller (it scrolls if made shorter than the page). */
-.handbook-page-rich {
+/* Grows with the note; drag the corner to resize it (it scrolls when shorter than the note). */
+.handbook-page-rich-frame .cm-editor {
+  border-radius: inherit;
   min-height: 260px;
-  outline: none;
-  overflow: auto;
-  padding: 14px 16px;
+  overflow: hidden;
   resize: vertical;
 }
+.handbook-page-rich-frame .cm-editor.cm-focused { outline: none; }
+.handbook-page-rich-frame .cm-scroller {
+  flex: 1 1 auto;
+  font-family: inherit;
+  font-size: 13.5px;
+  line-height: 1.55;
+  min-height: 0;
+  overflow: auto;
+}
+.handbook-page-rich-frame .cm-content {
+  caret-color: #e7e5e4;
+  color: rgba(231, 229, 228, 0.92);
+  padding: 14px 16px;
+}
+.handbook-page-rich-frame .cm-line { padding: 0; }
+.handbook-page-rich-frame .cm-placeholder { color: rgba(214, 211, 209, 0.45); }
 
-/* The editor stores heading levels 1-3, which pages render as h2-h4. */
-.handbook-md.handbook-page-rich h1 { color: #fafaf9; font-size: 16px; font-weight: 750; margin-top: 6px; }
-.handbook-md.handbook-page-rich h2 { font-size: 14.5px; font-weight: 700; margin-top: 4px; }
-.handbook-md.handbook-page-rich h3 { color: #fafaf9; font-size: 13.5px; font-weight: 700; margin-top: 0; }
-.handbook-page-rich > :first-child { margin-top: 0; }
-.handbook-page-rich p { margin: 0; }
-.handbook-page-rich li > p { display: inline; }
-.handbook-page-rich code {
+/* Live preview: the same sizes as .handbook-md, where notes are read. */
+.handbook-page-rich-frame .cm-md-h1 { color: #fafaf9; font-size: 16px; font-weight: 750; padding-top: 6px; }
+.handbook-page-rich-frame .cm-md-h2 { color: #fafaf9; font-size: 14.5px; font-weight: 700; padding-top: 4px; }
+.handbook-page-rich-frame .cm-md-h3 { color: #fafaf9; font-size: 13.5px; font-weight: 700; }
+.handbook-page-rich-frame .cm-line:first-child { padding-top: 0; }
+.handbook-page-rich-frame .cm-md-strong { color: #fafaf9; font-weight: 700; }
+.handbook-page-rich-frame .cm-md-em { font-style: italic; }
+.handbook-page-rich-frame .cm-md-code {
   background: rgba(255, 255, 255, 0.08);
-  border-radius: 5px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12.5px;
-  padding: 1px 5px;
+  padding: 1px 0;
 }
-
-.handbook-page-rich ul[data-type="taskList"] { list-style: none; padding-left: 0; }
-.handbook-page-rich ul[data-type="taskList"] > li { align-items: flex-start; display: flex; gap: 8px; }
-.handbook-page-rich ul[data-type="taskList"] > li > label { flex: none; margin-top: 3px; }
-.handbook-page-rich ul[data-type="taskList"] > li > div { flex: 1; min-width: 0; }
-.handbook-page-rich ul[data-type="taskList"] > li[data-checked="true"] > div { opacity: 0.6; text-decoration: line-through; }
-.handbook-page-rich ul[data-type="taskList"] > li input[type="checkbox"] {
-  appearance: none;
+.handbook-page-rich-frame .cm-md-link { color: #4ade80; text-decoration: underline; text-underline-offset: 2px; }
+/* Markers show faded while the cursor is in what they format. */
+.handbook-page-rich-frame .cm-md-mark,
+.handbook-page-rich-frame .cm-md-mark * { color: rgba(214, 211, 209, 0.45); font-weight: 400; text-decoration: none; }
+.handbook-page-rich-frame .cm-md-number,
+.handbook-page-rich-frame .cm-md-bullet { color: rgba(214, 211, 209, 0.7); }
+.handbook-page-rich-frame .cm-md-bullet { display: inline-block; text-align: center; width: 0.7em; }
+.handbook-page-rich-frame .cm-md-done { opacity: 0.6; text-decoration: line-through; }
+.handbook-page-rich-frame .cm-md-check {
   background: transparent center / 11px no-repeat;
   border: 1.5px solid rgba(214, 211, 209, 0.5);
   border-radius: 5px;
+  box-sizing: border-box;
   cursor: pointer;
-  display: block;
+  display: inline-block;
   height: 16px;
-  margin: 0;
+  margin-right: 2px;
+  vertical-align: -3px;
   width: 16px;
 }
-.handbook-page-rich ul[data-type="taskList"] > li input[type="checkbox"]:checked {
+.handbook-page-rich-frame .cm-md-check.is-checked {
   background-color: #16a34a;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
   border-color: #16a34a;
 }
 
-.handbook-page-rich p.is-editor-empty:first-child::before {
-  color: rgba(214, 211, 209, 0.45);
-  content: attr(data-placeholder);
-  float: left;
-  height: 0;
-  pointer-events: none;
-}
-
-.handbook-bubble-menu,
-.handbook-slash-menu {
+/* The "/" menu and the selection toolbar are CodeMirror tooltips. */
+.handbook-page-rich-frame .cm-editor .cm-tooltip.handbook-bubble-menu,
+.handbook-page-rich-frame .cm-editor .cm-tooltip.handbook-slash-menu {
   background: #1c1917;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 10px;
   box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.55);
   color: #e7e5e4;
+  cursor: default;
+  font-family: inherit;
+  margin-bottom: 4px;
+  padding: 4px;
 }
 
-.handbook-bubble-menu { display: flex; gap: 2px; padding: 4px; }
+.handbook-bubble-menu { display: flex; gap: 2px; }
 .handbook-bubble-menu > button,
 .handbook-bubble-link button {
   align-items: center;
@@ -616,28 +630,21 @@
 .handbook-bubble-link button { color: #4ade80; font-size: 12px; font-weight: 650; padding: 0 8px; }
 .handbook-bubble-link button:disabled { cursor: default; opacity: 0.4; }
 
-.handbook-slash-menu {
-  display: flex;
-  flex-direction: column;
-  padding: 4px;
-  position: fixed;
-  width: 240px;
-  z-index: 60;
+.handbook-page-rich-frame .cm-editor .handbook-slash-menu > ul {
+  font-family: inherit;
+  max-height: none;
+  min-width: 240px;
 }
-.handbook-slash-menu button {
+.handbook-page-rich-frame .cm-editor .handbook-slash-menu > ul > li {
   align-items: center;
-  background: transparent;
-  border: 0;
   border-radius: 7px;
-  color: inherit;
-  cursor: pointer;
   display: flex;
   font-size: 13px;
   gap: 10px;
+  line-height: 1.3;
   padding: 6px 8px;
-  text-align: left;
 }
-.handbook-slash-menu button.is-active { background: rgba(255, 255, 255, 0.08); }
+.handbook-page-rich-frame .cm-editor .handbook-slash-menu > ul > li[aria-selected] { background: rgba(255, 255, 255, 0.08); color: inherit; }
 .handbook-slash-icon {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 6px;
@@ -648,8 +655,15 @@
   width: 26px;
 }
 .handbook-slash-icon svg { height: 15px; width: 15px; }
-.handbook-slash-label { flex: 1; }
-.handbook-slash-menu kbd { color: rgba(214, 211, 209, 0.5); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.handbook-slash-menu .cm-completionLabel { flex: 1; }
+.handbook-slash-menu .cm-completionMatchedText { text-decoration: none; }
+.handbook-page-rich-frame .cm-editor .handbook-slash-menu .cm-completionDetail {
+  color: rgba(214, 211, 209, 0.5);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-style: normal;
+  margin-left: 0;
+}
 
 
 @media (prefers-color-scheme: light) {
@@ -724,14 +738,25 @@
 
 @media (prefers-color-scheme: light) {
   .handbook-page-rich-frame { background: rgba(255, 255, 255, 0.7); border-color: rgba(15, 23, 42, 0.12); }
-  .handbook-md.handbook-page-rich h1, .handbook-md.handbook-page-rich h3 { color: #1c1917; }
-  .handbook-page-rich code { background: rgba(15, 23, 42, 0.06); }
-  .handbook-page-rich ul[data-type="taskList"] > li input[type="checkbox"] { border-color: rgba(28, 25, 23, 0.35); }
-  .handbook-page-rich p.is-editor-empty:first-child::before { color: #a8a29e; }
-  .handbook-bubble-menu, .handbook-slash-menu { background: #fff; border-color: rgba(15, 23, 42, 0.12); box-shadow: 0 12px 32px -8px rgba(15, 23, 42, 0.25); color: #1c1917; }
-  .handbook-bubble-menu > button:hover, .handbook-slash-menu button.is-active { background: rgba(15, 23, 42, 0.06); }
+  .handbook-page-rich-frame .cm-content { caret-color: #1c1917; color: #44403c; }
+  .handbook-page-rich-frame .cm-placeholder { color: #a8a29e; }
+  .handbook-page-rich-frame .cm-md-h1,
+  .handbook-page-rich-frame .cm-md-h2,
+  .handbook-page-rich-frame .cm-md-h3,
+  .handbook-page-rich-frame .cm-md-strong { color: #1c1917; }
+  .handbook-page-rich-frame .cm-md-code { background: rgba(15, 23, 42, 0.06); }
+  .handbook-page-rich-frame .cm-md-link { color: #15803d; }
+  .handbook-page-rich-frame .cm-md-mark,
+  .handbook-page-rich-frame .cm-md-mark * { color: #a8a29e; }
+  .handbook-page-rich-frame .cm-md-number,
+  .handbook-page-rich-frame .cm-md-bullet { color: #78716c; }
+  .handbook-page-rich-frame .cm-md-check { border-color: rgba(28, 25, 23, 0.35); }
+  .handbook-page-rich-frame .cm-editor .cm-tooltip.handbook-bubble-menu,
+  .handbook-page-rich-frame .cm-editor .cm-tooltip.handbook-slash-menu { background: #fff; border-color: rgba(15, 23, 42, 0.12); box-shadow: 0 12px 32px -8px rgba(15, 23, 42, 0.25); color: #1c1917; }
+  .handbook-bubble-menu > button:hover,
+  .handbook-page-rich-frame .cm-editor .handbook-slash-menu > ul > li[aria-selected] { background: rgba(15, 23, 42, 0.06); }
   .handbook-bubble-menu > button.is-active { background: #dcfce7; color: #15803d; }
   .handbook-bubble-link button { color: #15803d; }
   .handbook-slash-icon { border-color: rgba(15, 23, 42, 0.12); }
-  .handbook-slash-menu kbd { color: #a8a29e; }
+  .handbook-page-rich-frame .cm-editor .handbook-slash-menu .cm-completionDetail { color: #a8a29e; }
 }

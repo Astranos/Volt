@@ -38,6 +38,14 @@ describe("handbook", () => {
     await expect(t.mutation(api.handbook.addStarterEntries, {})).rejects.toThrow("AUTHENTICATION_REQUIRED");
   });
 
+  test("an entry that fit before the rename still saves", async () => {
+    const t = convexTest(schema, modules);
+    // Exactly 16,000 bytes as a legacy page with a note; "comment" is 3 bytes longer than "note".
+    const legacy = { kind: "page" as const, title: "Page", category: "Procedures", pinned: false, body: "b".repeat(15_000), note: "n".repeat(911) };
+    const id = await asUser(t, "alice").mutation(api.handbook.create, legacy);
+    expect((await asUser(t, "alice").query(api.handbook.entries, {})).find((entry) => entry._id === id)?.comment).toHaveLength(911);
+  });
+
   test("lists show a login's username but never its password", async () => {
     const t = convexTest(schema, modules);
     const alice = asUser(t, "alice");

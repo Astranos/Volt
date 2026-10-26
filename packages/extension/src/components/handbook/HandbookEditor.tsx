@@ -383,9 +383,9 @@ export function HandbookEditor({
           <textarea value={draft.body} onChange={(event) => set("body", event.target.value)} rows={2} />
         </Field>
       ) : null}
-      {/* Below the main content: it's a one-line extra, not what the entry is about. */}
+      {/* Below the main content: extra context, not what the entry is about. */}
       <Field label="Comment (optional)" hint="Shown under the title, like “next to the bank” or “non-emergency”.">
-        <input value={draft.comment} onChange={(event) => set("comment", event.target.value)} />
+        <textarea className="handbook-comment-input" value={draft.comment} onChange={(event) => set("comment", event.target.value)} rows={1} />
       </Field>
       {(draft.kind === "value" || draft.kind === "secret") && hadOlderNotes ? (
         <Field label="Older text" hint="Left from an earlier version. Move what you need into the comment (or a note), then clear this.">

@@ -16,30 +16,62 @@ import "./whats-new-dialog.css";
 /** Pops "What's new" for an announced release; otherwise only flags the notes as unread. */
 export function useWhatsNew() {
   const [version] = useState(() => chrome.runtime.getManifest().version);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState<"auto" | "manual" | null>(null);
   const [unread, setUnread] = useState(false);
 
   useEffect(() => {
     let canceled = false;
+    let versionChanged = false;
+    let notesChanged = false;
+    const onChanged: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, area) => {
+      if (area !== "local") return;
+      if (WHATS_NEW_SEEN_VERSION_KEY in changes) {
+        versionChanged = true;
+        if (!shouldAnnounceRelease(changes[WHATS_NEW_SEEN_VERSION_KEY].newValue)) {
+          setOpen((current) => current === "auto" ? null : current);
+        }
+      }
+      if (WHATS_NEW_SEEN_NOTES_KEY in changes) {
+        notesChanged = true;
+        setUnread(changes[WHATS_NEW_SEEN_NOTES_KEY].newValue !== RELEASE_NOTES_ID);
+      }
+    };
+    chrome.storage.onChanged.addListener(onChanged);
     void chrome.storage.local.get([WHATS_NEW_SEEN_VERSION_KEY, WHATS_NEW_SEEN_NOTES_KEY]).then((stored) => {
       if (canceled) return;
-      setOpen(shouldAnnounceRelease(stored[WHATS_NEW_SEEN_VERSION_KEY]));
-      setUnread(stored[WHATS_NEW_SEEN_NOTES_KEY] !== RELEASE_NOTES_ID);
+      if (!versionChanged && shouldAnnounceRelease(stored[WHATS_NEW_SEEN_VERSION_KEY])) {
+        setOpen((current) => current ?? "auto");
+      }
+      if (!notesChanged) setUnread(stored[WHATS_NEW_SEEN_NOTES_KEY] !== RELEASE_NOTES_ID);
     });
-    return () => { canceled = true; };
+    return () => {
+      canceled = true;
+      chrome.storage.onChanged.removeListener(onChanged);
+    };
   }, []);
 
   const close = () => {
-    setOpen(false);
+    setOpen(null);
     setUnread(false);
     void markReleaseNotesSeen(version);
   };
 
-  return { version, open, unread, show: () => setOpen(true), close };
+  return { version, open: open !== null, unread, show: () => setOpen("manual"), close };
 }
 
 /** Non-modal card pinned to the bottom-right corner; the page stays usable behind it. */
 export function WhatsNewDialog({ version, onClose }: { version: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented || document.querySelector("[cmdk-root]")) return;
+      const focused = document.activeElement;
+      if (focused instanceof HTMLElement && (focused.isContentEditable || focused.closest("input, textarea, [contenteditable]:not([contenteditable='false'])"))) return;
+      onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
   const openSettings = (hash: string) => {
     onClose();
     void chrome.tabs.create({ url: chrome.runtime.getURL(`/options.html#${hash}`), active: true });

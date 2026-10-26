@@ -274,7 +274,10 @@ function EntryList({ entries, categoryOrder, query, onOpen }: {
           <h2 className="handbook-section-title">{group.title}</h2>
           <div className="mobile-scanner-card handbook-card">
             {group.entries.map((entry, index) => {
-              const canMove = (offset: number) => Boolean(group.entries[index + offset]);
+              const canMove = (offset: number) => {
+                const neighbor = group.entries[index + offset];
+                return Boolean(neighbor && (group.key !== "pinned" || neighbor.category === entry.category));
+              };
               const moveBy = (offset: number) => {
                 const neighbor = group.entries[index + offset]._id;
                 void reorder({ ids: offset < 0 ? [entry._id, neighbor] : [neighbor, entry._id] });

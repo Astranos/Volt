@@ -74,8 +74,12 @@ export const RELEASE_SETTINGS_LINKS = [
 
 export const WHATS_NEW_SEEN_VERSION_KEY = "voltWhatsNewSeenVersion";
 export const WHATS_NEW_SEEN_NOTES_KEY = "voltWhatsNewSeenNotes";
-/** Changes whenever a note is added or retitled; drives the unread dot. */
-export const RELEASE_NOTES_ID = RELEASE_NOTES.map((note) => note.title).join("\n");
+/** Changes whenever a note's title or description changes; drives the unread dot. */
+export function releaseNotesId(notes: readonly { title: string; description: string }[]) {
+  return JSON.stringify(notes.map((note) => [note.title, note.description]));
+}
+
+export const RELEASE_NOTES_ID = releaseNotesId(RELEASE_NOTES);
 
 export function compareVersions(a: string, b: string) {
   const left = a.split(".").map(Number);

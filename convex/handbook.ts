@@ -27,7 +27,8 @@ import { decryptToken, encryptToken } from "./shopifyHelpers";
 // Bounds what a full list read can return: MAX_ENTRIES * MAX_ENTRY_BYTES stays well
 // under Convex's per-function read limit.
 const MAX_ENTRIES = 300;
-const MAX_ENTRY_BYTES = 16_000;
+// 16,003, not 16,000: renaming `note` to `comment` adds 3 bytes, and entries that fit before still save.
+const MAX_ENTRY_BYTES = 16_003;
 const LIMITS = {
   title: 120,
   category: 40,
@@ -182,14 +183,15 @@ export const moveNotesIntoShortNotes = internalMutation({
     let skipped = 0;
     for (const entry of page.page) {
       if ((entry.kind !== "value" && entry.kind !== "secret") || !entry.body?.trim()) continue;
-      const note = mergeNotes(entry.note, entry.body);
-      const fits = note.length <= LIMITS.comment
-        && new TextEncoder().encode(JSON.stringify({ ...entry, note, body: undefined })).length <= MAX_ENTRY_BYTES;
+      // Writes the current field (`comment`), so a rerun after the rename never hides text.
+      const comment = mergeNotes(entry.comment ?? entry.note, entry.body);
+      const fits = comment.length <= LIMITS.comment
+        && new TextEncoder().encode(JSON.stringify({ ...entry, comment, note: undefined, body: undefined })).length <= MAX_ENTRY_BYTES;
       if (!fits) {
         skipped++;
         continue;
       }
-      await ctx.db.patch(entry._id, { note, body: undefined });
+      await ctx.db.patch(entry._id, { comment, note: undefined, body: undefined });
       moved++;
     }
     return { moved, skipped, isDone: page.isDone, continueCursor: page.continueCursor };

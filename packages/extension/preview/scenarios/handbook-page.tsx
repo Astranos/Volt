@@ -1,4 +1,6 @@
 import "@/entrypoints/sidepanel/sidepanel.css";
+import { startCompletion } from "@codemirror/autocomplete";
+import { EditorView } from "@codemirror/view";
 import HandbookPage from "@/src/components/handbook/HandbookPage";
 import { waitFor } from "../dom";
 import { HandbookPreviewProvider } from "../fixtures/handbook";
@@ -13,23 +15,19 @@ const clickText = async (selector: string, text: string) => {
 
 async function noteEditorMenu(menu: string | null) {
   if (!menu) return;
-  const editor = await waitFor<HTMLElement>(".handbook-page-rich");
-  editor.focus();
-  const selection = window.getSelection()!;
+  const view = EditorView.findFromDOM(await waitFor<HTMLElement>(".handbook-page-rich-frame .cm-editor"));
+  if (!view) throw new Error("No note editor");
+  view.focus();
   if (menu === "slash") {
-    selection.selectAllChildren(editor);
-    selection.collapseToEnd();
-    document.execCommand("insertParagraph");
-    document.execCommand("insertText", false, "/");
+    const end = view.state.doc.length;
+    view.dispatch({ changes: { from: end, insert: "\n/" }, selection: { anchor: end + 2 }, userEvent: "input.type" });
+    startCompletion(view);
     await waitFor(".handbook-slash-menu");
   } else {
-    // The first word of the first paragraph.
-    const text = [...editor.querySelectorAll("p")].map((p) => p.firstChild).find((node) => node?.nodeType === Node.TEXT_NODE)!;
-    const range = document.createRange();
-    range.setStart(text, 0);
-    range.setEnd(text, text.textContent!.indexOf(" "));
-    selection.removeAllRanges();
-    selection.addRange(range);
+    // The first word of the note.
+    const word = /\S+/.exec(view.state.doc.line(1).text);
+    if (!word) throw new Error("The note's first line is empty");
+    view.dispatch({ selection: { anchor: word.index, head: word.index + word[0].length } });
     await waitFor(".handbook-bubble-menu");
   }
 }

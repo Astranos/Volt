@@ -15,6 +15,12 @@
   padding: 6px 16px 16px;
 }
 
+.handbook-editor .handbook-comment-input {
+  field-sizing: content;
+  min-height: calc(1lh + 18px);
+  resize: none;
+}
+
 .handbook-search {
   align-items: center;
   background: rgba(255, 255, 255, 0.045);
