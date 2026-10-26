@@ -212,6 +212,16 @@ test("a wrapper around several metafields never supplies another field's value",
   assert.match(messages[0].url, /q=Wii%20Sports&/);
 });
 
+test("labels that only mention a console or game name are ignored", () => {
+  const { document, messages, poll } = mount();
+  addMetafield(document, "game_name", "Game name", "Halo 3");
+  addMetafield(document, "console_color", "Console color", "Black");
+  addMetafield(document, "notes", "Game name notes", "Sealed");
+  poll();
+  document.getElementById("volt-tab-pc").onclick({ stopPropagation() {} });
+  assert.match(messages[0].url, /q=Halo%203&/);
+});
+
 test("a UPC still wins over the game name", () => {
   const { document, messages, poll } = mount();
   addMetafield(document, "game_name", "Game name", "Halo 3");

@@ -299,11 +299,9 @@ export default defineContentScript({
         findMetafieldByLabel(/UPC|Barcode/);
 
       upcValue = extractMetafieldValue(upcContainer);
-      gameName = extractMetafieldValue(findMetafieldByLabel(/^\s*game\s*(name|title)\s*$/i) ||
-        findMetafieldByLabel(/\bgame\s*(name|title)\b/i))?.trim() || null;
-      // An exact label first, so "Console color" or "Sales platform" can't win by appearing earlier.
-      platform = extractMetafieldValue(findMetafieldByLabel(/^\s*(platform|console|system)\s*$/i) ||
-        findMetafieldByLabel(/\b(platform|console)\b/i))?.trim() || null;
+      // Whole labels only, so "Game name notes" or "Console color" never feed the search.
+      gameName = extractMetafieldValue(findMetafieldByLabel(/^\s*(video\s*)?game\s*(name|title)\s*$/i))?.trim() || null;
+      platform = extractMetafieldValue(findMetafieldByLabel(/^\s*((video\s*)?game|gaming)?\s*(platform|console|system)\s*$/i))?.trim() || null;
     };
 
     // A <label> in older markup; Shopify's quick fields carry an accessibilitylabel instead.
