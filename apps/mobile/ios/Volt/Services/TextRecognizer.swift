@@ -69,23 +69,25 @@ enum TextRecognizer {
         }
     }
 
-    /// Reads the image upright, then retries on a rotated copy when the text is tilted or no
-    /// identifier was found. Regions from rotated passes are mapped back to the original image.
+    /// Reads the image upright, then retries on rotated copies when no identifier was found.
+    /// Regions from rotated passes are mapped back to the original image.
     static func recognizeTextRegionsSynchronously(in cgImage: CGImage, minimumTextHeight: Float = 0) throws -> [RecognizedTextRegion] {
         let upright = try recognitionPass(in: cgImage, rotation: 0, minimumTextHeight: minimumTextHeight)
+        // Upright quads already follow tilted text, and a rotated re-read can misread characters it
+        // got right (G as 6), so only retry when the upright pass found no identifier at all.
+        guard !upright.hasDeviceIdentifier else { return upright.regions.sorted(by: readingOrder) }
+
         var rotations: [CGFloat] = []
         if let skew = dominantAngle(in: upright.lineAngles), abs(skew) > maximumUprightSkew {
             rotations.append(-skew)
         }
-        if !upright.hasDeviceIdentifier {
-            rotations += fallbackRotations.filter { rotation in
-                rotations.allSatisfy { abs($0 - rotation) > maximumUprightSkew }
-            }
+        rotations += fallbackRotations.filter { rotation in
+            rotations.allSatisfy { abs($0 - rotation) > maximumUprightSkew }
         }
 
         var best = upright
         for rotation in rotations {
-            if best.hasDeviceIdentifier, best.score > upright.score { break }
+            if best.hasDeviceIdentifier { break }
             let pass = try recognitionPass(in: cgImage, rotation: rotation, minimumTextHeight: minimumTextHeight)
             if pass.score > best.score {
                 best = pass
@@ -154,17 +156,9 @@ enum TextRecognizer {
             bottomRight: mapPoint(region.quadrilateral.bottomRight),
             bottomLeft: mapPoint(region.quadrilateral.bottomLeft)
         )
-        let xs = quadrilateral.points.map(\.x)
-        let ys = quadrilateral.points.map(\.y)
-        let boundingBox = CGRect(
-            x: xs.min() ?? 0,
-            y: ys.min() ?? 0,
-            width: (xs.max() ?? 0) - (xs.min() ?? 0),
-            height: (ys.max() ?? 0) - (ys.min() ?? 0)
-        )
         return RecognizedTextRegion(
             text: region.text,
-            boundingBox: boundingBox,
+            boundingBox: boundingRect(of: quadrilateral.points),
             quadrilateral: quadrilateral,
             confidence: region.confidence,
             isDeviceIdentifier: region.isDeviceIdentifier
@@ -296,7 +290,60 @@ enum TextRecognizer {
             index = nextIndex
         }
 
-        return glyphs
+        return subdividingSharedWordBoxes(glyphs)
+    }
+
+    /// Vision often returns one rotated word box for every character range in that word. Splitting the
+    /// box evenly along its reading edge gives each glyph its own rotated quad, so sub-word matches and
+    /// reading direction follow the text instead of collapsing to an upright box.
+    private static func subdividingSharedWordBoxes(_ glyphs: [RecognizedGlyph]) -> [RecognizedGlyph] {
+        var result: [RecognizedGlyph] = []
+        var start = 0
+        while start < glyphs.count {
+            var end = start + 1
+            while end < glyphs.count, glyphs[end].quadrilateral == glyphs[start].quadrilateral {
+                end += 1
+            }
+            let count = end - start
+            let word = glyphs[start].quadrilateral
+            for offset in 0..<count {
+                let glyph = glyphs[start + offset]
+                guard count > 1 else {
+                    result.append(glyph)
+                    continue
+                }
+                let lower = CGFloat(offset) / CGFloat(count)
+                let upper = CGFloat(offset + 1) / CGFloat(count)
+                let quadrilateral = TextQuadrilateral(
+                    topLeft: interpolate(word.topLeft, word.topRight, lower),
+                    topRight: interpolate(word.topLeft, word.topRight, upper),
+                    bottomRight: interpolate(word.bottomLeft, word.bottomRight, upper),
+                    bottomLeft: interpolate(word.bottomLeft, word.bottomRight, lower)
+                )
+                result.append(
+                    RecognizedGlyph(
+                        character: glyph.character,
+                        leadingWhitespace: glyph.leadingWhitespace,
+                        boundingBox: boundingRect(of: quadrilateral.points),
+                        quadrilateral: quadrilateral
+                    )
+                )
+            }
+            start = end
+        }
+        return result
+    }
+
+    private static func interpolate(_ from: CGPoint, _ to: CGPoint, _ fraction: CGFloat) -> CGPoint {
+        CGPoint(x: from.x + (to.x - from.x) * fraction, y: from.y + (to.y - from.y) * fraction)
+    }
+
+    private static func boundingRect(of points: [CGPoint]) -> CGRect {
+        let xs = points.map(\.x)
+        let ys = points.map(\.y)
+        let minX = xs.min() ?? 0
+        let minY = ys.min() ?? 0
+        return CGRect(x: minX, y: minY, width: (xs.max() ?? 0) - minX, height: (ys.max() ?? 0) - minY)
     }
 
     private static func shouldStartNewRow(after previous: RecognizedGlyph, before next: RecognizedGlyph, threshold: CGFloat) -> Bool {
@@ -403,10 +450,14 @@ enum TextRecognizer {
         guard let first = points.first else { return nil }
 
         let lastGlyph = glyphs[glyphs.count - 1]
-        let direction = CGPoint(
+        var direction = CGPoint(
             x: (lastGlyph.boundingBox.midX - firstGlyph.boundingBox.midX) * aspectRatio,
             y: lastGlyph.boundingBox.midY - firstGlyph.boundingBox.midY
         )
+        if hypot(direction.x, direction.y) <= 0.0001 {
+            let edge = firstGlyph.quadrilateral
+            direction = CGPoint(x: (edge.topRight.x - edge.topLeft.x) * aspectRatio, y: edge.topRight.y - edge.topLeft.y)
+        }
         let length = hypot(direction.x, direction.y)
         guard length > 0.0001 else {
             return axisAlignedQuadrilateral(enclosing: glyphs.flatMap { $0.quadrilateral.points })

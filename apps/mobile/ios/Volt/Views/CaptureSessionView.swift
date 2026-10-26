@@ -50,9 +50,9 @@ struct CaptureSessionView: View {
                     onToggleRepresentation: {
                         isShowingRawText.toggle()
                     },
-                    onSend: {
+                    onSend: { outgoingText in
                         guard selectedTextRegion != nil else { return }
-                        store.sendRecognizedText(selectedTextValue)
+                        store.sendRecognizedText(outgoingText)
                         resetSelectedText()
                     },
                     onDismiss: {
