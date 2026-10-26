@@ -209,8 +209,8 @@ export default defineContentScript({
     let lastUrl = location.href;
     let isInitialized = false;
     let buttonsEnabled = false;
-    let openIn = "popup";
-    const NEW_TAB_HINT = `${/Mac/i.test(globalThis.navigator?.platform || "") ? "\u2318-click" : "Ctrl+click"} to open in a new tab`;
+    // Always a popup, ignoring the menus' open-in setting: a modifier or middle click opens a tab.
+    const NEW_TAB_HINT = `${/Mac/i.test(globalThis.navigator?.platform || "") ? "\u2318-click" : "Ctrl+click"} or middle-click to open in a new tab`;
 
     const findShopifyTitleField = () =>
       document.querySelector(
@@ -372,7 +372,7 @@ export default defineContentScript({
 
     // Modifier and middle clicks follow browser link conventions.
     const openResearch = (url, event) => {
-      const newTab = openIn === "tab" || event?.metaKey || event?.ctrlKey ||
+      const newTab = event?.metaKey || event?.ctrlKey ||
         event?.button === 1;
       if (!newTab) {
         openSearchPopup(url);
@@ -523,7 +523,7 @@ export default defineContentScript({
       // Update States
       const pcTab = document.getElementById("volt-tab-pc");
       const ebayTab = document.getElementById("volt-tab-ebay");
-      const tooltipHint = openIn === "tab" ? "" : `\n${NEW_TAB_HINT}`;
+      const tooltipHint = `\n${NEW_TAB_HINT}`;
 
       if (pcTab) {
         const search = getPriceChartingQuery();
@@ -662,10 +662,9 @@ export default defineContentScript({
     };
 
     const checkSettingsAndInit = () => {
-      chrome.storage.sync.get(["cmdkSettings", "openSearchResultsIn"], (result) => {
+      chrome.storage.sync.get(["cmdkSettings"], (result) => {
         const settings = result.cmdkSettings || {};
         buttonsEnabled = settings.shopifyButtons?.enabled ?? true;
-        openIn = result.openSearchResultsIn === "tab" ? "tab" : "popup";
 
         if (buttonsEnabled) {
           init();
@@ -673,13 +672,6 @@ export default defineContentScript({
       });
     };
 
-    // Listen for settings changes
-    chrome.storage.onChanged?.addListener((changes, area) => {
-      // Shared "openSearchResultsIn" preference (see open-mode-switch.tsx).
-      if (area === "sync" && changes.openSearchResultsIn) {
-        openIn = changes.openSearchResultsIn.newValue === "tab" ? "tab" : "popup";
-      }
-    });
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.action === "shopify-buttons-settings-changed") {
         buttonsEnabled = Boolean(message.enabled);

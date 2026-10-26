@@ -51,7 +51,6 @@ function mount({ modern = true, card = true, width = 720, settings = {}, stored 
   let checkFields;
   const messages = [];
   let onMessage;
-  let onStorageChanged;
   const context = vm.createContext({
     exports: {}, defineContentScript: (config) => config, document, window, location,
     history: { pushState() {}, replaceState() {} },
@@ -62,7 +61,6 @@ function mount({ modern = true, card = true, width = 720, settings = {}, stored 
       runtime: { getURL: (path) => path, onMessage: { addListener(callback) { onMessage = callback; } }, sendMessage: (message) => messages.push(message) },
       storage: {
         sync: { get: (_, callback) => callback({ cmdkSettings: settings, ...stored }) },
-        onChanged: { addListener(callback) { onStorageChanged = callback; } },
       },
     },
   });
@@ -75,8 +73,7 @@ function mount({ modern = true, card = true, width = 720, settings = {}, stored 
   context.exports.default.main();
   frame();
   return { document, window, host, container, location, messages, frame: () => frame(), resize: (width) => { availableWidth = width; frame(); }, settings: (enabled) => onMessage({ action: "shopify-buttons-settings-changed", enabled }),
-    poll: () => { checkFields(); frame(); },
-    storageChanged: (changes) => onStorageChanged(changes, "sync") };
+    poll: () => { checkFields(); frame(); } };
 }
 
 function addShadowUpc(document, value) {
@@ -246,8 +243,8 @@ test("research action reads Shopify's shadow title and still opens sold listings
   assert.match(messages[0].url, /_nkw=Dell%20Latitude.*LH_Sold=1/);
 });
 
-test("research actions open a new tab on modifier or middle click, or when preferred", () => {
-  const { document, messages, storageChanged, frame } = mount();
+test("research actions open a popup unless modifier or middle clicked, whatever the menus' setting", () => {
+  const { document, messages, frame } = mount({ stored: { openSearchResultsIn: "tab" } });
   const ebay = document.getElementById("volt-tab-ebay");
   const click = (event = {}) => ebay.onclick({ stopPropagation() {}, preventDefault() {}, button: 0, ...event });
   click();
@@ -257,25 +254,9 @@ test("research actions open a new tab on modifier or middle click, or when prefe
   ebay.onauxclick({ stopPropagation() {}, preventDefault() {}, button: 2 });
   assert.deepEqual(messages.map((message) => message.action),
     ["openPreviewPopup", "openUrl", "openUrl", "openUrl"]);
-  frame();
-  assert.match(ebay.getAttribute("data-tooltip"), /\nCtrl\+click to open in a new tab$/);
-
-  storageChanged({ cmdkSettings: { newValue: { shopifyButtons: { enabled: true } } } });
-  click();
-  assert.equal(messages.at(-1).action, "openPreviewPopup", "unrelated settings changes keep the mode");
-  storageChanged({ openSearchResultsIn: { newValue: "tab" } });
-  click();
-  assert.equal(messages.at(-1).action, "openUrl");
   assert.match(messages.at(-1).url, /_nkw=Dell%20Latitude.*LH_Sold=1/);
-});
-
-test("stored new-tab preference applies on load and drops the hint", () => {
-  const { document, messages, frame } = mount({ stored: { openSearchResultsIn: "tab" } });
-  document.getElementById("volt-tab-ebay").onclick({ stopPropagation() {}, button: 0 });
-  assert.equal(messages[0].action, "openUrl");
   frame();
-  const tooltip = document.getElementById("volt-tab-ebay").getAttribute("data-tooltip");
-  assert.equal(tooltip, "Search eBay sold prices: Dell Latitude");
+  assert.match(ebay.getAttribute("data-tooltip"), /\nCtrl\+click or middle-click to open in a new tab$/);
 });
 
 test("toolbar follows a replaced product section and leaves non-product pages", () => {
