@@ -401,6 +401,52 @@ final class CloudWorkspaceStore {
         }
     }
 
+    /// Sends a flagged OCR capture (photo to R2, recognizer output to Convex) for parser work.
+    func flagOcrCapture(_ capture: OcrFlagCapture, flagId: UUID, using clerk: Clerk) async throws {
+        await bootstrapIfNeeded(using: clerk)
+        guard let credential = activeCredential else {
+            throw MobileCloudError.credentialRevoked
+        }
+        do {
+            try await submitOcrFlag(capture, flagId: flagId, credential: credential)
+        } catch MobileCloudError.credentialRevoked {
+            revokeLocalCredential()
+            await bootstrapIfNeeded(using: clerk)
+            guard let recoveredCredential = activeCredential else {
+                throw MobileCloudError.credentialRevoked
+            }
+            try await submitOcrFlag(capture, flagId: flagId, credential: recoveredCredential)
+        }
+    }
+
+    private func submitOcrFlag(
+        _ capture: OcrFlagCapture,
+        flagId: UUID,
+        credential: CloudDeviceCredential
+    ) async throws {
+        let info = Bundle.main.infoDictionary
+        let flagIdString = flagId.uuidString.lowercased()
+        let created = try await api.createOcrFlag(CreateOcrFlagRequest(
+            deviceId: credential.deviceId,
+            deviceSecret: credential.value,
+            flagId: flagIdString,
+            byteCount: capture.photoJPEG.count,
+            selectedRawText: capture.selectedRawText,
+            selectedCleanedText: capture.selectedCleanedText,
+            regions: capture.regions,
+            rawRegionTexts: capture.rawRegionTexts,
+            appVersion: info?["CFBundleShortVersionString"] as? String,
+            appBuild: info?["CFBundleVersion"] as? String,
+            note: capture.correctedText.map { "Corrected to: \($0)" }
+        ))
+        try await api.uploadPhoto(capture.photoJPEG, using: created.upload)
+        try await api.finalizeOcrFlag(FinalizeOcrFlagRequest(
+            deviceId: credential.deviceId,
+            deviceSecret: credential.value,
+            flagId: flagIdString
+        ))
+    }
+
     private func requestProductAnalysis(
         _ data: Data,
         mode: ProductScanMode,

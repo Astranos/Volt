@@ -30,6 +30,7 @@ import { type AIScannerReservation } from "./aiScannerQuota";
 import { productApiCollectionHandler, productApiItemHandler } from "./http/products";
 import { signalHandler } from "./http/signal";
 import { mobileComputerListHandler, appClipComputerListHandler } from "./http/computers";
+import { mobileOcrFlagCreateHandler, mobileOcrFlagFinalizeHandler } from "./http/ocrFlags";
 
 const http = httpRouter();
 
@@ -874,6 +875,14 @@ http.route({ path: "/api/mobile/photos/upload-url", method: "OPTIONS", handler: 
 http.route({ path: "/api/mobile/batches/finalize", method: "POST", handler: mobileBatchFinalizeHandler });
 
 http.route({ path: "/api/mobile/batches/finalize", method: "OPTIONS", handler: mobileBatchFinalizeHandler });
+
+http.route({ path: "/api/mobile/ocr-flags", method: "POST", handler: mobileOcrFlagCreateHandler });
+
+http.route({ path: "/api/mobile/ocr-flags", method: "OPTIONS", handler: mobileOcrFlagCreateHandler });
+
+http.route({ path: "/api/mobile/ocr-flags/finalize", method: "POST", handler: mobileOcrFlagFinalizeHandler });
+
+http.route({ path: "/api/mobile/ocr-flags/finalize", method: "OPTIONS", handler: mobileOcrFlagFinalizeHandler });
 
 http.route({ path: "/api/app-clip/outbox/sync", method: "POST", handler: appClipGuestOutboxSyncHandler });
 

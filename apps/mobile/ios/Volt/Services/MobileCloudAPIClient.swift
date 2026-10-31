@@ -10,6 +10,8 @@ protocol MobileCloudAPI: Sendable {
     func setCursorTarget(_ request: SetCursorTargetRequest) async throws -> SetCursorTargetResponse
     func queueCursorDelivery(_ request: QueueCursorDeliveryRequest) async throws -> QueueCursorDeliveryResponse
     func cursorDeliveryStatus(_ request: CursorDeliveryStatusRequest) async throws -> CursorDeliveryStatusResponse
+    func createOcrFlag(_ request: CreateOcrFlagRequest) async throws -> CreateOcrFlagResponse
+    func finalizeOcrFlag(_ request: FinalizeOcrFlagRequest) async throws
     func analyzeProductImage(
         _ data: Data,
         mode: ProductScanMode,
@@ -29,6 +31,8 @@ struct MobileCloudAPIClient: MobileCloudAPI {
         case cursorTarget
         case queueCursorDelivery
         case cursorDeliveryStatus
+        case createOcrFlag
+        case finalizeOcrFlag
 
         var path: String {
             switch self {
@@ -40,6 +44,8 @@ struct MobileCloudAPIClient: MobileCloudAPI {
             case .cursorTarget: "api/mobile/cursor-target"
             case .queueCursorDelivery: "api/mobile/deliveries/queue"
             case .cursorDeliveryStatus: "api/mobile/deliveries/status"
+            case .createOcrFlag: "api/mobile/ocr-flags"
+            case .finalizeOcrFlag: "api/mobile/ocr-flags/finalize"
             }
         }
     }
@@ -96,6 +102,14 @@ struct MobileCloudAPIClient: MobileCloudAPI {
 
     func cursorDeliveryStatus(_ request: CursorDeliveryStatusRequest) async throws -> CursorDeliveryStatusResponse {
         try await post(request, to: .cursorDeliveryStatus)
+    }
+
+    func createOcrFlag(_ request: CreateOcrFlagRequest) async throws -> CreateOcrFlagResponse {
+        try await post(request, to: .createOcrFlag)
+    }
+
+    func finalizeOcrFlag(_ request: FinalizeOcrFlagRequest) async throws {
+        let _: FinalizeOcrFlagResponse = try await post(request, to: .finalizeOcrFlag)
     }
 
     func analyzeProductImage(
@@ -197,6 +211,11 @@ struct MobileCloudAPIClient: MobileCloudAPI {
 }
 
 private struct EmptyCloudResponse: Codable, Sendable {}
+
+private struct FinalizeOcrFlagResponse: Codable, Sendable {
+    let flagId: String
+    let status: String
+}
 
 enum MobileCloudError: LocalizedError, Equatable {
     case credentialRevoked

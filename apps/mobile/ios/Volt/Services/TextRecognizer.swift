@@ -1,4 +1,5 @@
 import CoreGraphics
+import CoreImage
 import Foundation
 #if canImport(UIKit)
 import UIKit
@@ -41,6 +42,75 @@ enum TextRecognizer {
     /// Vision already returns rotated quads for tilted lines, so a single upright pass is enough.
     /// Re-reading rotated copies drew 45° diamonds and could misread characters the upright pass got right.
     static func recognizeTextRegionsSynchronously(in cgImage: CGImage, minimumTextHeight: Float = 0) throws -> [RecognizedTextRegion] {
+        let regions = try recognizeSinglePass(in: cgImage, minimumTextHeight: minimumTextHeight)
+        guard regions.contains(where: { $0.confidence < lowConfidenceThreshold }),
+              let softened = softenedForScreenText(cgImage)
+        else { return regions }
+        let retry = try recognizeSinglePass(in: softened, minimumTextHeight: minimumTextHeight)
+        return mergingLowConfidenceRegions(regions, with: retry)
+    }
+
+    /// Vision reports 0.3/0.5 for lines it mostly guessed; 1.0 for lines it read cleanly.
+    static let lowConfidenceThreshold: Float = 0.6
+
+    /// Photos of monitors carry pixel-grid moiré that Vision misreads ("16GXMP3200CL16" came back
+    /// as "IRRANGRADA ILTE"). A blur scaled to the image hides the grid while keeping glyph shapes.
+    static func softenedForScreenText(_ cgImage: CGImage) -> CGImage? {
+        let image = CIImage(cgImage: cgImage)
+        let sigma = max(1.5, Double(max(cgImage.width, cgImage.height)) / softeningDivisor)
+        let blurred = image.clampedToExtent().applyingGaussianBlur(sigma: sigma).cropped(to: image.extent)
+        return softeningContext.createCGImage(blurred, from: image.extent)
+    }
+
+    /// Blur radius is the image's long edge divided by this (2px at the 1800px OCR size). Tuned on
+    /// flagged captures: 2px read "16GXMP3200CL16" from a monitor exactly; 3px+ dropped "CL16".
+    static let softeningDivisor: Double = 900
+
+    private static let softeningContext = CIContext(options: [.cacheIntermediates: false])
+
+    /// Swaps each low-confidence line for what the softened pass read in the same place, but only
+    /// when that read is more confident. Lines read cleanly the first time are never touched.
+    static func mergingLowConfidenceRegions(
+        _ regions: [RecognizedTextRegion],
+        with retry: [RecognizedTextRegion]
+    ) -> [RecognizedTextRegion] {
+        var used = Set<Int>()
+        var merged: [RecognizedTextRegion] = []
+        for region in regions {
+            guard region.confidence < lowConfidenceThreshold else {
+                merged.append(region)
+                continue
+            }
+            let replacements = retry.indices.filter { index in
+                !used.contains(index)
+                    && retry[index].confidence > region.confidence
+                    && overlapFraction(region.boundingBox, retry[index].boundingBox) >= 0.5
+            }
+            // A retry that only re-read part of the line would drop the rest of it.
+            let coveredArea = replacements.reduce(CGFloat(0)) { total, index in
+                let intersection = region.boundingBox.intersection(retry[index].boundingBox)
+                return total + (intersection.isNull ? 0 : intersection.width * intersection.height)
+            }
+            let regionArea = region.boundingBox.width * region.boundingBox.height
+            guard !replacements.isEmpty, regionArea > 0, coveredArea / regionArea >= 0.6 else {
+                merged.append(region)
+                continue
+            }
+            replacements.forEach { used.insert($0) }
+            merged.append(contentsOf: replacements.map { retry[$0] })
+        }
+        return merged.sorted(by: readingOrder)
+    }
+
+    /// Intersection as a share of the smaller box, so a label split into two pieces still matches.
+    private static func overlapFraction(_ lhs: CGRect, _ rhs: CGRect) -> CGFloat {
+        let intersection = lhs.intersection(rhs)
+        guard !intersection.isNull else { return 0 }
+        let smaller = min(lhs.width * lhs.height, rhs.width * rhs.height)
+        return smaller > 0 ? (intersection.width * intersection.height) / smaller : 0
+    }
+
+    private static func recognizeSinglePass(in cgImage: CGImage, minimumTextHeight: Float) throws -> [RecognizedTextRegion] {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = false
@@ -255,20 +325,23 @@ enum TextRecognizer {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !glyphs.isEmpty else { return }
 
-        if let match = LiveTextIdentifierMatcher.match(trimmed) {
+        // A regulatory line can hold a serial and a model side by side, so each identifier
+        // becomes its own region drawn around just its glyphs.
+        var appendedIdentifier = false
+        for match in LiveTextIdentifierMatcher.identifierMatches(in: trimmed) {
             let matchedGlyphs = Self.glyphs(in: match.range, text: trimmed, glyphs: glyphs)
-            if !matchedGlyphs.isEmpty {
-                appendGlyphRegion(
-                    text: match.value,
-                    glyphs: matchedGlyphs,
-                    confidence: confidence,
-                    aspectRatio: aspectRatio,
-                    isDeviceIdentifier: true,
-                    to: &regions
-                )
-                return
-            }
+            guard !matchedGlyphs.isEmpty else { continue }
+            appendGlyphRegion(
+                text: match.value,
+                glyphs: matchedGlyphs,
+                confidence: confidence,
+                aspectRatio: aspectRatio,
+                isDeviceIdentifier: true,
+                to: &regions
+            )
+            appendedIdentifier = true
         }
+        if appendedIdentifier { return }
 
         appendGlyphRegion(
             text: trimmed,

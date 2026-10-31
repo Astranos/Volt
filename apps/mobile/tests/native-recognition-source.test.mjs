@@ -15,6 +15,9 @@ import {
   textRecognizerSwiftSource,
   ocrTextCleanerSwiftSource,
   clipBarcodeScannerServiceSwiftSource,
+  scannerStoreSwiftSource,
+  cloudWorkspaceStoreSwiftSource,
+  mobileCloudAPIClientSwiftSource,
 } from "./native-source-fixtures.mjs";
 
 test("native OCR review stops the live camera until retake", () => {
@@ -165,10 +168,11 @@ test("native post-capture OCR extracts device identifiers from recognized rows",
   assert.match(scannerRecognitionModelsSwiftSource, /enum DeviceIdentifierRegionExtractor/);
   assert.match(scannerRecognitionModelsSwiftSource, /regions\.filter\(\\\.isDeviceIdentifier\)/);
   assert.match(scannerRecognitionModelsSwiftSource, /identifierRegion\(from: \$0, allowingStandalone: false\)/);
-  assert.match(scannerRecognitionModelsSwiftSource, /identifierRegion\(from: \$0, allowingStandalone: true\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /regions\.flatMap\(standaloneIdentifierRegions\(from:\)\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /identifierRegion\(from: region, allowingStandalone: true\)/);
   assert.match(scannerRecognitionModelsSwiftSource, /LiveTextIdentifierMatcher\.match\(region\.text, allowingStandalone: allowingStandalone\)/);
   assert.match(scannerRecognitionModelsSwiftSource, /text: match\.value/);
-  assert.match(textRecognizerSwiftSource, /if let match = LiveTextIdentifierMatcher\.match\(trimmed\)/);
+  assert.match(textRecognizerSwiftSource, /for match in LiveTextIdentifierMatcher\.identifierMatches\(in: trimmed\)/);
   assert.match(textRecognizerSwiftSource, /let matchedGlyphs = Self\.glyphs\(in: match\.range, text: trimmed, glyphs: glyphs\)/);
   assert.match(textRecognizerSwiftSource, /appendGlyphRegion\([\s\S]*text: match\.value[\s\S]*isDeviceIdentifier: true/);
   assert.match(scannerRecognitionModelsSwiftSource, /let isDeviceIdentifier: Bool/);
@@ -182,7 +186,8 @@ test("native post-capture OCR extracts device identifiers from recognized rows",
   assert.match(scannerRecognitionModelsSwiftSource, /"cnc id"/);
   assert.match(scannerRecognitionModelsSwiftSource, /"conatel"/);
   assert.match(scannerRecognitionModelsSwiftSource, /"anatel"/);
-  assert.match(scannerRecognitionModelsSwiftSource, /guard !isRegulatoryIdentifierContext\(text\) else \{ return nil \}/);
+  // Regulatory lines skip only the certification value after each label, not the whole line.
+  assert.match(scannerRecognitionModelsSwiftSource, /guard !regulatoryValueStarts\.contains\(candidate\.range\.lowerBound\) else \{ return nil \}/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /DeviceIdentifierRegionExtractor\.reviewRegions\(from: recognizedRegions\)/);
 });
 
@@ -190,11 +195,19 @@ test("native OCR target dialog defaults to cleaned text and can reveal raw text"
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /Button\(action: send\) \{[\s\S]*Label\("Send", systemImage: "paperplane\.fill"\)/);
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /let onSend: \(String\) -> Void/);
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /TextField\("Text to send", text: \$draft, axis: \.vertical\)/);
-  assert.match(sharedCaptureSessionOverlaysSwiftSource, /Label\(isEditing \? "Done" : "Edit"/);
+  // The field is always editable; once the user types over the OCR value, Raw/Cleaned becomes Reset.
+  assert.doesNotMatch(sharedCaptureSessionOverlaysSwiftSource, /"Edit"/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /if isEdited \{\s*Button\(action: resetDraft\) \{\s*Label\("Reset", systemImage: "arrow\.uturn\.backward"\)/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /\.onChange\(of: text\) \{ oldText, newText in\s*[\s\S]*?if draft == oldText \{\s*draft = newText/);
+  // Keyboard: Return closes it, there is a hide-keyboard button, and the card moves above it.
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /\.submitLabel\(\.done\)/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /Image\(systemName: "keyboard\.chevron\.compact\.down"\)/);
+  assert.match(captureSessionViewSwiftSource, /\.frame\(maxHeight: \.infinity, alignment: isTextInputFocused \? \.top : \.center\)/);
+  assert.match(captureSessionViewSwiftSource, /\.onTapGesture \{ isTextInputFocused = false \}/);
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /onSend\(outgoingText\)/);
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /let onToggleRepresentation: \(\) -> Void/);
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /Label\(isShowingRaw \? "Cleaned" : "Raw"/);
-  assert.match(sharedCaptureSessionOverlaysSwiftSource, /Label\("Cleaning…", systemImage: "wand\.and\.sparkles"\)/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /Label\("Cleaning…", systemImage: "wand\.and\.sparkles"\)\s*\.labelStyle\(\.iconOnly\)/);
   assert.match(captureSessionViewSwiftSource, /onSend: \{ outgoingText in[\s\S]*store\.sendRecognizedText\(outgoingText\)/);
   assert.match(captureSessionViewSwiftSource, /selectTextRegion\(_ region: RecognizedTextRegion\) \{\s*resetSelectedText\(\)\s*selectedTextRegion = region\s*cleanupSelectedText\(region\)/);
   assert.match(captureSessionViewSwiftSource, /OcrTextCleaner\.clean\(text: region\.text, context: context\)/);
@@ -202,4 +215,40 @@ test("native OCR target dialog defaults to cleaned text and can reveal raw text"
   assert.match(captureSessionViewSwiftSource, /private func resetSelectedText\(\)/);
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /Button\(action: onDismiss\) \{[\s\S]*Image\(systemName: "xmark"\)/);
   assert.match(captureSessionViewSwiftSource, /private var selectedTextPreview: String/);
+});
+
+test("TestFlight-only Flag sends the uncleaned photo and OCR output for parser review", () => {
+  // Only TestFlight (sandbox) installs and debug builds may flag; App Store builds never show it.
+  assert.match(scannerStoreSwiftSource, /#if DEBUG\s*return true\s*#else[\s\S]*AppTransaction\.shared[\s\S]*transaction\.environment == \.sandbox/);
+  assert.match(captureSessionViewSwiftSource, /flagState: store\.isOcrFlaggingAvailable \? store\.ocrFlagState : nil/);
+  assert.match(captureSessionViewSwiftSource, /onFlag: store\.isOcrFlaggingAvailable \? \{ correctedText in flagSelectedText\(correctedText: correctedText\) \} : nil/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /if let flagState, let onFlag \{\s*OcrFlagButton\(state: flagState, action: \{ onFlag\(draft\) \}\)/);
+  assert.match(cloudWorkspaceStoreSwiftSource, /note: capture\.correctedText\.map \{ "Corrected to: \\\(\$0\)" \}/);
+  // The flag carries the pre-cleanup crop plus every recognizer region, not just the selection.
+  assert.match(scannerStoreCaptureActionsSwiftSource, /ocrSourceImage = croppedImage/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /ocrRecognizedRegions = recognizedRegions/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /guard isOcrFlaggingAvailable, ocrFlagState != \.sending else \{ return \}/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /rawRegionTexts: ocrRecognizedRegions\.map\(\\\.text\)/);
+  // Photo goes to R2 through a presigned PUT, then the backend confirms it before listing the flag.
+  assert.match(cloudWorkspaceStoreSwiftSource, /api\.createOcrFlag[\s\S]*api\.uploadPhoto\(capture\.photoJPEG, using: created\.upload\)[\s\S]*api\.finalizeOcrFlag/);
+  assert.match(mobileCloudAPIClientSwiftSource, /case \.createOcrFlag: "api\/mobile\/ocr-flags"/);
+  assert.match(mobileCloudAPIClientSwiftSource, /case \.finalizeOcrFlag: "api\/mobile\/ocr-flags\/finalize"/);
+});
+
+test("extracted text card shows the straightened photo clip of the selected text", () => {
+  assert.match(ocrReviewLayerSwiftSource, /func ocrSnippet\(for quadrilateral: TextQuadrilateral\) -> UIImage\?/);
+  assert.match(ocrReviewLayerSwiftSource, /CIFilter\(name: "CIPerspectiveCorrection"\)/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /if let snippet \{\s*OcrSnippetView\(image: snippet\)/);
+  assert.match(captureSessionViewSwiftSource, /\.task\(id: selectedTextRegion\?\.id\) \{\s*selectedTextSnippet = selectedTextRegion\.flatMap[\s\S]*store\.ocrReviewImage\?\.ocrSnippet\(for: region\.quadrilateral\)/);
+  assert.match(captureSessionViewSwiftSource, /snippet: selectedTextSnippet/);
+});
+
+test("low-confidence OCR lines get a softened second pass for photos of screens", () => {
+  // Only captures with a guessed line pay for the second pass.
+  assert.match(textRecognizerSwiftSource, /guard regions\.contains\(where: \{ \$0\.confidence < lowConfidenceThreshold \}\),\s*let softened = softenedForScreenText\(cgImage\)/);
+  assert.match(textRecognizerSwiftSource, /static let softeningDivisor: Double = 900/);
+  // Clean lines are never replaced, and a retry must be more confident and cover most of the line.
+  assert.match(textRecognizerSwiftSource, /guard region\.confidence < lowConfidenceThreshold else \{\s*merged\.append\(region\)/);
+  assert.match(textRecognizerSwiftSource, /retry\[index\]\.confidence > region\.confidence/);
+  assert.match(textRecognizerSwiftSource, /coveredArea \/ regionArea >= 0\.6/);
 });

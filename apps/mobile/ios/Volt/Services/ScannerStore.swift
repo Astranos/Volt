@@ -1,5 +1,27 @@
 import Observation
+import StoreKit
 import UIKit
+
+/// Whether this install came from TestFlight. App Store builds report `.production`; TestFlight
+/// reports `.sandbox`. Debug builds always count so the flow can be exercised in the simulator.
+enum AppDistributionChannel {
+    static func isTestFlightOrDebug() async -> Bool {
+        // Screenshot runs can render the App Store variant of the UI.
+        if ScreenshotScenario.isEnabled,
+           ProcessInfo.processInfo.environment["VOLT_SCREENSHOT_APP_STORE"] == "1" {
+            return false
+        }
+        #if DEBUG
+        return true
+        #else
+        guard let result = try? await AppTransaction.shared else { return false }
+        switch result {
+        case .verified(let transaction), .unverified(let transaction, _):
+            return transaction.environment == .sandbox
+        }
+        #endif
+    }
+}
 
 struct CaptureDeliveryToast: Identifiable, Equatable {
     enum Tone: Equatable {
@@ -28,6 +50,13 @@ final class ScannerStore {
     var ocrReviewImage: UIImage?
     var ocrReviewText = ""
     var ocrTextRegions: [RecognizedTextRegion] = []
+    /// The cropped capture before OCR cleanup, kept so TestFlight testers can flag bad parses.
+    var ocrSourceImage: UIImage?
+    /// Every region the recognizer returned, before review filtering, for flagged captures.
+    var ocrRecognizedRegions: [RecognizedTextRegion] = []
+    var ocrFlagState: OcrFlagState = .idle
+    /// Only TestFlight (and local debug) builds can flag OCR captures for parser work.
+    var isOcrFlaggingAvailable = false
     var isRecognizingText = false
     var captureDeliveryToast: CaptureDeliveryToast?
     var isProductScannerActive = false
@@ -100,6 +129,7 @@ final class ScannerStore {
     func beginCaptureSession() -> String {
         let id = "batch-\(UUID().uuidString.lowercased())"
         activeCaptureBatchId = id
+        restoreScreenshotOcrReviewIfNeeded()
         return id
     }
 

@@ -179,15 +179,19 @@ extension ScannerStore {
         guard let image = await camera.capturePhoto() else { return }
 
         let normalizedImage = image.normalizedForProcessing()
-        let preparedImage = normalizedImage
-            .croppedToVisiblePreview(
-                previewSize: camera.previewLayer.bounds.size
-            )
+        let croppedImage = normalizedImage.croppedToVisiblePreview(
+            previewSize: camera.previewLayer.bounds.size
+        )
+        let preparedImage = croppedImage
             .cleanedForOCR()
             .resized(maxLongEdge: ocrCaptureMaxDimension)
         ocrReviewImage = preparedImage
+        ocrSourceImage = croppedImage
+        ocrRecognizedRegions = []
+        ocrFlagState = .idle
         do {
             let recognizedRegions = try await TextRecognizer.recognizeTextRegions(in: preparedImage)
+            ocrRecognizedRegions = recognizedRegions
             ocrTextRegions = DeviceIdentifierRegionExtractor.reviewRegions(from: recognizedRegions)
             ocrReviewText = ocrTextRegions.map(\.text).joined(separator: "\n")
             if ocrTextRegions.isEmpty {
@@ -202,8 +206,62 @@ extension ScannerStore {
 
     func clearOcrReview() {
         ocrReviewImage = nil
+        ocrSourceImage = nil
         ocrReviewText = ""
         ocrTextRegions = []
+        ocrRecognizedRegions = []
+        ocrFlagState = .idle
+    }
+
+    func refreshOcrFlaggingAvailability() async {
+        isOcrFlaggingAvailable = await AppDistributionChannel.isTestFlightOrDebug()
+    }
+
+    /// TestFlight only: sends the uncleaned capture and everything OCR read from it so bad
+    /// serial/model/UPC parses can be reproduced. Nothing is sent to a computer.
+    func flagOcrSelection(rawText: String, cleanedText: String?, correctedText: String? = nil, using clerk: Clerk) async {
+        guard isOcrFlaggingAvailable, ocrFlagState != .sending else { return }
+        guard let photo = (ocrSourceImage ?? ocrReviewImage)?
+            .boundedJPEGData(maxLongEdge: 3000, maxBytes: 5_000_000)
+        else {
+            ocrFlagState = .failed
+            return
+        }
+        let capture = OcrFlagCapture(
+            photoJPEG: photo,
+            selectedRawText: rawText,
+            selectedCleanedText: cleanedText == rawText ? nil : cleanedText,
+            regions: ocrTextRegions.map(OcrFlagRegionPayload.init(region:)),
+            rawRegionTexts: ocrRecognizedRegions.map(\.text),
+            correctedText: correctedText.flatMap { corrected in
+                let trimmed = corrected.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty || trimmed == rawText || trimmed == cleanedText ? nil : trimmed
+            }
+        )
+        ocrFlagState = .sending
+        do {
+            if ScreenshotScenario.isEnabled {
+                // Screenshot fixtures have no enrolled device; show the flagged state offline.
+                try await Task.sleep(for: .milliseconds(300))
+            } else {
+                try await cloudWorkspace.flagOcrCapture(capture, flagId: UUID(), using: clerk)
+            }
+            ocrFlagState = .sent
+            captureDeliveryToast = CaptureDeliveryToast(
+                title: "Flagged",
+                message: "Photo and OCR text saved for parser review.",
+                systemImage: "flag.fill",
+                tone: .success
+            )
+        } catch {
+            ocrFlagState = .failed
+            captureDeliveryToast = CaptureDeliveryToast(
+                title: "Flag failed",
+                message: error.localizedDescription,
+                systemImage: "exclamationmark.triangle.fill",
+                tone: .failure
+            )
+        }
     }
 
     func sendOcrReviewText() {
@@ -645,5 +703,19 @@ extension UIImage {
     }
 
     return UIImage(cgImage: cgImage, scale: scale, orientation: .up)
+    }
+}
+
+extension OcrFlagRegionPayload {
+    init(region: RecognizedTextRegion) {
+        self.init(
+            text: region.text,
+            confidence: Double(region.confidence),
+            isDeviceIdentifier: region.isDeviceIdentifier,
+            x: Double(region.boundingBox.minX),
+            y: Double(region.boundingBox.minY),
+            width: Double(region.boundingBox.width),
+            height: Double(region.boundingBox.height)
+        )
     }
 }

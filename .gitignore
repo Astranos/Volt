@@ -61,3 +61,6 @@ web/next-env.d.ts
 
 # Swift explicit-modules record cache written inside the project bundle during CLI builds
 apps/mobile/ios/Volt.xcodeproj/-Xcc/
+
+# OCR flags pulled with scripts/ocr-flags.mjs (customer photos; never commit)
+.ocr-flags/

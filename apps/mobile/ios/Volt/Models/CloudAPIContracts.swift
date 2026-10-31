@@ -52,6 +52,54 @@ struct PresignedPhotoUpload: Codable, Sendable {
     let headers: [String: String]
 }
 
+/// One recognizer region as it was shown in OCR review. Boxes use Vision's normalized,
+/// bottom-left-origin coordinates so a flagged capture can be replayed against its photo.
+struct OcrFlagRegionPayload: Codable, Sendable {
+    let text: String
+    let confidence: Double
+    let isDeviceIdentifier: Bool
+    let x: Double
+    let y: Double
+    let width: Double
+    let height: Double
+}
+
+struct CreateOcrFlagRequest: Codable, Sendable {
+    let deviceId: String
+    let deviceSecret: String
+    let flagId: String
+    let byteCount: Int
+    let selectedRawText: String
+    let selectedCleanedText: String?
+    let regions: [OcrFlagRegionPayload]
+    let rawRegionTexts: [String]
+    let appVersion: String?
+    let appBuild: String?
+    /// What the user typed over the OCR value before flagging: the expected answer for this capture.
+    let note: String?
+}
+
+struct CreateOcrFlagResponse: Codable, Sendable {
+    let flagId: String
+    let upload: PresignedPhotoUpload
+}
+
+struct FinalizeOcrFlagRequest: Codable, Sendable {
+    let deviceId: String
+    let deviceSecret: String
+    let flagId: String
+}
+
+/// The OCR review state a TestFlight tester flags: the captured photo plus what the recognizer read.
+struct OcrFlagCapture: Sendable {
+    let photoJPEG: Data
+    let selectedRawText: String
+    let selectedCleanedText: String?
+    let regions: [OcrFlagRegionPayload]
+    let rawRegionTexts: [String]
+    let correctedText: String?
+}
+
 struct MarkCloudBatchReadyRequest: Codable, Sendable {
     let deviceId: String
     let deviceSecret: String

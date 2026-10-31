@@ -1,5 +1,13 @@
 import SwiftUI
 
+/// Progress of the TestFlight-only OCR flag action shown on the extracted text card.
+enum OcrFlagState: Equatable {
+    case idle
+    case sending
+    case sent
+    case failed
+}
+
 struct ExtractedTextActionCard: View {
     let text: String
     let rawText: String
@@ -8,13 +16,24 @@ struct ExtractedTextActionCard: View {
     let onToggleRepresentation: () -> Void
     let onSend: (String) -> Void
     let onDismiss: () -> Void
+    /// Owned by the presenting view so it can lift the card above the keyboard and close it.
+    var inputFocus: FocusState<Bool>.Binding
+    /// The OCR photo clipped to the selected text, so the user can check what was read before sending.
+    var snippet: UIImage? = nil
+    /// TestFlight-only. When nil the Flag button is hidden (App Store builds, App Clip).
+    var flagState: OcrFlagState? = nil
+    /// Receives the field's current text, so a value the user corrected travels with the flag.
+    var onFlag: ((String) -> Void)? = nil
+    /// Always editable: some sites reject characters OCR keeps, so the value can be fixed in place.
     @State private var draft = ""
-    @State private var isEditing = false
-    @FocusState private var isDraftFocused: Bool
 
-    /// Some sites reject characters OCR keeps, so the user can rewrite the value before it goes out.
     private var outgoingText: String {
-        isEditing ? draft : text
+        draft
+    }
+
+    /// The user typed over the OCR value, so the Raw/Cleaned toggle turns into Reset.
+    private var isEdited: Bool {
+        draft != text
     }
 
     private var canSend: Bool {
@@ -22,42 +41,21 @@ struct ExtractedTextActionCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Extracted Text")
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(.black)
+        VStack(alignment: .leading, spacing: 16) {
+            if let snippet {
+                OcrSnippetView(image: snippet)
+            }
 
-                    if isEditing {
-                        TextField("Text to send", text: $draft, axis: .vertical)
-                            .font(.title3)
-                            .foregroundStyle(.black)
-                            .lineLimit(1...4)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .submitLabel(.send)
-                            .focused($isDraftFocused)
-                            .onSubmit(send)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(.black.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    } else {
-                        Text(text)
-                            .font(.title3)
-                            .foregroundStyle(.black.opacity(0.62))
-                            .lineLimit(3)
-                            .minimumScaleFactor(0.78)
-                    }
-
-                    if isCleaning {
-                        Label("Cleaning…", systemImage: "wand.and.sparkles")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.black.opacity(0.56))
-                    }
-                }
+            HStack(alignment: .center, spacing: 10) {
+                Text("Extracted Text")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(.black)
 
                 Spacer(minLength: 0)
+
+                if let flagState, let onFlag {
+                    OcrFlagButton(state: flagState, action: { onFlag(draft) })
+                }
 
                 Button(action: onDismiss) {
                     Image(systemName: "xmark")
@@ -70,37 +68,78 @@ struct ExtractedTextActionCard: View {
                 .accessibilityLabel("Close")
             }
 
-            VStack(spacing: 12) {
-                HStack(spacing: 12) {
-                    Button(action: toggleEditing) {
-                        Label(isEditing ? "Done" : "Edit", systemImage: isEditing ? "checkmark" : "pencil")
-                            .font(.headline)
-                            .foregroundStyle(.black)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
-                            .background(.black.opacity(0.12), in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isCleaning)
+            Group {
+                HStack(alignment: .center, spacing: 8) {
+                    TextField("Text to send", text: $draft, axis: .vertical)
+                        .font(.title3)
+                        .foregroundStyle(.black)
+                        .lineLimit(1...4)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .submitLabel(.done)
+                        .focused(inputFocus)
+                        .accessibilityIdentifier("extracted-text-field")
 
-                    Button(action: onToggleRepresentation) {
-                        Label(isShowingRaw ? "Cleaned" : "Raw", systemImage: isShowingRaw ? "wand.and.sparkles" : "doc.text")
-                            .font(.headline)
-                            .foregroundStyle(.black)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
-                            .background(.black.opacity(0.12), in: Capsule())
+                    // Shown inside the field so the card keeps its height when cleanup finishes.
+                    if isCleaning {
+                        Label("Cleaning…", systemImage: "wand.and.sparkles")
+                            .labelStyle(.iconOnly)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.green)
+                            .symbolEffect(.pulse, options: .repeating)
+                            .frame(width: 28, height: 28)
+                            .transition(.opacity)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(isCleaning)
+
+                    if inputFocus.wrappedValue {
+                        Button {
+                            inputFocus.wrappedValue = false
+                        } label: {
+                            Image(systemName: "keyboard.chevron.compact.down")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(.black.opacity(0.6))
+                                .frame(width: 34, height: 34)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Hide keyboard")
+                    }
                 }
+                .padding(.leading, 14)
+                .padding(.trailing, inputFocus.wrappedValue ? 4 : 14)
+                .padding(.vertical, 10)
+                .background(.black.opacity(0.07), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(inputFocus.wrappedValue ? Color.green.opacity(0.7) : .clear, lineWidth: 1.5)
+                }
+                .animation(.easeOut(duration: 0.2), value: isCleaning)
+            }
+
+            HStack(spacing: 12) {
+                Group {
+                    if isEdited {
+                        Button(action: resetDraft) {
+                            Label("Reset", systemImage: "arrow.uturn.backward")
+                                .secondaryActionStyle()
+                        }
+                        .accessibilityHint("Puts back the text OCR read.")
+                    } else {
+                        Button(action: onToggleRepresentation) {
+                            Label(isShowingRaw ? "Cleaned" : "Raw", systemImage: isShowingRaw ? "wand.and.sparkles" : "doc.text")
+                                .secondaryActionStyle()
+                        }
+                        .disabled(isCleaning)
+                    }
+                }
+                .buttonStyle(.plain)
+                .frame(width: 128)
 
                 Button(action: send) {
                     Label("Send", systemImage: "paperplane.fill")
                         .font(.title3.weight(.bold))
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 64)
+                        .frame(height: 56)
                         .background(Color.green.opacity(canSend ? 1 : 0.4), in: Capsule())
                 }
                 .buttonStyle(.plain)
@@ -121,25 +160,111 @@ struct ExtractedTextActionCard: View {
         }
         .shadow(color: .black.opacity(0.22), radius: 28, y: 16)
         .accessibilityElement(children: .contain)
-        .onChange(of: text) { _, newText in
-            // Switching Raw/Cleaned while editing restarts the draft from the newly chosen text.
-            if isEditing {
+        .onAppear {
+            draft = text
+        }
+        .onChange(of: text) { oldText, newText in
+            // Cleanup finishing or Raw/Cleaned switching refreshes the field unless the user typed over it.
+            if draft == oldText {
                 draft = newText
             }
         }
+        .onChange(of: draft) { _, newDraft in
+            // A vertical field turns Return into a newline; treat it as Done and close the keyboard.
+            guard newDraft.contains("\n") else { return }
+            draft = newDraft.replacingOccurrences(of: "\n", with: "")
+            inputFocus.wrappedValue = false
+        }
     }
 
-    private func toggleEditing() {
-        if !isEditing {
-            draft = text
-        }
-        isEditing.toggle()
-        isDraftFocused = isEditing
+    private func resetDraft() {
+        draft = text
     }
 
     private func send() {
         guard canSend else { return }
+        inputFocus.wrappedValue = false
         onSend(outgoingText)
+    }
+}
+
+private extension View {
+    func secondaryActionStyle() -> some View {
+        font(.headline)
+            .foregroundStyle(.black)
+            .lineLimit(1)
+            .minimumScaleFactor(0.85)
+            .frame(maxWidth: .infinity)
+            .frame(height: 56)
+            .background(.black.opacity(0.12), in: Capsule())
+    }
+}
+
+/// The source photo clipped to the selected text, shown on the card so the user can compare
+/// the pixels with the extracted value before sending or editing it.
+private struct OcrSnippetView: View {
+    let image: UIImage
+
+    var body: some View {
+        Image(uiImage: image)
+            .resizable()
+            .interpolation(.high)
+            .aspectRatio(contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(.black.opacity(0.12), lineWidth: 1)
+            }
+            .frame(maxHeight: 96)
+            .frame(maxWidth: .infinity)
+            .accessibilityLabel("Photo of the selected text")
+    }
+}
+
+/// TestFlight-only flag control. It sits in the card header beside Close, as an icon, so it
+/// never crowds the Edit and Raw/Cleaned actions; the "Flagged" toast confirms the result.
+private struct OcrFlagButton: View {
+    let state: OcrFlagState
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Group {
+                if state == .sending {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(.orange)
+                } else {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 15, weight: .bold))
+                }
+            }
+            .foregroundStyle(state == .failed ? Color.red : Color.orange)
+            .frame(width: 34, height: 34)
+            .background((state == .failed ? Color.red : Color.orange).opacity(0.16), in: Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(state == .sending)
+        .allowsHitTesting(state != .sent)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint("Saves this photo and its OCR text so parsing can be improved.")
+    }
+
+    private var systemImage: String {
+        switch state {
+        case .idle, .sending: "flag"
+        case .sent: "flag.fill"
+        case .failed: "arrow.clockwise"
+        }
+    }
+
+    private var accessibilityLabel: String {
+        switch state {
+        case .idle: "Flag OCR result"
+        case .sending: "Flagging OCR result"
+        case .sent: "OCR result flagged"
+        case .failed: "Retry flagging OCR result"
+        }
     }
 }
 

@@ -104,6 +104,49 @@ private enum IdentifierMatcherFixture {
             try require(cleaned == testCase.expected, "Cleanup of \(testCase.text) gave \(cleaned), expected \(testCase.expected)")
         }
 
+        // Ray-Ban Meta arm (flagged from TestFlight 0.1.17 (68)): OCR reads the "·" separators as
+        // hyphens and returns one line. Only the FCC ID's own value is regulatory; the serial
+        // and model that follow must still be found, each as its own tappable region.
+        let metaLine = "FCC ID 2AYOA-4003- 4V37W27HC901FB- RW4012"
+        let metaMatches = LiveTextIdentifierMatcher.standaloneMatches(in: metaLine)
+        try require(
+            metaMatches.map(\.value) == ["4V37W27HC901FB", "RW4012"] && metaMatches.map(\.kind) == [.serial, .model],
+            "Meta glasses line gave \(metaMatches.map { "\($0.kind.rawValue)=\($0.value)" })"
+        )
+        try requireMatch(metaLine, kind: .model, value: "RW4012")
+        try require(
+            LiveTextIdentifierMatcher.identifierMatches(in: metaLine).map(\.value) == ["4V37W27HC901FB", "RW4012"],
+            "TextRecognizer should get both identifiers from the Meta line"
+        )
+        try require(
+            LiveTextIdentifierMatcher.identifierMatches(in: "FCC ID BCG-E3091A Serial No. F2LX8ABCHG7F").map(\.value) == ["F2LX8ABCHG7F"],
+            "A labeled serial on a regulatory line should be the only identifier"
+        )
+        let regulatoryOnly = "ON - IC 26243-4003 - ANATEL 03832-25-17896 - Input 5.0V d.c. 1.0 A"
+        try require(LiveTextIdentifierMatcher.match(regulatoryOnly) == nil, "Matched a certification number: \(regulatoryOnly)")
+        try require(LiveTextIdentifierMatcher.match("FCC ID BCG-E3091A") == nil, "Matched an FCC ID as a device identifier")
+
+        func lineRegion(_ text: String, y: CGFloat) -> RecognizedTextRegion {
+            let box = CGRect(x: 0.05, y: y, width: 0.8, height: 0.02)
+            return RecognizedTextRegion(text: text, boundingBox: box, quadrilateral: TextQuadrilateral(rect: box), confidence: 1)
+        }
+        let metaRegions = [
+            lineRegion(metaLine, y: 0.5),
+            lineRegion("601SSB 53• 22 155", y: 0.5),
+            lineRegion(regulatoryOnly, y: 0.47),
+        ]
+        let identifiers = DeviceIdentifierRegionExtractor.reviewRegions(from: metaRegions).filter(\.isDeviceIdentifier)
+        try require(identifiers.map(\.text) == ["4V37W27HC901FB", "RW4012"], "Meta review regions: \(identifiers.map(\.text))")
+        let line = metaRegions[0].boundingBox
+        for identifier in identifiers {
+            try require(
+                identifier.boundingBox.width < line.width / 2
+                    && identifier.boundingBox.minX >= line.minX && identifier.boundingBox.maxX <= line.maxX + 0.0001,
+                "\(identifier.text) should be clipped to its own characters, got \(identifier.boundingBox)"
+            )
+        }
+        try require(identifiers[0].boundingBox.maxX <= identifiers[1].boundingBox.minX + 0.0001, "Serial box should sit left of the model box")
+
         print("identifier matcher fixtures passed")
     }
 }
