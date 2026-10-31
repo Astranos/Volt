@@ -76,7 +76,7 @@ enum TextRecognizer {
     ) -> [RecognizedTextRegion] {
         var used = Set<Int>()
         var merged: [RecognizedTextRegion] = []
-        for region in regions {
+        for (regionIndex, region) in regions.enumerated() {
             guard region.confidence < lowConfidenceThreshold else {
                 merged.append(region)
                 continue
@@ -85,6 +85,11 @@ enum TextRecognizer {
                 !used.contains(index)
                     && retry[index].confidence > region.confidence
                     && overlapFraction(region.boundingBox, retry[index].boundingBox) >= 0.5
+                    // A retry that also spans another original line would duplicate that line's text.
+                    && !regions.indices.contains { otherIndex in
+                        otherIndex != regionIndex
+                            && overlapFraction(regions[otherIndex].boundingBox, retry[index].boundingBox) >= 0.5
+                    }
             }
             // A retry that only re-read part of the line would drop the rest of it.
             let coveredArea = replacements.reduce(CGFloat(0)) { total, index in

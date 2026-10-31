@@ -197,10 +197,10 @@ export const listOcrFlags = internalQuery({
       .query("ocrFlags")
       .withIndex("by_createdAt", (q) => q.gt("createdAt", args.since ?? 0))
       .order("desc")
+      // Filter before take() so newer unfinished uploads don't crowd out ready flags.
+      .filter((q) => q.eq(q.field("status"), "ready"))
       .take(limit);
-    return flags
-      .filter((flag) => flag.status === "ready")
-      .map(({ _id: _ignoredId, _creationTime: _ignoredCreation, workspaceId: _ignoredWorkspace, ...flag }) => flag);
+    return flags.map(({ _id: _ignoredId, _creationTime: _ignoredCreation, workspaceId: _ignoredWorkspace, ...flag }) => flag);
   },
 });
 

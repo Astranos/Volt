@@ -80,6 +80,11 @@ test("a flag returns an R2 upload URL and is listed only after the photo is conf
     status: "ready",
   });
   expect(flags[0]).not.toHaveProperty("workspaceId");
+
+  // A newer upload that never finished must not crowd the ready flag out of a small page.
+  const pendingId = "5a8d2c3b-0e4f-4d6a-9b7c-2d3e4f5a6b7c";
+  expect((await post(t, "/api/mobile/ocr-flags", flagBody(credential, pendingId))).status).toBe(200);
+  expect((await t.query(listOcrFlags, { limit: 1 })).map((flag) => flag.flagId)).toEqual([FLAG_ID]);
 });
 
 test("retrying a flag is idempotent and other devices cannot claim it", async () => {
