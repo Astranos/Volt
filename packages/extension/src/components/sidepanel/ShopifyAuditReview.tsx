@@ -99,23 +99,25 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
       let tabId: number;
       if (tab?.id !== undefined) {
         tabId = tab.id;
-        const shownUrl = tab.pendingUrl ?? tab.url;
+        const showsProduct = (url: string | undefined) => url?.split(/[?#]/)[0] === product.url;
         const shown = (reviewRef.current ?? current).products.find((item) => item.id === (reviewRef.current ?? current).currentId);
         // Same product: just bring it forward rather than reloading the editor.
         // Otherwise let Shopify swap the product in place, and reload only if that doesn't take.
-        const outcome = shownUrl === product.url ? "done"
-          : tab.status === "complete" ? await openProductInPlace(chrome.scripting, tabId, shownUrl, shown, product) : "fallback";
+        const outcome = showsProduct(tab.pendingUrl ?? tab.url) ? "done"
+          : tab.status === "complete" ? await openProductInPlace(chrome.scripting, tabId, tab.pendingUrl ?? tab.url, shown, product) : "fallback";
         if (stale()) return;
         if (outcome === "blocked") {
           // Shopify kept the old product (unsaved changes): leave the selection where it is.
           await chrome.tabs.update(tabId, { active: true });
           return;
         }
-        if (outcome === "fallback") {
+        if (outcome !== "done") {
           // The tab may have moved on while we tried; only reload it if it's still ours.
           const fresh = await reviewTab(reviewRef.current ?? current);
           if (stale()) return;
-          if (fresh?.id === tabId) await chrome.tabs.update(tabId, { url: product.url, active: true });
+          // A page that went away and is now on this product is Shopify loading it itself: don't load it twice.
+          const loading = outcome === "unknown" && showsProduct(fresh?.pendingUrl ?? fresh?.url);
+          if (fresh?.id === tabId) await chrome.tabs.update(tabId, { active: true, ...(loading ? {} : { url: product.url }) });
           else {
             const panelWindow = await chrome.windows.getCurrent();
             if (stale()) return;
