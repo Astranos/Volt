@@ -130,6 +130,10 @@ struct CameraSessionControls: View {
     let onToggleGrid: () -> Void
     let onCapture: () -> Void
     var onConnection: (() -> Void)?
+    /// Latest photo of this session; shown bottom-left in Photo mode like the iOS Camera app.
+    var lastPhoto: GalleryPhoto?
+    var sessionPhotoCount = 0
+    var onOpenSessionPhotos: (() -> Void)?
     var onSelectProductScanner: (() -> Void)?
     var onToggleProductScanMode: (() -> Void)?
     var onDeactivateProductScanner: (() -> Void)?
@@ -327,7 +331,15 @@ struct CameraSessionControls: View {
     private var connectionSlot: some View {
         ZStack {
             Color.clear
-            if let onConnection {
+            // Photos don't type into a computer, so in Photo mode this slot previews the last shot.
+            if activeMode == .photo, !isProductScannerSelected, let lastPhoto, let onOpenSessionPhotos {
+                CameraLastPhotoButton(
+                    photo: lastPhoto,
+                    count: sessionPhotoCount,
+                    rotation: controlRotation,
+                    action: onOpenSessionPhotos
+                )
+            } else if let onConnection {
                 SessionSideActionButton(
                     systemImage: connectionSystemImage,
                     title: connectionLabel,

@@ -104,13 +104,15 @@ test('photo runs stop at non-photos and source changes, keeping mixed capture or
   assert.match(scanner, /results: \$0\.value\.sorted \{ \$0\.capturedAt < \$1\.capturedAt \}/);
 });
 
-test('compact photos retain expandable gallery, preview, resend and delete', () => {
-  assert.match(rows, /Array\(batch\.results\.suffix\(4\)\)/);
-  assert.match(rows, /LazyVGrid/);
-  assert.match(rows, /adaptive\(minimum: 96, maximum: 112\)/);
-  assert.match(rows, /View all/);
-  assert.match(rows, /sheet\(item: \$previewedPhoto\)/);
-  assert.match(rows, /onResend\(result\)/);
-  assert.match(rows, /onDelete\(result\)/);
-  assert.match(rows, /Preview photo/);
+test('photo runs use the shared strip and full-screen viewer with resend and delete', () => {
+  const shared = readFileSync(new URL('../ios/Volt/Views/SharedScannerTabComponents.swift', import.meta.url), 'utf8');
+  assert.match(rows, /HistoryPhotoStrip\(/);
+  assert.match(rows, /onSend: \{ photo in result\(for: photo\)\.map\(onResend\) \}/);
+  assert.match(rows, /onDelete: \{ photo in result\(for: photo\)\.map\(onDelete\) \}/);
+  assert.match(shared, /struct HistoryPhotoStrip: View/);
+  assert.match(shared, /\.fullScreenCover\(item: \$viewerStart\)[\s\S]*PhotoGalleryViewer\(/);
+  assert.match(shared, /struct PhotoGalleryViewer: View[\s\S]*\.tabViewStyle\(\.page\(indexDisplayMode: \.never\)\)/);
+  assert.match(shared, /ShareLink\(item: Image\(uiImage: image\)/);
+  assert.match(shared, /struct CameraLastPhotoButton: View/);
+  assert.doesNotMatch(rows, /LazyVGrid|View all|previewedPhoto/);
 });

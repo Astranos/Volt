@@ -175,11 +175,47 @@ extension ScannerStore {
             ),
             ScanResult(
                 kind: .photo,
-                value: "Actual PS5 console photo",
+                value: "PS5 photo 1",
                 format: "photo",
-                capturedAt: Date.now.addingTimeInterval(-86_400),
+                capturedAt: Date.now.addingTimeInterval(-86_400 + 20),
                 deliveryState: .sent,
                 imageData: assetPhotoData(named: "screenshot-product-1"),
+                batchId: "fixture-session-yesterday"
+            ),
+            ScanResult(
+                kind: .photo,
+                value: "PS5 photo 2",
+                format: "photo",
+                capturedAt: Date.now.addingTimeInterval(-86_400 + 40),
+                deliveryState: .sent,
+                imageData: assetPhotoData(named: "screenshot-product-2"),
+                batchId: "fixture-session-yesterday"
+            ),
+            ScanResult(
+                kind: .photo,
+                value: "PS5 photo 3",
+                format: "photo",
+                capturedAt: Date.now.addingTimeInterval(-86_400 + 60),
+                deliveryState: .sent,
+                imageData: assetPhotoData(named: "screenshot-product-3"),
+                batchId: "fixture-session-yesterday"
+            ),
+            ScanResult(
+                kind: .photo,
+                value: "PS5 photo 4",
+                format: "photo",
+                capturedAt: Date.now.addingTimeInterval(-86_400 + 80),
+                deliveryState: .failed,
+                imageData: assetPhotoData(named: "screenshot-product-4"),
+                batchId: "fixture-session-yesterday"
+            ),
+            ScanResult(
+                kind: .photo,
+                value: "PS5 photo 5",
+                format: "photo",
+                capturedAt: Date.now.addingTimeInterval(-86_400 + 100),
+                deliveryState: .sent,
+                imageData: assetPhotoData(named: "screenshot-product-5"),
                 batchId: "fixture-session-yesterday"
             ),
         ]

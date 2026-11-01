@@ -462,6 +462,12 @@ final class ClipScannerStore {
         photos.removeAll { ($0.batchId ?? $0.id.uuidString) == batchId }
     }
 
+    /// Sends one photo again from history or the viewer.
+    func resendPhoto(id: UUID) {
+        guard let photo = photos.first(where: { $0.id == id }) else { return }
+        Task { _ = await sendPhoto(photo) }
+    }
+
     func removeCapture(id: UUID) {
         captures.removeAll { $0.id == id }
     }

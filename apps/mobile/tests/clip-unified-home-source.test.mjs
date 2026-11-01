@@ -36,15 +36,13 @@ test("Clip starts offline and resumes the selected session", () => {
   assert.doesNotMatch(source, /isCaptureEnabled: isConnected|isModeSelectionEnabled: isConnected/);
 });
 
-test("Clip history reuses bounded square previews, gallery, and delete actions", () => {
-  assert.match(history, /ClipPhotoBatchCard\(/);
+test("Clip history shows photos in the shared strip with viewer, resend and delete", () => {
+  assert.match(history, /HistoryPhotoStrip\(/);
   assert.match(history, /store\.removeSession\(batchId: id\)/);
-  assert.match(history, /onDeletePhoto: \{ store\.removePhoto\(id: \$0\.id\) \}/);
-  assert.match(history, /onDeleteBatch: \{ store\.removePhotos\(batchId: id\) \}/);
-  assert.match(history, /\.sheet\(item: \$previewedPhoto\)/);
-  assert.match(source, /Array\(batch\.photos\.suffix\(4\)\)/);
-  assert.match(source, /ClipPhotoBatchGallery\(batch: batch, onDelete: onDeletePhoto\)/);
-  assert.match(section("struct ClipPhotoThumbnail:", "struct ClipPhotoBatchGallery:"), /\.aspectRatio\(1, contentMode: \.fit\)/);
+  assert.match(history, /onSend: \{ store\.resendPhoto\(id: \$0\.id\) \}/);
+  assert.match(history, /onDelete: \{ store\.removePhoto\(id: \$0\.id\) \}/);
+  assert.match(history, /onDeleteAll: \{ store\.removePhotos\(batchId: id\) \}/);
+  assert.doesNotMatch(source, /ClipPhotoBatchCard|ClipPhotoPreviewSheet|ClipPhotoBatchGallery/);
 });
 
 test("Clip connection choices retain guest QR pairing and expose save-only destination", () => {

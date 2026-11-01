@@ -325,7 +325,6 @@ private struct CaptureHistorySessionCard: View {
                     switch entry {
                     case .photos(let batch):
                         CaptureHistoryPhotoBatch(batch: batch, onResend: onResend, onDelete: onDelete)
-                            .padding(12)
                     case .result(let result):
                         CapturedResultRow(result: result, canResend: true, onResend: { onResend(result) }, onDelete: { onDelete(result) })
                     }

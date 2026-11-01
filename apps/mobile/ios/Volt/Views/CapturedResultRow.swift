@@ -1,106 +1,38 @@
 import SwiftUI
 
-/// A bounded preview of a contiguous photo run, with an inline lazy gallery.
-struct CaptureHistoryPhotoBatch: View {
-    let batch: PhotoBatch
-    let onResend: (ScanResult) -> Void
-    let onDelete: (ScanResult) -> Void
-    @State private var isExpanded = false
-    @State private var previewedPhoto: ScanResult?
-
-    private var visibleResults: [ScanResult] {
-        isExpanded ? batch.results : Array(batch.results.suffix(4))
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Label(batch.title, systemImage: "photo.stack")
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-                DeliveryBadge(state: batch.deliveryState)
-            }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 96, maximum: 112), spacing: 8)], spacing: 8) {
-                ForEach(visibleResults) { result in
-                    VStack(spacing: 4) {
-                        Button { previewedPhoto = result } label: {
-                            GeometryReader { proxy in
-                                Group {
-                                    if let data = result.imageData, let image = UIImage(data: data) {
-                                        Image(uiImage: image).resizable().scaledToFill()
-                                    } else {
-                                        Image(systemName: "photo").frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    }
-                                }
-                                .frame(width: proxy.size.width, height: proxy.size.height)
-                                .clipped()
-                            }
-                            .aspectRatio(1, contentMode: .fit)
-                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Preview photo from \(result.capturedAt.formatted(date: .omitted, time: .shortened))")
-                        HStack(spacing: 0) {
-                            Button { onResend(result) } label: {
-                                Label("Resend photo", systemImage: "paperplane").labelStyle(.iconOnly)
-                                    .frame(minWidth: 44, minHeight: 44)
-                            }
-                            Button(role: .destructive) { onDelete(result) } label: {
-                                Label("Delete photo", systemImage: "trash").labelStyle(.iconOnly)
-                                    .frame(minWidth: 44, minHeight: 44)
-                            }
-                        }
-                        .buttonStyle(.borderless)
-                    }
-                }
-            }
-            if batch.results.count > 4 {
-                Button(isExpanded ? "Show fewer photos" : "View all \(batch.results.count) photos") {
-                    isExpanded.toggle()
-                }
-                .font(.subheadline.weight(.semibold))
-                .buttonStyle(.bordered)
-            }
+extension ScanResult {
+    var galleryPhoto: GalleryPhoto {
+        let data = imageData
+        let status: HistoryCaptureStatus = switch deliveryState {
+        case .sent: .sent
+        case .sending: .sending
+        case .failed: .failed
+        case .saved: .unsent
         }
-        .sheet(item: $previewedPhoto) { result in
-            CaptureHistoryPhotoPreview(result: result, onResend: { onResend(result) }, onDelete: { onDelete(result) })
+        return GalleryPhoto(id: id, capturedAt: capturedAt, status: status) {
+            data.flatMap(UIImage.init(data:))
         }
     }
 }
 
-private struct CaptureHistoryPhotoPreview: View {
-    let result: ScanResult
-    let onResend: () -> Void
-    let onDelete: () -> Void
-    @Environment(\.dismiss) private var dismiss
+/// A contiguous photo run in a history session, shown with the shared strip and viewer.
+struct CaptureHistoryPhotoBatch: View {
+    let batch: PhotoBatch
+    let onResend: (ScanResult) -> Void
+    let onDelete: (ScanResult) -> Void
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if let data = result.imageData, let image = UIImage(data: data) {
-                    Image(uiImage: image).resizable().scaledToFit()
-                } else {
-                    ContentUnavailableView("Photo preview unavailable", systemImage: "photo")
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationTitle("Photo")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-                ToolbarItemGroup(placement: .bottomBar) {
-                    Button("Resend", systemImage: "paperplane", action: onResend)
-                    Spacer()
-                    Button("Delete", systemImage: "trash", role: .destructive) {
-                        onDelete()
-                        dismiss()
-                    }
-                }
-            }
-        }
+        HistoryPhotoStrip(
+            title: batch.title,
+            photos: batch.results.map(\.galleryPhoto),
+            onSend: { photo in result(for: photo).map(onResend) },
+            onDelete: { photo in result(for: photo).map(onDelete) },
+            onDeleteAll: { batch.results.forEach(onDelete) }
+        )
+    }
+
+    private func result(for photo: GalleryPhoto) -> ScanResult? {
+        batch.results.first { $0.id == photo.id }
     }
 }
 
