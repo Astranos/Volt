@@ -893,8 +893,11 @@ struct HistoryPhotoStrip: View {
                     }
                 }
                 .padding(.leading, 52)
+                .padding(.trailing, 12)
             }
-            .scrollClipDisabled()
+            // Run the strip to the container's trailing edge (past the row padding) so a cut-off
+            // thumbnail reads as "scroll for more", while the container still clips it.
+            .padding(.trailing, -12)
         }
         .padding(.vertical, 10)
         .padding(.horizontal, 12)

@@ -102,6 +102,7 @@ struct ClipUnifiedHistoryView: View {
                     onDeleteAll: { store.removePhotos(batchId: id) }
                 )
                 .background(Color(.tertiarySystemGroupedBackground).opacity(0.6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
         }
         .padding(14)
