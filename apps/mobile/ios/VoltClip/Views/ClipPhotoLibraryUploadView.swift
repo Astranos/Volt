@@ -3,9 +3,13 @@ import PhotosUI
 import SwiftUI
 import UIKit
 
-struct ClipPhotoLibraryUploadSection: View {
+/// Runs imports picked from the home bar's Photos button and shows progress above
+/// `content` only while there's something to report. Wraps content so the selection
+/// observer stays alive when no banner is shown.
+struct ClipPhotoLibraryUploadSection<Content: View>: View {
     @Bindable var store: ClipScannerStore
-    @State private var pickerItems: [PhotosPickerItem] = []
+    @Binding var pickerItems: [PhotosPickerItem]
+    @ViewBuilder let content: () -> Content
     @State private var isPreparingUploads = false
     @State private var selectedUploadTotal = 0
     @State private var selectedUploadPrepared = 0
@@ -19,30 +23,17 @@ struct ClipPhotoLibraryUploadSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("From Photo Library")
-                .font(.headline)
-
-            if isPreparingUploads {
-                PhotoPreparationProgressSummary(
-                    prepared: selectedUploadPrepared,
-                    total: selectedUploadTotal
-                )
-            } else if let progress = activeUploadProgress {
-                PhotoUploadProgressSummary(progress: progress)
-            }
-
-            ScannerPhotoPickerAccessory(
-                selectedItems: $pickerItems,
-                isConnected: store.isConnected,
-                isPreparing: isPreparingUploads,
-                isConnecting: store.isPairing,
-                isUploading: activeUploadProgress != nil,
-                statusText: uploadStatusText,
-                showsError: uploadError != nil,
-                disabledHint: store.targetHint
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        let banner = PhotoImportStatusBanner(
+            isPreparing: isPreparingUploads,
+            prepared: selectedUploadPrepared,
+            total: selectedUploadTotal,
+            progress: activeUploadProgress,
+            message: statusMessage,
+            isError: uploadError != nil
+        )
+        VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
+            if banner.isVisible { banner }
+            content()
         }
         .onChange(of: pickerItems) { _, items in
             guard !items.isEmpty else { return }
@@ -56,33 +47,11 @@ struct ClipPhotoLibraryUploadSection: View {
         }
     }
 
-    private var uploadStatusText: String {
-        let status: String
-        if let uploadError {
-            status = uploadError
-        } else if isPreparingUploads {
-            if selectedUploadTotal > 0 {
-                status = "Reading \(selectedUploadReadCount) of \(selectedUploadTotal) selected photos"
-            } else {
-                status = "Preparing uploads..."
-            }
-        } else if let progress = activeUploadProgress {
-            status = "\(progress.title). \(progress.detail)."
-        } else if store.isPairing {
-            status = store.statusText
-        } else if store.isConnected {
-            status = "Ready to upload to Chrome"
-        } else {
-            status = store.targetHint
-        }
-
-        guard queuedUploadPhotoCount > 0 else { return status }
-        return "\(status) \(queuedUploadPhotoCount) more photo\(queuedUploadPhotoCount == 1 ? "" : "s") queued."
-    }
-
-    private var selectedUploadReadCount: Int {
-        guard selectedUploadTotal > 0 else { return 0 }
-        return min(max(selectedUploadPrepared, 1), selectedUploadTotal)
+    private var statusMessage: String? {
+        if let uploadError { return uploadError }
+        guard queuedUploadPhotoCount > 0 else { return nil }
+        let photos = "\(queuedUploadPhotoCount) photo\(queuedUploadPhotoCount == 1 ? "" : "s")"
+        return store.isConnected ? "\(photos) queued." : "\(photos) waiting for a workspace connection."
     }
 
     private func uploadSelectedItems(_ items: [PhotosPickerItem]) async {

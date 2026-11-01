@@ -86,8 +86,10 @@ print("photo batch history Swift fixtures passed")
 });
 
 test('both history surfaces use the shared card with photo runs instead of individual photo rows', () => {
-  assert.equal((scanner.match(/CaptureHistorySessionCard\(/g) ?? []).length, 2);
-  assert.match(scanner, /ForEach\(session\.entries\)/);
+  // Both history surfaces render through the one day-grouped session list.
+  assert.equal((scanner.match(/CaptureHistorySessionList\(/g) ?? []).length, 2);
+  assert.equal((scanner.match(/CaptureHistorySessionCard\(/g) ?? []).length, 1);
+  assert.match(scanner, /ForEach\(Array\(session\.entries\.enumerated\(\)\)/);
   assert.match(scanner, /case \.photos\(let batch\):[\s\S]*CaptureHistoryPhotoBatch/);
   assert.doesNotMatch(scanner, /ForEach\(session\.results\)/);
 });

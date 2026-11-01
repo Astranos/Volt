@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 import UIKit
 
@@ -7,6 +8,8 @@ struct RootView: View {
     @State private var selectedTab = AppSection.text
     @State private var isCaptureSessionPresented = false
     @State private var presentedSheet: RootPresentedSheet?
+    /// Picked from the bar's Photos button; the visible home/history view runs the import.
+    @State private var photoSelection: [PhotosPickerItem] = []
     private let showsAccountSettings: Bool
 
     private var ownershipConflictIsPresented: Binding<Bool> {
@@ -14,16 +17,6 @@ struct RootView: View {
             get: { store.cloudWorkspace.accountSwitchConflict != nil },
             set: { _ in }
         )
-    }
-
-    private var targetSymbol: String {
-        if store.cloudWorkspace.selectedComputer != nil {
-            return "cursorarrow.motionlines"
-        }
-        if store.cloudWorkspace.selectedTargetComputer != nil {
-            return "desktopcomputer.trianglebadge.exclamationmark"
-        }
-        return "iphone"
     }
 
     init(showsAccountSettings: Bool = true) {
@@ -43,9 +36,8 @@ struct RootView: View {
             GeometryReader { proxy in
                 ScannerHomeControls(
                     onScan: startCapture,
-                    onConnections: { presentedSheet = .connections },
+                    photoSelection: $photoSelection,
                     onSettings: { presentedSheet = .settings },
-                    targetSymbol: targetSymbol,
                     isScanSelected: selectedTab == .text,
                     isSettingsSelected: selectedTab == .settings
                 )
@@ -62,8 +54,6 @@ struct RootView: View {
         }
         .sheet(item: $presentedSheet) { sheet in
             switch sheet {
-            case .connections:
-                CloudTargetPickerSheet()
             case .settings:
                 SettingsSheet(showsAccountSettings: showsAccountSettings)
             }
@@ -115,9 +105,9 @@ struct RootView: View {
     private var selectedContent: some View {
         switch selectedTab {
         case .text, .barcode, .dictation:
-            UnifiedCaptureHomeView()
+            UnifiedCaptureHomeView(photoSelection: $photoSelection)
         case .photos:
-            CaptureHistoryView()
+            CaptureHistoryView(photoSelection: $photoSelection)
         case .settings:
             SettingsView(showsAccountSettings: showsAccountSettings)
         }
@@ -143,7 +133,6 @@ struct RootView: View {
 }
 
 private enum RootPresentedSheet: String, Identifiable {
-    case connections
     case settings
 
     var id: String { rawValue }

@@ -29,7 +29,7 @@ const captureModeCardsSource = read("../ios/Volt/Views/CaptureModeCards.swift");
 
 test("full app opens one unified capture session without pairing or WebRTC", () => {
   assert.doesNotMatch(appSource, /PairingURLParser/);
-  assert.match(rootSource, /UnifiedCaptureHomeView\(\)/);
+  assert.match(rootSource, /UnifiedCaptureHomeView\(photoSelection: \$photoSelection\)/);
   assert.match(captureViewSource, /showsModePicker: true/);
   assert.match(captureViewSource, /store\.activeMode == \.dictation/);
   assert.doesNotMatch(scannerSource, /ScannerWebRTCConnection|connectionStatus|peerTarget|DictationModel/);
@@ -257,7 +257,7 @@ test("full-app capture and photo selection are not gated on WebRTC", () => {
   assert.doesNotMatch(scannerViewSource, /guard store\.connectionStatus\.isConnected/);
   assert.match(captureViewSource, /isCaptureEnabled: !store\.isDictationBusy/);
   assert.doesNotMatch(captureViewSource, /\.onChange\(of: store\.connectionStatus\)/);
-  assert.match(uploadViewSource, /isConnected: true/);
+  assert.doesNotMatch(uploadViewSource, /isConnected/);
   assert.doesNotMatch(uploadViewSource, /guard store\.connectionStatus\.isConnected/);
   assert.match(uploadViewSource, /while !queuedUploadSelections\.isEmpty/);
 });

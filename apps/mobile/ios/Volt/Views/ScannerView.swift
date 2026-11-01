@@ -1,9 +1,11 @@
+import PhotosUI
 import SwiftUI
 
 /// The landing surface now represents the scanner as one camera. Mode selection
 /// happens inside the presented camera, so a single visit can contain mixed items.
 struct UnifiedCaptureHomeView: View {
     @Environment(ScannerStore.self) private var store
+    @Binding var photoSelection: [PhotosPickerItem]
     @State private var isCaptureSessionPresented = false
     @State private var isTargetPickerPresented = false
     @State private var resumedBatchId: String?
@@ -16,19 +18,15 @@ struct UnifiedCaptureHomeView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
-                    HStack(spacing: 12) {
-                        Text("Volt").font(.largeTitle.bold())
-                        Spacer()
-                        CloudTargetLabel()
+                    ScannerHomeHeader(chip: targetChip)
+                    PhotoLibraryUploadSection(selectedItems: $photoSelection) {
+                        if sessions.isEmpty {
+                            // First run: explain the camera once. After that, Start in the bar is enough.
+                            UnifiedCaptureLaunchCard(action: startCapture)
+                        } else {
+                            captureHistory
+                        }
                     }
-                    UnifiedCaptureLaunchCard(action: startCapture)
-                    ComputerAvailabilityCard { isTargetPickerPresented = true }
-                    PhotoLibraryUploadSection()
-                    captureHistory
-                    Text("One camera for text, barcodes, photos, and audio. Switch modes without leaving the session.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(ScannerTabLayout.contentPadding)
                 .padding(.top, ScannerTabLayout.topPadding)
@@ -47,6 +45,24 @@ struct UnifiedCaptureHomeView: View {
         }
     }
 
+    private var targetChip: HomeTargetChip {
+        let label = CloudTargetLabel.targetLabel(for: store)
+        let (systemImage, status, description): (String, HomeTargetChip.Status, String) =
+            if store.cloudWorkspace.selectedComputer != nil {
+                ("desktopcomputer", .ready, "Typing to \(label)")
+            } else if store.cloudWorkspace.selectedTargetComputer != nil {
+                ("desktopcomputer", .warning, "\(label) is offline")
+            } else {
+                ("iphone", .idle, "Saving to this iPhone")
+            }
+        return HomeTargetChip(
+            title: label,
+            systemImage: systemImage,
+            status: status,
+            accessibilityLabel: description
+        ) { isTargetPickerPresented = true }
+    }
+
     private func startCapture() {
         resumedBatchId = nil
         store.clearOcrReview()
@@ -60,28 +76,33 @@ struct UnifiedCaptureHomeView: View {
         isCaptureSessionPresented = true
     }
 
-    @ViewBuilder
     private var captureHistory: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("History")
-                .font(.title2.bold())
+        CaptureHistorySessionList(
+            sessions: sessions,
+            onResend: { result in Task { await store.insertResultIntoComputer(id: result.id) } },
+            onDelete: { result in store.removeResult(id: result.id) },
+            onContinue: continueSession
+        )
+    }
+}
 
-            if sessions.isEmpty {
-                ContentUnavailableView(
-                    "No Scans Yet",
-                    systemImage: "camera.viewfinder",
-                    description: Text("Your saved scan sessions will appear here.")
-                )
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 24)
-                .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            } else {
-                ForEach(sessions) { session in
+/// History sessions grouped under Today / Yesterday / date headers.
+private struct CaptureHistorySessionList: View {
+    let sessions: [CaptureHistorySession]
+    let onResend: (ScanResult) -> Void
+    let onDelete: (ScanResult) -> Void
+    let onContinue: (CaptureHistorySession) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(historyDaySections(sessions, date: \.latestCapturedAt), id: \.title) { section in
+                HistoryDayHeader(title: section.title)
+                ForEach(section.items) { session in
                     CaptureHistorySessionCard(
                         session: session,
-                        onResend: { result in Task { await store.insertResultIntoComputer(id: result.id) } },
-                        onDelete: { result in store.removeResult(id: result.id) },
-                        onContinue: { continueSession(session) }
+                        onResend: onResend,
+                        onDelete: onDelete,
+                        onContinue: { onContinue(session) }
                     )
                 }
             }
@@ -135,6 +156,7 @@ private struct UnifiedCaptureLaunchCard: View {
 /// presented camera session. Missing IDs remain singletons for legacy records.
 struct CaptureHistoryView: View {
     @Environment(ScannerStore.self) private var store
+    @Binding var photoSelection: [PhotosPickerItem]
     @State private var isTargetPickerPresented = false
     @State private var isCaptureSessionPresented = false
     @State private var resumedBatchId: String?
@@ -152,23 +174,22 @@ struct CaptureHistoryView: View {
                         Spacer()
                         CloudTargetButton { isTargetPickerPresented = true }
                     }
-                    PhotoLibraryUploadSection()
-                    if sessions.isEmpty {
-                        ContentUnavailableView(
-                            "No Scans Yet",
-                            systemImage: "camera.viewfinder",
-                            description: Text("Text, barcodes, photos, and audio from each camera session will appear here.")
-                        )
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 34)
-                        .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    } else {
-                        ForEach(sessions) { session in
-                            CaptureHistorySessionCard(
-                                session: session,
+                    PhotoLibraryUploadSection(selectedItems: $photoSelection) {
+                        if sessions.isEmpty {
+                            ContentUnavailableView(
+                                "No Scans Yet",
+                                systemImage: "camera.viewfinder",
+                                description: Text("Text, barcodes, photos, and audio from each camera session will appear here.")
+                            )
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 34)
+                            .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        } else {
+                            CaptureHistorySessionList(
+                                sessions: sessions,
                                 onResend: { result in Task { await store.insertResultIntoComputer(id: result.id) } },
                                 onDelete: { result in store.removeResult(id: result.id) },
-                                onContinue: {
+                                onContinue: { session in
                                     store.clearOcrReview()
                                     resumedBatchId = store.resumeCaptureSession(batchId: session.id)
                                     isCaptureSessionPresented = true
@@ -230,6 +251,15 @@ struct CaptureHistorySession: Identifiable {
     }
 
     var latestCapturedAt: Date { results.map(\.capturedAt).max() ?? .distantPast }
+    var earliestCapturedAt: Date { results.map(\.capturedAt).min() ?? .distantPast }
+
+    /// "1:05 PM", or a localized range like "12:52 – 1:05 PM" when the session spans minutes.
+    var timeRange: String {
+        guard latestCapturedAt.timeIntervalSince(earliestCapturedAt) >= 60 else {
+            return latestCapturedAt.formatted(date: .omitted, time: .shortened)
+        }
+        return (earliestCapturedAt..<latestCapturedAt).formatted(.interval.hour().minute())
+    }
     var title: String { "\(results.count) capture\(results.count == 1 ? "" : "s")" }
 
     var modeSummary: String {
@@ -268,29 +298,40 @@ private struct CaptureHistorySessionCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(session.title).font(.headline)
-                    Text(session.modeSummary).font(.caption).foregroundStyle(.secondary)
-                    Text(session.latestCapturedAt, format: .dateTime.month().day().hour().minute())
-                        .font(.caption2).foregroundStyle(.secondary)
-                }
+                Text(session.title).font(.headline)
                 Spacer()
                 DeliveryBadge(state: aggregateDeliveryState)
             }
-            Button("Continue session", systemImage: "camera.fill", action: onContinue)
-                .font(.subheadline.weight(.semibold))
-                .buttonStyle(.borderedProminent)
-                .tint(VoltBrand.green)
-            ForEach(session.entries) { entry in
-                switch entry {
-                case .photos(let batch):
-                    CaptureHistoryPhotoBatch(batch: batch, onResend: onResend, onDelete: onDelete)
-                case .result(let result):
-                    CapturedResultRow(result: result, canResend: true, onResend: { onResend(result) }, onDelete: { onDelete(result) })
-                        .padding(12)
-                        .background(.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            HStack(alignment: .center, spacing: 8) {
+                Text("\(session.modeSummary) · \(session.timeRange)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                // Secondary to the bar's Start button, so tinted rather than filled.
+                Button("Continue", systemImage: "camera.fill", action: onContinue)
+                    .font(.subheadline.weight(.semibold))
+                    .accessibilityLabel("Continue session")
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.capsule)
+                    .controlSize(.small)
+                    .tint(VoltBrand.green)
+            }
+            VStack(spacing: 0) {
+                ForEach(Array(session.entries.enumerated()), id: \.element.id) { index, entry in
+                    if index > 0 {
+                        Divider().padding(.leading, 64)
+                    }
+                    switch entry {
+                    case .photos(let batch):
+                        CaptureHistoryPhotoBatch(batch: batch, onResend: onResend, onDelete: onDelete)
+                            .padding(12)
+                    case .result(let result):
+                        CapturedResultRow(result: result, canResend: true, onResend: { onResend(result) }, onDelete: { onDelete(result) })
+                    }
                 }
             }
+            .background(Color(.tertiarySystemGroupedBackground).opacity(0.6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .padding(14)
         .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -306,5 +347,6 @@ private struct CaptureHistorySessionCard: View {
 
 /// Compatibility wrapper for screenshot fixtures and old callers.
 struct CaptureModeTabView: View {
-    var body: some View { UnifiedCaptureHomeView() }
+    @State private var photoSelection: [PhotosPickerItem] = []
+    var body: some View { UnifiedCaptureHomeView(photoSelection: $photoSelection) }
 }

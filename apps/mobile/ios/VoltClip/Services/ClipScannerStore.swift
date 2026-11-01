@@ -462,6 +462,20 @@ final class ClipScannerStore {
         photos.removeAll { ($0.batchId ?? $0.id.uuidString) == batchId }
     }
 
+    func removeCapture(id: UUID) {
+        captures.removeAll { $0.id == id }
+    }
+
+    /// Sends a saved or failed capture again. Offline, it stays saved until the next connect.
+    func resendCapture(id: UUID) {
+        guard let capture = captures.first(where: { $0.id == id }) else { return }
+        guard isConnected else {
+            updateCapture(id, status: "Saved until connected")
+            return
+        }
+        sendCaptureToWorkspace(capture)
+    }
+
     func removeSession(batchId: String) {
         captures.removeAll { $0.batchId == batchId }
         removePhotos(batchId: batchId)

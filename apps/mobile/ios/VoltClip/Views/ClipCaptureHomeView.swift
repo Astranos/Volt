@@ -14,33 +14,24 @@ struct ClipCaptureView: View {
     @State private var isTargetPickerPresented = false
     @State private var isSettingsPresented = false
     @State private var opensConnectionAfterTargetPicker = false
+    @State private var photoSelection: [PhotosPickerItem] = []
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
-                    ClipChromeSectionHeader(
-                        title: "Volt",
-                        connection: connectionSummary,
-                        onConnectionTapped: showConnections
-                    )
+                    ScannerHomeHeader(chip: targetChip)
 
-                    ClipCaptureLaunchCard(action: startCapture)
-
-                    ClipWorkspaceTargetCard(store: store, action: showConnections)
-
-                    ClipPhotoLibraryUploadSection(store: store)
-
-                    ClipUnifiedHistoryView(store: store) { batchId in
-                        requestedSessionBatchId = batchId
+                    ClipPhotoLibraryUploadSection(store: store, pickerItems: $photoSelection) {
+                        if store.captures.isEmpty && store.photos.isEmpty {
+                            // First run: explain the camera once. After that, Start in the bar is enough.
+                            ClipCaptureLaunchCard(action: startCapture)
+                        } else {
+                            ClipUnifiedHistoryView(store: store) { batchId in
+                                requestedSessionBatchId = batchId
+                            }
+                        }
                     }
-
-                    Text("One camera for text, barcodes, photos, and audio. Switch modes without leaving the session.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
-
                 }
                 .padding(ScannerTabLayout.contentPadding)
                 .padding(.top, ScannerTabLayout.topPadding)
@@ -102,9 +93,9 @@ struct ClipCaptureView: View {
                 GeometryReader { proxy in
                     ScannerHomeControls(
                         onScan: startCapture,
-                        onConnections: showConnections,
+                        photoSelection: $photoSelection,
                         onSettings: { isSettingsPresented = true },
-                        targetSymbol: targetSymbol
+                        isPhotoPickerEnabled: store.isConnected
                     )
                     .padding(.horizontal, 16)
                     .padding(.bottom, 20)
@@ -154,17 +145,31 @@ struct ClipCaptureView: View {
         isCaptureSessionPresented = true
     }
 
-    private var connectionSummary: ScannerConnectionSummary {
-        ScannerConnectionSummary(
-            isConnected: store.isConnected,
-            isBusy: store.isPairing,
-            title: store.isConnected ? store.typingTargetLabel : clipConnectionTitle(
-                isConnected: store.isConnected,
-                isPairing: store.isPairing,
-                pairingLabel: store.pairingLabel,
-                pairingFailureMessage: store.pairingFailureMessage
-            ),
-            statusText: store.statusText
+    /// Guest sessions have no computer until a workspace QR is scanned, so the chip doubles
+    /// as the connect button.
+    private var targetChip: HomeTargetChip {
+        let (title, systemImage, status, description): (String, String, HomeTargetChip.Status, String) =
+            if store.isPairing {
+                ("Connecting", "desktopcomputer", .busy, store.statusText)
+            } else if store.isConnected {
+                if store.selectedWorkspaceComputerId == nil {
+                    (store.typingTargetLabel, "iphone", .ready, "Saving to \(store.typingTargetLabel)")
+                } else if store.selectedWorkspaceComputer == nil {
+                    (store.typingTargetLabel, "desktopcomputer", .warning, "\(store.typingTargetLabel) is offline")
+                } else {
+                    (store.typingTargetLabel, "desktopcomputer", .ready, "Typing to \(store.typingTargetLabel)")
+                }
+            } else if store.pairingFailureMessage != nil {
+                ("Retry", "exclamationmark.triangle.fill", .failed, "Connection failed. Scan the workspace QR again.")
+            } else {
+                ("Connect", "qrcode.viewfinder", .idle, "Connect to a workspace")
+            }
+        return HomeTargetChip(
+            title: title,
+            systemImage: systemImage,
+            status: status,
+            accessibilityLabel: description,
+            action: showConnections
         )
     }
 
@@ -176,12 +181,6 @@ struct ClipCaptureView: View {
         } else {
             store.targetHint
         }
-    }
-
-    private var targetSymbol: String {
-        if store.selectedWorkspaceComputerId == nil { return "iphone" }
-        if store.selectedWorkspaceComputer == nil { return "desktopcomputer.trianglebadge.exclamationmark" }
-        return "cursorarrow.motionlines"
     }
 }
 
@@ -253,84 +252,4 @@ struct ClipSettingsSheet: View {
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
     }
-}
-
-struct ClipChromeSectionHeader: View {
-    let title: String
-    let connection: ScannerConnectionSummary
-    let onConnectionTapped: () -> Void
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text(title)
-                .font(.largeTitle.bold())
-                .lineLimit(1)
-                .minimumScaleFactor(0.82)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            Button(action: onConnectionTapped) {
-                HStack(spacing: 8) {
-                    if connection.isBusy {
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(.primary)
-                    } else {
-                        Image(systemName: connectionIcon)
-                            .font(.subheadline.weight(.semibold))
-                    }
-
-                    Text(connection.title)
-                        .font(.headline)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.76)
-                }
-                .foregroundStyle(connectionColor)
-                .padding(.horizontal, 18)
-                .frame(minHeight: 44)
-                .background(.regularMaterial, in: Capsule())
-            }
-            .buttonStyle(.plain)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(connection.isConnected ? connection.statusText : "Connect to workspace")
-            .accessibilityHint(connection.isBusy ? "Shows connection progress." : "Shows connection options.")
-        }
-    }
-
-    private var connectionIcon: String {
-        if connection.isConnected {
-            return "character.cursor.ibeam"
-        }
-        if connection.title == "Failed" {
-            return "exclamationmark.triangle.fill"
-        }
-        return "desktopcomputer"
-    }
-
-    private var connectionColor: Color {
-        if connection.isConnected {
-            return .green
-        }
-        if connection.title == "Failed" {
-            return .red
-        }
-        return .secondary
-    }
-}
-
-private func clipConnectionTitle(
-    isConnected: Bool,
-    isPairing: Bool,
-    pairingLabel: String?,
-    pairingFailureMessage: String?
-) -> String {
-    if isConnected {
-        return pairingLabel ?? "Chrome"
-    }
-    if isPairing {
-        return "Connecting"
-    }
-    if pairingFailureMessage != nil {
-        return "Failed"
-    }
-    return "Connect"
 }

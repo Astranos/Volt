@@ -12,18 +12,20 @@ const section = (start, end) => {
 const home = section("struct ClipCaptureView:", "struct ClipCaptureLaunchCard:");
 const history = section("struct ClipUnifiedHistoryView:", "private extension Array");
 
-test("Clip home orders hero, typing target, library upload, and session history", () => {
-  const landmarks = ["ClipChromeSectionHeader(", "ClipCaptureLaunchCard(", "ClipWorkspaceTargetCard(", "ClipPhotoLibraryUploadSection(", "ClipUnifiedHistoryView("];
+test("Clip home orders header chip, library import, then first-run card or session history", () => {
+  const landmarks = ["ScannerHomeHeader(chip: targetChip)", "ClipPhotoLibraryUploadSection(", "ClipCaptureLaunchCard(", "ClipUnifiedHistoryView("];
   const positions = landmarks.map((landmark) => home.indexOf(landmark));
   assert.ok(positions.every((position, index) => position >= 0 && (index === 0 || position > positions[index - 1])));
   assert.doesNotMatch(source, /TabView\(|\.tabItem|ClipPhotoBatchesSection|private var photoBatches/);
-  assert.match(home, /ScannerHomeControls\([\s\S]*onScan: startCapture,[\s\S]*onConnections: showConnections,[\s\S]*onSettings:/);
+  assert.match(home, /if store\.captures\.isEmpty && store\.photos\.isEmpty \{[\s\S]*ClipCaptureLaunchCard\(action: startCapture\)[\s\S]*\} else \{[\s\S]*ClipUnifiedHistoryView\(/);
+  assert.doesNotMatch(home, /ClipWorkspaceTargetCard\(|ClipChromeSectionHeader\(/);
+  assert.match(home, /ScannerHomeControls\([\s\S]*onScan: startCapture,[\s\S]*photoSelection: \$photoSelection,[\s\S]*onSettings:[\s\S]*isPhotoPickerEnabled: store\.isConnected/);
   assert.match(home, /ScannerHomeControls\.reservedSpace/);
   assert.match(home, /\.overlay\(alignment: \.bottom\)[\s\S]*GeometryReader \{ proxy in[\s\S]*\.offset\(y: proxy\.safeAreaInsets\.bottom\)/);
 });
 
 test("Clip starts offline and resumes the selected session", () => {
-  const launch = section("    private func startCapture()", "    private var connectionSummary:");
+  const launch = section("    private func startCapture()", "    private var targetChip:");
   assert.doesNotMatch(launch, /guard|isConnected|onScanQRCode/);
   assert.match(launch, /clearOcrReview\(\)[\s\S]*activeCaptureMode = \.ocr[\s\S]*beginCaptureSession\(\)[\s\S]*isCaptureSessionPresented = true/);
   assert.match(home, /onChange\(of: requestedSessionBatchId\)[\s\S]*resumeCaptureSession\(batchId: batchId\)[\s\S]*requestedSessionBatchId = nil/);
@@ -46,9 +48,10 @@ test("Clip history reuses bounded square previews, gallery, and delete actions",
 });
 
 test("Clip connection choices retain guest QR pairing and expose save-only destination", () => {
-  assert.match(home, /title: store\.isConnected \? store\.typingTargetLabel/);
-  assert.match(home, /selectedWorkspaceComputerId == nil \{ return "iphone" \}/);
-  assert.match(home, /selectedWorkspaceComputer == nil \{ return "desktopcomputer\.trianglebadge\.exclamationmark" \}/);
+  assert.match(home, /\} else if store\.isConnected \{[\s\S]*store\.typingTargetLabel/);
+  assert.match(home, /selectedWorkspaceComputerId == nil \{\s*\(store\.typingTargetLabel, "iphone", \.ready/);
+  assert.match(home, /selectedWorkspaceComputer == nil \{\s*\(store\.typingTargetLabel, "desktopcomputer", \.warning/);
+  assert.match(home, /HomeTargetChip\([\s\S]*action: showConnections/);
   assert.match(source, /title: "This iPhone",[\s\S]*deviceId: nil/);
   assert.match(source, /Section\("Workspace Computers"\)/);
   assert.match(source, /Section\("Offline"\)/);

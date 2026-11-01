@@ -11,7 +11,7 @@ final class VoltScreenshots: XCTestCase {
         app.launchEnvironment["VOLT_SCREENSHOT_SCENARIO"] = "captureReviewSend"
         app.launch()
 
-        let openCamera = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Open Camera'")).firstMatch
+        let openCamera = app.buttons["Start"]
         if openCamera.waitForExistence(timeout: 10) {
             openCamera.tap()
         }
@@ -62,7 +62,7 @@ final class VoltScreenshots: XCTestCase {
         app.launchEnvironment["VOLT_SCREENSHOT_APP_STORE"] = "1"
         app.launch()
 
-        let openCamera = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Open Camera'")).firstMatch
+        let openCamera = app.buttons["Start"]
         if openCamera.waitForExistence(timeout: 10) {
             openCamera.tap()
         }
@@ -79,6 +79,24 @@ final class VoltScreenshots: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    /// Home screen: header target chip, day-grouped history, and the Photos/Start/Settings bar.
+    @MainActor
+    func testHomeScreen() throws {
+        continueAfterFailure = false
+        for (scenario, name) in [("captureTextPre", "home-history")] {
+            let app = XCUIApplication()
+            app.launchArguments += ["--ui-testing", "--screenshots"]
+            app.launchEnvironment["VOLT_SCREENSHOTS"] = "1"
+            app.launchEnvironment["VOLT_SCREENSHOT_SCENARIO"] = scenario
+            app.launch()
+            XCTAssertTrue(app.buttons["home-target-chip"].waitForExistence(timeout: 15))
+            XCTAssertTrue(app.buttons["Add Photos"].exists)
+            XCTAssertFalse(app.buttons["Connections"].exists)
+            attachScreenshot(named: name)
+            app.terminate()
+        }
     }
 
     @MainActor

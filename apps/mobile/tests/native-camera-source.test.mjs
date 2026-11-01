@@ -55,12 +55,12 @@ test("unified camera starts from the hero card and history groups mixed captures
   assert.match(captureModeCardsSwiftSource, /Text\("\\\(hiddenCount\) more saved"\)/);
   assert.doesNotMatch(captureModeCardsSwiftSource, /more in Sessions/);
 
-  assert.match(scannerViewSwiftSource, /ComputerAvailabilityCard[\s\S]*captureHistory/);
+  assert.match(scannerViewSwiftSource, /if sessions\.isEmpty \{[\s\S]*UnifiedCaptureLaunchCard\(action: startCapture\)[\s\S]*\} else \{\s*captureHistory/);
+  assert.match(scannerViewSwiftSource, /historyDaySections\(sessions, date: \\\.latestCapturedAt\)/);
   assert.match(scannerViewSwiftSource, /captureHistorySessions\(from: store\.results\)/);
   assert.match(scannerViewSwiftSource, /Dictionary\(grouping: results\) \{ result in/);
   assert.match(scannerViewSwiftSource, /result\.batchId \?\? result\.id\.uuidString\.lowercased\(\)/);
-  assert.match(scannerViewSwiftSource, /Continue session/);
-  assert.match(scannerViewSwiftSource, /Button\("Continue session"[\s\S]*\.tint\(VoltBrand\.green\)/);
+  assert.match(scannerViewSwiftSource, /Button\("Continue", systemImage: "camera\.fill", action: onContinue\)[\s\S]*\.accessibilityLabel\("Continue session"\)[\s\S]*\.buttonStyle\(\.bordered\)[\s\S]*\.tint\(VoltBrand\.green\)/);
   assert.match(scannerViewSwiftSource, /CaptureHistorySessionCard\(/);
   assert.match(sharedCameraSessionControlsSwiftSource, /if showsModePicker \{\s*modePicker\s*\}[\s\S]*connectionSlot[\s\S]*finishSlot[\s\S]*shutterButton/);
   assert.match(sharedCameraSessionControlsSwiftSource, /\.scrollTargetLayout\(\)/);
@@ -71,9 +71,8 @@ test("unified camera starts from the hero card and history groups mixed captures
   const modePickerSource = sharedCameraSessionControlsSwiftSource.slice(modePickerStart, modePickerEnd);
   assert.doesNotMatch(modePickerSource, /\.background\([^\n]*Capsule|Capsule\(\)\.stroke/);
   assert.match(captureSessionViewSwiftSource, /isModeSelectionEnabled: !store\.isDictating && !store\.isDictationBusy/);
-  assert.match(uploadViewSwiftSource, /struct PhotoLibraryUploadSection: View/);
-  assert.match(uploadViewSwiftSource, /Text\("From Photo Library"\)/);
-  assert.match(uploadViewSwiftSource, /ScannerPhotoPickerAccessory\(/);
+  assert.match(uploadViewSwiftSource, /struct PhotoLibraryUploadSection<Content: View>: View/);
+  assert.doesNotMatch(uploadViewSwiftSource, /Text\("From Photo Library"\)|ScannerPhotoPickerAccessory/);
   assert.doesNotMatch(uploadViewSwiftSource, /Recent Uploads/);
   assert.doesNotMatch(rootViewSwiftSource, /Label\("Upload", systemImage: "square\.and\.arrow\.up"\)|case upload/);
   assert.match(scannerViewSwiftSource, /onResend: \{ result in[\s\S]*insertResultIntoComputer\(id: result\.id\)/);

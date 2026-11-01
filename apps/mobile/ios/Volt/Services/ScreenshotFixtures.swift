@@ -134,33 +134,53 @@ extension ScannerStore {
     static var captureResults: [ScanResult] {
         [
             ScanResult(
+                kind: .text,
+                value: "L7NKMW0XNP",
+                format: "ocr-region",
+                capturedAt: Date.now.addingTimeInterval(-30),
+                deliveryState: .failed,
+                batchId: "fixture-session-today"
+            ),
+            ScanResult(
+                kind: .text,
+                value: "XJW40014329247",
+                format: "ocr-region",
+                capturedAt: Date.now.addingTimeInterval(-60),
+                deliveryState: .sent,
+                batchId: "fixture-session-today"
+            ),
+            ScanResult(
                 kind: .barcode,
                 value: "711719573364",
                 format: "UPC-A",
                 capturedAt: Date.now.addingTimeInterval(-80),
-                deliveryState: .sent
+                deliveryState: .sent,
+                batchId: "fixture-session-today"
             ),
             ScanResult(
                 kind: .text,
                 value: "Sony PlayStation 5 Slim Disc PS5\nMODEL CFI-2015\n1TB White Console",
                 format: "OCR text",
                 capturedAt: Date.now.addingTimeInterval(-140),
-                deliveryState: .sent
+                deliveryState: .sent,
+                batchId: "fixture-session-today"
             ),
             ScanResult(
                 kind: .text,
                 value: "SKU: MI01-8077A-R1R3\nSerial: E43801VKK12677215\nIncludes: HDMI cable, power cable, controller",
                 format: "OCR text",
                 capturedAt: Date.now.addingTimeInterval(-220),
-                deliveryState: .saved
+                deliveryState: .saved,
+                batchId: "fixture-session-today"
             ),
             ScanResult(
                 kind: .photo,
                 value: "Actual PS5 console photo",
                 format: "photo",
-                capturedAt: Date.now.addingTimeInterval(-310),
+                capturedAt: Date.now.addingTimeInterval(-86_400),
                 deliveryState: .sent,
-                imageData: assetPhotoData(named: "screenshot-product-1")
+                imageData: assetPhotoData(named: "screenshot-product-1"),
+                batchId: "fixture-session-yesterday"
             ),
         ]
     }

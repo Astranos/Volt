@@ -16,8 +16,7 @@ struct ClipUnifiedHistoryView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
-            Text("History").font(.title2.bold())
+        VStack(alignment: .leading, spacing: 12) {
             if sessionIDs.isEmpty {
                 ContentUnavailableView(
                     "No Scans Yet",
@@ -28,8 +27,11 @@ struct ClipUnifiedHistoryView: View {
                 .padding(.vertical, 34)
                 .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             } else {
-                ForEach(sessionIDs, id: \.self) { id in
-                    sessionCard(id: id)
+                ForEach(historyDaySections(sessionIDs, date: latestDate(for:)), id: \.title) { section in
+                    HistoryDayHeader(title: section.title)
+                    ForEach(section.items, id: \.self) { id in
+                        sessionCard(id: id)
+                    }
                 }
             }
         }
@@ -45,41 +47,55 @@ struct ClipUnifiedHistoryView: View {
         let captures = store.captures.filter { $0.batchId == id }.sorted { $0.capturedAt < $1.capturedAt }
         let photos = store.photos.filter { ($0.batchId ?? $0.id.uuidString.lowercased()) == id }.sorted { $0.capturedAt < $1.capturedAt }
         return VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("\(captures.count + photos.count) capture\(captures.count + photos.count == 1 ? "" : "s")")
-                        .font(.headline)
-                    Text("\(captures.map { $0.mode.title }.uniqued().joined(separator: " · "))\(captures.isEmpty || photos.isEmpty ? "" : " · ")\(photos.isEmpty ? "" : "Photos")")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text(latestDate(for: id), format: .dateTime.hour().minute())
-                        .font(.caption2).foregroundStyle(.secondary)
-                }
+            HStack(alignment: .firstTextBaseline) {
+                Text("\(captures.count + photos.count) capture\(captures.count + photos.count == 1 ? "" : "s")")
+                    .font(.headline)
                 Spacer()
-            }
-            Button("Continue session", systemImage: "camera.fill") {
-                onContinue(id)
-            }
-            .font(.subheadline.weight(.semibold))
-            .buttonStyle(.borderedProminent)
-            .tint(.accentColor)
-            Button("Delete session", systemImage: "trash", role: .destructive) {
-                store.removeSession(batchId: id)
-            }
-            .font(.subheadline.weight(.semibold))
-            ForEach(captures) { capture in
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: capture.mode.symbolName)
-                        .foregroundStyle(.green)
-                        .frame(width: 32, height: 32)
-                        .background(.green.opacity(0.12), in: RoundedRectangle(cornerRadius: 9))
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(capture.value).lineLimit(4).textSelection(.enabled)
-                        Text(capture.status).font(.caption).foregroundStyle(.secondary)
+                Menu {
+                    Button("Delete session", systemImage: "trash", role: .destructive) {
+                        store.removeSession(batchId: id)
                     }
-                    Spacer()
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 32, height: 28)
+                        .contentShape(Rectangle())
                 }
-                .padding(12)
-                .background(.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .accessibilityLabel("Session options")
+            }
+            HStack(alignment: .center, spacing: 8) {
+                Text("\(sessionSummary(captures: captures, photos: photos)) · \(latestDate(for: id).formatted(date: .omitted, time: .shortened))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                // Secondary to the bar's Start button, so tinted rather than filled.
+                Button("Continue", systemImage: "camera.fill") {
+                    onContinue(id)
+                }
+                .font(.subheadline.weight(.semibold))
+                .accessibilityLabel("Continue session")
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.capsule)
+                .controlSize(.small)
+                .tint(.green)
+            }
+            if !captures.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(Array(captures.enumerated()), id: \.element.id) { index, capture in
+                        if index > 0 {
+                            Divider().padding(.leading, 64)
+                        }
+                        ClipCaptureHistoryRow(
+                            capture: capture,
+                            isConnected: store.isConnected,
+                            onSend: { store.resendCapture(id: capture.id) },
+                            onDelete: { store.removeCapture(id: capture.id) }
+                        )
+                    }
+                }
+                .background(Color(.tertiarySystemGroupedBackground).opacity(0.6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             if !photos.isEmpty {
                 ClipPhotoBatchCard(
@@ -101,10 +117,54 @@ struct ClipUnifiedHistoryView: View {
         .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
+    private func sessionSummary(captures: [ClipScannerStore.ClipCapture], photos: [ClipScannerStore.ClipPhoto]) -> String {
+        var modes = captures.map { $0.mode.title }.uniqued()
+        if !photos.isEmpty { modes.append("Photos") }
+        return modes.joined(separator: " · ")
+    }
+
     private func latestDate(for id: String) -> Date {
         let captureDate = store.captures.filter { $0.batchId == id }.map(\.capturedAt).max() ?? .distantPast
         let photoDate = store.photos.filter { ($0.batchId ?? $0.id.uuidString.lowercased()) == id }.map(\.capturedAt).max() ?? .distantPast
         return max(captureDate, photoDate)
+    }
+}
+
+/// An App Clip capture rendered with the shared history row.
+private struct ClipCaptureHistoryRow: View {
+    let capture: ClipScannerStore.ClipCapture
+    let isConnected: Bool
+    let onSend: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        let classification = HistoryCaptureClassification(
+            kind: capture.mode == .barcode ? .barcode : capture.mode == .dictation ? .dictation : .text,
+            value: capture.value,
+            format: capture.format
+        )
+        HistoryCaptureRow(
+            classification: classification,
+            copyText: capture.value,
+            capturedAt: capture.capturedAt,
+            status: status,
+            statusDescription: capture.status,
+            sendTitle: capture.status == "Failed" ? "Retry sending" : "Send to workspace",
+            canSend: isConnected,
+            onSend: onSend,
+            onDelete: onDelete
+        ) {
+            HistoryCaptureIcon(symbol: classification.symbol, color: capture.mode == .dictation ? .orange : .green)
+        }
+    }
+
+    private var status: HistoryCaptureStatus {
+        switch capture.status {
+        case "Sending": .sending
+        case "Failed": .failed
+        case "Saved until connected": .unsent
+        default: .sent
+        }
     }
 }
 

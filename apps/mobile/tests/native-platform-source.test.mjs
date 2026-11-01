@@ -40,15 +40,17 @@ test("both iOS targets exclude WebRTC while the App Clip retains cloud workspace
   assert.doesNotMatch(scannerStoreSwiftSource, /ScannerWebRTCConnection|ScannerSignalingClient|PairingURLParser|PairingSecretStore|connectionStatus|peerTarget|DictationModel/);
   assert.doesNotMatch(scannerStoreCaptureActionsSwiftSource, /sendCaptureResultOverWebRTC|photoRetryQueue|sendRetryablePhotos|sendQueuedPhoto|sendDictation/);
   assert.doesNotMatch(rootViewSwiftSource, /PairingSessionsView|PairingStatusSheet/);
-  assert.match(rootViewSwiftSource, /CaptureHistoryView\(\)/);
+  assert.match(rootViewSwiftSource, /CaptureHistoryView\(photoSelection: \$photoSelection\)/);
   assert.match(captureSessionViewSwiftSource, /store\.activeMode == \.dictation/);
   assert.match(infoPlistSource, /NSMicrophoneUsageDescription/);
   assert.match(infoPlistSource, /NSSpeechRecognitionUsageDescription/);
   assert.doesNotMatch(podfileSource, /JitsiWebRTC/);
   assert.doesNotMatch(scannerProtocolSwiftSource, /PhotoDeliveryReceipt|struct PhotoChunkAck|parsePhotoChunkAck|static func helloMessage|static func dictationMessage/);
-  assert.match(capturedResultRowSwiftSource, /case \.dictation: "Dictation"/);
-  assert.match(capturedResultRowSwiftSource, /case \.dictation: "mic"/);
-  assert.match(rootViewSwiftSource, /CaptureHistoryView\(\)/);
+  // Dictation rows: the app maps the kind, the shared history row labels and icons it.
+  assert.match(capturedResultRowSwiftSource, /case \.dictation: \.dictation/);
+  const sharedTabSource = readFileSync(new URL("../ios/Volt/Views/SharedScannerTabComponents.swift", import.meta.url), "utf8");
+  assert.match(sharedTabSource, /case \.dictation:\s*label = "Dictation"\s*symbol = "mic"/);
+  assert.match(rootViewSwiftSource, /CaptureHistoryView\(photoSelection: \$photoSelection\)/);
   assert.equal(existsSync(new URL("../ios/Volt/Views/SessionsView.swift", import.meta.url)), false);
   assert.match(xcodeProjectSource, /B3000000000000000000000C \/\* PairingURLParser\.swift in Sources \*\//);
   assert.match(xcodeProjectSource, /B30000000000000000000021 \/\* AppClipGuestCloudClient\.swift in Sources \*\//);
