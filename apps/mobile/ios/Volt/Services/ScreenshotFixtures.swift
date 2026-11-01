@@ -63,6 +63,17 @@ struct FreeWorkspaceScreenshotView: View {
 
 @MainActor
 extension ScannerStore {
+    /// Opening the camera clears any OCR review, so review scenarios reload theirs as the session begins.
+    func restoreScreenshotOcrReviewIfNeeded() {
+        guard let scenario = ScreenshotScenario.current,
+              scenario == .captureReview || scenario == .captureReviewSend,
+              ocrReviewImage == nil
+        else { return }
+        ocrReviewImage = Self.ocrReviewImage()
+        ocrReviewText = Self.ocrReviewText
+        ocrTextRegions = Self.ocrRegions
+    }
+
     func applyScreenshotFixturesIfNeeded() {
         guard let scenario = ScreenshotScenario.current else { return }
 

@@ -1,6 +1,86 @@
 import XCTest
 
 final class VoltScreenshots: XCTestCase {
+    /// Extracted text card: photo clip of the selected text, Edit/Raw/Flag row, and the flagged state.
+    @MainActor
+    func testExtractedTextCard() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-testing", "--screenshots"]
+        app.launchEnvironment["VOLT_SCREENSHOTS"] = "1"
+        app.launchEnvironment["VOLT_SCREENSHOT_SCENARIO"] = "captureReviewSend"
+        app.launch()
+
+        let openCamera = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Open Camera'")).firstMatch
+        if openCamera.waitForExistence(timeout: 10) {
+            openCamera.tap()
+        }
+        XCTAssertTrue(app.images["Photo of the selected text"].waitForExistence(timeout: 15))
+        attachScreenshot(named: "extracted-text-card")
+
+        let flag = app.buttons["Flag OCR result"]
+        XCTAssertTrue(flag.waitForExistence(timeout: 5))
+        flag.tap()
+        XCTAssertTrue(app.buttons["OCR result flagged"].waitForExistence(timeout: 5))
+        attachScreenshot(named: "extracted-text-card-flagged")
+
+        // The longest secondary label ("Cleaned") must still fit beside Edit.
+        let raw = app.buttons["Raw"]
+        XCTAssertTrue(raw.waitForExistence(timeout: 5))
+        let enabled = expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: raw)
+        wait(for: [enabled], timeout: 15)
+        raw.tap()
+        XCTAssertTrue(app.buttons["Cleaned"].waitForExistence(timeout: 5))
+        sleep(1)
+        attachScreenshot(named: "extracted-text-card-raw")
+
+        // Typing moves the card above the keyboard and turns Raw/Cleaned into Reset.
+        let field = app.descendants(matching: .any)["extracted-text-field"].firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText("X")
+        XCTAssertTrue(app.buttons["Reset"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Hide keyboard"].exists)
+        sleep(1)
+        attachScreenshot(named: "extracted-text-card-typing")
+
+        app.buttons["Hide keyboard"].tap()
+        XCTAssertTrue(app.buttons["Reset"].waitForExistence(timeout: 5))
+        sleep(1)
+        attachScreenshot(named: "extracted-text-card-edited")
+        app.terminate()
+    }
+
+    /// App Store builds keep the photo clip but never show Flag.
+    @MainActor
+    func testExtractedTextCardAppStore() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-testing", "--screenshots"]
+        app.launchEnvironment["VOLT_SCREENSHOTS"] = "1"
+        app.launchEnvironment["VOLT_SCREENSHOT_SCENARIO"] = "captureReviewSend"
+        app.launchEnvironment["VOLT_SCREENSHOT_APP_STORE"] = "1"
+        app.launch()
+
+        let openCamera = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Open Camera'")).firstMatch
+        if openCamera.waitForExistence(timeout: 10) {
+            openCamera.tap()
+        }
+        XCTAssertTrue(app.images["Photo of the selected text"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["Send"].exists)
+        XCTAssertFalse(app.buttons["Flag OCR result"].exists)
+        attachScreenshot(named: "extracted-text-card-app-store")
+        app.terminate()
+    }
+
+    @MainActor
+    private func attachScreenshot(named name: String) {
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
     @MainActor
     func testMockAppScreens() throws {
         continueAfterFailure = false

@@ -26,7 +26,7 @@ enum OcrTextCleaner {
             instructions: """
             You clean one selected OCR snippet for a mobile scanner.
             Use nearby OCR context only to identify what the selected snippet represents. If it contains a serial number, model number, SKU, code, URL, email, phone number, or identifier with OCR artifacts before or after it, return only the intended value.
-            If context identifies an Apple hardware serial, resolve an O or Q that is an obvious OCR rendering of 0 and an I that is an obvious OCR rendering of 1, but do not make those substitutions for generic identifiers.
+            If context identifies an Apple hardware serial, an O is always a 0 and an I is always a 1, because Apple serials never contain O or I. Never change Q, which Apple serials do contain. Do not make any substitutions for generic identifiers.
             Preserve exact casing, punctuation, separators, and digits unless an OCR error is obvious.
             Do not return any nearby context. Do not expand abbreviations. Do not explain. Do not add labels or surrounding quotes.
             """
@@ -65,12 +65,13 @@ enum OcrTextCleaner {
         return !trimmed.isEmpty && trimmed.count <= 240
     }
 
-    private static func deterministicCleanup(_ text: String, context: String) -> String {
+    /// Internal (not private) so the macOS fixture can check substitutions without the on-device model.
+    static func deterministicCleanup(_ text: String, context: String) -> String {
         let normalized = text
             .split(whereSeparator: \.isWhitespace)
             .joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        if let imei = repairedIMEI(in: normalized) {
+        if let imei = repairedIMEI(in: normalized, context: context) {
             return imei
         }
         if let match = LiveTextIdentifierMatcher.match(normalized) {
@@ -114,7 +115,7 @@ enum OcrTextCleaner {
     }
 
     private static func authoritativeCleanup(_ text: String, context: String) -> String {
-        if let imei = repairedIMEI(in: text) {
+        if let imei = repairedIMEI(in: text, context: context) {
             return imei
         }
         if isAppleSerialContext(context) {
@@ -135,7 +136,7 @@ enum OcrTextCleaner {
     private static func repairAppleSerialCharacters(in value: String) -> String {
         String(value.map { character in
             switch character {
-            case "O", "o", "Q", "q":
+            case "O", "o":
                 return "0"
             case "I":
                 return "1"
@@ -145,7 +146,11 @@ enum OcrTextCleaner {
         })
     }
 
-    private static func repairedIMEI(in text: String) -> String? {
+    /// Only repairs when IMEI/MEID is on screen: any 15-digit window of a longer number (an Xbox
+    /// Product Id, a UPC run) passes Luhn one time in ten, which would send a made-up IMEI.
+    private static func repairedIMEI(in text: String, context: String) -> String? {
+        let mentionsIMEI = (text + " " + context).lowercased()
+        guard mentionsIMEI.contains("imei") || mentionsIMEI.contains("meid") else { return nil }
         let candidates = text.filter { $0.isNumber || $0 == "O" || $0 == "o" || $0 == "Q" || $0 == "q" }
         guard candidates.count >= 15 else { return nil }
         let characters = Array(candidates)

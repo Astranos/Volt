@@ -19,6 +19,7 @@
     "test": "node scripts/run-tests.mjs all",
     "typecheck": "pnpm -r --if-present typecheck && pnpm exec tsc -p convex/tsconfig.json",
     "check:repo-health": "node scripts/check-repo-health.mjs",
+    "ocr-flags:pull": "node scripts/ocr-flags.mjs",
     "check:github": "node scripts/check-github-settings.mjs",
     "build:extension": "pnpm --filter @volt/extension build",
     "build:mobile:appclip": "pnpm --filter @volt/mobile build:ios:appclip",

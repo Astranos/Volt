@@ -164,7 +164,7 @@ test("app clip OCR target dialog shares cleanup and styling with the main app", 
   assert.match(clipViewsSwiftSource, /isCleaning: isCleaningSelectedText/);
   assert.match(clipViewsSwiftSource, /isShowingRaw: isShowingRawText/);
   assert.match(clipViewsSwiftSource, /let result = await OcrTextCleaner\.clean\(text: region\.text, context: context\)/);
-  assert.match(clipViewsSwiftSource, /onSendRecognizedText\(selectedTextValue\)/);
+  assert.match(clipViewsSwiftSource, /onSend: \{ outgoingText in\s*onSendRecognizedText\(outgoingText\)/);
   assert.match(clipViewsSwiftSource, /private func resetSelectedText\(\)/);
   assert.match(clipViewsSwiftSource, /private var selectedTextPreview: String/);
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /\.foregroundStyle\(\.black\)/);

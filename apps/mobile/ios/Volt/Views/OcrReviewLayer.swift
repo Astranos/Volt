@@ -1,3 +1,4 @@
+import CoreImage
 import SwiftUI
 import UIKit
 
@@ -253,5 +254,54 @@ private struct OcrRegionShape: Shape {
         }
         path.closeSubpath()
         return path
+    }
+}
+
+extension UIImage {
+    private static let snippetContext = CIContext(options: [.cacheIntermediates: false])
+
+    /// Clips the region OCR read for `quadrilateral` (Vision's normalized, bottom-left coordinates)
+    /// and straightens it, so tilted text reads level in the extracted text card. A margin of
+    /// surrounding pixels is kept so the user can see what sits next to the value.
+    func ocrSnippet(for quadrilateral: TextQuadrilateral) -> UIImage? {
+        guard let cgImage else { return nil }
+        let width = CGFloat(cgImage.width)
+        let height = CGFloat(cgImage.height)
+        func pixel(_ point: CGPoint) -> CGPoint { CGPoint(x: point.x * width, y: point.y * height) }
+
+        let topLeft = pixel(quadrilateral.topLeft)
+        let topRight = pixel(quadrilateral.topRight)
+        let bottomRight = pixel(quadrilateral.bottomRight)
+        let bottomLeft = pixel(quadrilateral.bottomLeft)
+        let along = CGVector(dx: topRight.x - topLeft.x, dy: topRight.y - topLeft.y)
+        let up = CGVector(dx: topLeft.x - bottomLeft.x, dy: topLeft.y - bottomLeft.y)
+        let alongLength = max(hypot(along.dx, along.dy), 1)
+        let textHeight = max(hypot(up.dx, up.dy), 1)
+        let unitAlong = CGVector(dx: along.dx / alongLength, dy: along.dy / alongLength)
+        let unitUp = CGVector(dx: up.dx / textHeight, dy: up.dy / textHeight)
+        let horizontalPad = textHeight * 0.8
+        let verticalPad = textHeight * 0.45
+
+        func padded(_ point: CGPoint, alongSign: CGFloat, upSign: CGFloat) -> CIVector {
+            CIVector(
+                x: point.x + unitAlong.dx * horizontalPad * alongSign + unitUp.dx * verticalPad * upSign,
+                y: point.y + unitAlong.dy * horizontalPad * alongSign + unitUp.dy * verticalPad * upSign
+            )
+        }
+
+        let source = CIImage(cgImage: cgImage)
+        guard let filter = CIFilter(name: "CIPerspectiveCorrection") else { return nil }
+        filter.setValue(source.clampedToExtent(), forKey: kCIInputImageKey)
+        filter.setValue(padded(topLeft, alongSign: -1, upSign: 1), forKey: "inputTopLeft")
+        filter.setValue(padded(topRight, alongSign: 1, upSign: 1), forKey: "inputTopRight")
+        filter.setValue(padded(bottomRight, alongSign: 1, upSign: -1), forKey: "inputBottomRight")
+        filter.setValue(padded(bottomLeft, alongSign: -1, upSign: -1), forKey: "inputBottomLeft")
+        guard let output = filter.outputImage,
+              !output.extent.isInfinite,
+              output.extent.width >= 4,
+              output.extent.height >= 4,
+              let snippet = Self.snippetContext.createCGImage(output, from: output.extent.integral)
+        else { return nil }
+        return UIImage(cgImage: snippet, scale: 1, orientation: .up)
     }
 }

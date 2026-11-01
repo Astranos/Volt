@@ -29,6 +29,8 @@ struct ClipCaptureSessionView: View {
     @State private var detectedBarcodeBounds: CGRect?
     @State private var detectedBarcodeFormat: String?
     @State private var selectedTextRegion: RecognizedTextRegion?
+    @State private var selectedTextSnippet: UIImage?
+    @FocusState private var isTextInputFocused: Bool
     @State private var selectedCleanedText: String?
     @State private var isShowingRawText = false
     @State private var isCleaningSelectedText = false
@@ -136,6 +138,13 @@ struct ClipCaptureSessionView: View {
             }
 
             if let selectedTextRegion {
+                if isTextInputFocused {
+                    Color.black.opacity(0.35)
+                        .ignoresSafeArea()
+                        .onTapGesture { isTextInputFocused = false }
+                        .transition(.opacity)
+                }
+
                 ExtractedTextActionCard(
                     text: selectedTextPreview,
                     rawText: selectedTextRegion.text,
@@ -144,14 +153,18 @@ struct ClipCaptureSessionView: View {
                     onToggleRepresentation: {
                         isShowingRawText.toggle()
                     },
-                    onSend: {
-                        onSendRecognizedText(selectedTextValue)
+                    onSend: { outgoingText in
+                        onSendRecognizedText(outgoingText)
                         resetSelectedText()
                     },
                     onDismiss: {
                         resetSelectedText()
-                    }
+                    },
+                    inputFocus: $isTextInputFocused,
+                    snippet: selectedTextSnippet
                 )
+                .padding(.top, isTextInputFocused ? 8 : 0)
+                .frame(maxHeight: .infinity, alignment: isTextInputFocused ? .top : .center)
                 .transition(.scale(scale: 0.96).combined(with: .opacity))
             }
 
@@ -306,6 +319,12 @@ struct ClipCaptureSessionView: View {
                 cameraService.clearDetectedBarcode()
             }
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.88), value: isTextInputFocused)
+        .task(id: selectedTextRegion?.id) {
+            selectedTextSnippet = selectedTextRegion.flatMap { region in
+                ocrReviewImage?.ocrSnippet(for: region.quadrilateral)
+            }
+        }
         .onChange(of: ocrReviewImage != nil) { _, isReviewing in
             syncCameraForOcrPostCapture()
             resetSelectedText()
@@ -417,6 +436,7 @@ struct ClipCaptureSessionView: View {
     }
 
     private func resetSelectedText() {
+        isTextInputFocused = false
         cleanupRequestID = UUID()
         selectedCleanedText = nil
         selectedTextRegion = nil

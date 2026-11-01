@@ -15,6 +15,30 @@ struct TextQuadrilateral: Equatable {
         self.bottomLeft = bottomLeft
     }
 
+    var boundingBox: CGRect {
+        let xs = points.map(\.x)
+        let ys = points.map(\.y)
+        guard let minX = xs.min(), let maxX = xs.max(), let minY = ys.min(), let maxY = ys.max() else { return .zero }
+        return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+    }
+
+    /// The part of this line's quadrilateral covering `range` of `text`, estimated from character
+    /// offsets along the line's own direction so tilted lines slice correctly.
+    func slice(of text: String, range: Range<String.Index>) -> TextQuadrilateral {
+        let total = CGFloat(max(text.count, 1))
+        let start = CGFloat(text.distance(from: text.startIndex, to: range.lowerBound)) / total
+        let end = CGFloat(text.distance(from: text.startIndex, to: range.upperBound)) / total
+        func lerp(_ from: CGPoint, _ to: CGPoint, _ t: CGFloat) -> CGPoint {
+            CGPoint(x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t)
+        }
+        return TextQuadrilateral(
+            topLeft: lerp(topLeft, topRight, start),
+            topRight: lerp(topLeft, topRight, end),
+            bottomRight: lerp(bottomLeft, bottomRight, end),
+            bottomLeft: lerp(bottomLeft, bottomRight, start)
+        )
+    }
+
     init(rect: CGRect) {
         self.init(
             topLeft: CGPoint(x: rect.minX, y: rect.maxY),
@@ -81,8 +105,26 @@ enum DeviceIdentifierRegionExtractor {
             return labeledIdentifierRegions
         }
 
-        let identifierRegions = regions.compactMap { identifierRegion(from: $0, allowingStandalone: true) }
+        let identifierRegions = regions.flatMap(standaloneIdentifierRegions(from:))
         return identifierRegions.isEmpty ? regions : deduplicated(identifierRegions)
+    }
+
+    /// Regulatory lines often pack several values ("FCC ID 2AYOA-4003 · 4V37W27HC901FB · RW4012"),
+    /// so each identifier found there becomes its own tappable region clipped to its characters.
+    private static func standaloneIdentifierRegions(from region: RecognizedTextRegion) -> [RecognizedTextRegion] {
+        guard LiveTextIdentifierMatcher.isRegulatoryIdentifierContext(region.text) else {
+            return identifierRegion(from: region, allowingStandalone: true).map { [$0] } ?? []
+        }
+        return LiveTextIdentifierMatcher.standaloneMatches(in: region.text).map { match in
+            let quadrilateral = region.quadrilateral.slice(of: region.text, range: match.range)
+            return RecognizedTextRegion(
+                text: match.value,
+                boundingBox: quadrilateral.boundingBox,
+                quadrilateral: quadrilateral,
+                confidence: region.confidence,
+                isDeviceIdentifier: true
+            )
+        }
     }
 
     private static func identifierRegion(
@@ -515,7 +557,10 @@ enum LiveTextIdentifierMatcher {
     }
 
     private static func standaloneIdentifier(in text: String) -> Match? {
-        guard !isRegulatoryIdentifierContext(text) else { return nil }
+        if isRegulatoryIdentifierContext(text) {
+            let matches = standaloneMatches(in: text)
+            return matches.first(where: { $0.kind == .model }) ?? matches.first
+        }
         if let model = modelTokenCandidate(in: text) {
             return match(kind: .model, value: model.value, range: model.range)
         }
@@ -529,8 +574,63 @@ enum LiveTextIdentifierMatcher {
         return nil
     }
 
-    private static func isRegulatoryIdentifierContext(_ text: String) -> Bool {
+    static func isRegulatoryIdentifierContext(_ text: String) -> Bool {
         containsLabel(in: text.lowercased(), labels: regulatoryLabels)
+    }
+
+    /// All identifiers a single OCR line should offer. A labeled value wins on its own; a
+    /// regulatory line can carry several unlabeled ones; anything else yields at most one.
+    static func identifierMatches(in text: String) -> [Match] {
+        if let labeled = match(text, allowingStandalone: false) {
+            return [labeled]
+        }
+        if isRegulatoryIdentifierContext(text) {
+            return standaloneMatches(in: text)
+        }
+        return match(text).map { [$0] } ?? []
+    }
+
+    /// Every serial and model on a line, in reading order. The value printed right after a
+    /// regulatory label (FCC ID, IC, ANATEL…) is a certification code, never the device's own
+    /// identifier, so only that token is skipped rather than the whole line.
+    static func standaloneMatches(in text: String) -> [Match] {
+        let candidates = identifierTokenCandidates(in: text)
+        let lowercased = text.lowercased()
+        let regulatoryValueStarts: [String.Index] = regulatoryLabels.flatMap { label in
+            labelRanges(in: lowercased, label: label).compactMap { labelRange in
+                let labelEnd = text.index(text.startIndex, offsetBy: lowercased.distance(from: lowercased.startIndex, to: labelRange.upperBound))
+                return candidates.first(where: { $0.range.lowerBound >= labelEnd })?.range.lowerBound
+            }
+        }
+        var seen = Set<String>()
+        return candidates.compactMap { candidate -> Match? in
+            guard !regulatoryValueStarts.contains(candidate.range.lowerBound) else { return nil }
+            let found: Match?
+            if let appleRetailPart = normalizedAppleRetailPartToken(candidate.value) {
+                found = match(kind: .model, value: appleRetailPart, range: candidate.range)
+            } else if isKnownModelToken(candidate.value) {
+                found = match(kind: .model, value: normalizedModelToken(candidate.value), range: candidate.range)
+            } else if isLikelySerialToken(candidate.value) {
+                found = match(kind: .serial, value: candidate.value, range: candidate.range)
+            } else {
+                found = nil
+            }
+            guard let found, seen.insert(found.value).inserted else { return nil }
+            return found
+        }
+    }
+
+    private static func labelRanges(in text: String, label: String) -> [Range<String.Index>] {
+        var ranges: [Range<String.Index>] = []
+        var searchStart = text.startIndex
+        while searchStart < text.endIndex,
+              let range = text.range(of: label, range: searchStart..<text.endIndex) {
+            if isLabelBoundary(in: text, before: range.lowerBound) && isLabelBoundary(in: text, after: range.upperBound) {
+                ranges.append(range)
+            }
+            searchStart = range.upperBound
+        }
+        return ranges
     }
 
     private static func containsLabel(in text: String, labels: [String]) -> Bool {
@@ -567,7 +667,7 @@ enum LiveTextIdentifierMatcher {
 
     private static func identifierTokenCandidates(in text: String) -> [(value: String, range: Range<String.Index>)] {
         text
-            .split(whereSeparator: { $0.isWhitespace || isOCRNoise($0) })
+            .split(whereSeparator: { $0.isWhitespace || $0 == ":" || isOCRNoise($0) })
             .compactMap { rawToken -> (value: String, range: Range<String.Index>)? in
                 let value = String(rawToken).trimmingCharacters(in: identifierTokenTrimCharacters)
                 guard !value.isEmpty,
@@ -621,6 +721,9 @@ enum LiveTextIdentifierMatcher {
 
     private static func isKnownModelToken(_ value: String) -> Bool {
         let uppercased = normalizedModelToken(value)
+        if isRayBanMetaModelToken(uppercased) {
+            return true
+        }
         guard uppercased.hasPrefix("CFI-"),
               uppercased.count >= 7,
               uppercased.count <= 20
@@ -628,6 +731,11 @@ enum LiveTextIdentifierMatcher {
         return uppercased.allSatisfy { character in
             character.isLetter || character.isNumber || character == "-"
         }
+    }
+
+    /// Ray-Ban Meta glasses print their model as RW followed by four digits (RW4006, RW4012).
+    private static func isRayBanMetaModelToken(_ value: String) -> Bool {
+        value.count == 6 && value.hasPrefix("RW") && value.dropFirst(2).allSatisfy(\.isNumber)
     }
 
     private static func normalizedAppleRetailPartToken(_ value: String) -> String? {

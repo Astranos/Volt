@@ -9,12 +9,16 @@ struct CaptureSessionView: View {
     let mode: CaptureMode
     @State private var gridVisible = true
     @State private var selectedTextRegion: RecognizedTextRegion?
+    @State private var selectedTextSnippet: UIImage?
     @State private var selectedCleanedText: String?
     @State private var isShowingRawText = false
     @State private var isCleaningSelectedText = false
     @State private var cleanupRequestID = UUID()
     @State private var isTargetPickerPresented = false
     @State private var isQuotaAlertPresented = false
+    /// Focus of the extracted text field. While typing, the card moves to the top so the keyboard
+    /// never hides its photo clip, and the camera controls step aside.
+    @FocusState private var isTextInputFocused: Bool
 
     var body: some View {
         @Bindable var store = store
@@ -42,6 +46,14 @@ struct CaptureSessionView: View {
             }
 
             if selectedTextRegion != nil {
+                if isTextInputFocused {
+                    // Tapping outside the card closes the keyboard.
+                    Color.black.opacity(0.35)
+                        .ignoresSafeArea()
+                        .onTapGesture { isTextInputFocused = false }
+                        .transition(.opacity)
+                }
+
                 ExtractedTextActionCard(
                     text: selectedTextPreview,
                     rawText: selectedTextRegion?.text ?? "",
@@ -50,15 +62,21 @@ struct CaptureSessionView: View {
                     onToggleRepresentation: {
                         isShowingRawText.toggle()
                     },
-                    onSend: {
+                    onSend: { outgoingText in
                         guard selectedTextRegion != nil else { return }
-                        store.sendRecognizedText(selectedTextValue)
+                        store.sendRecognizedText(outgoingText)
                         resetSelectedText()
                     },
                     onDismiss: {
                         resetSelectedText()
-                    }
+                    },
+                    inputFocus: $isTextInputFocused,
+                    snippet: selectedTextSnippet,
+                    flagState: store.isOcrFlaggingAvailable ? store.ocrFlagState : nil,
+                    onFlag: store.isOcrFlaggingAvailable ? { correctedText in flagSelectedText(correctedText: correctedText) } : nil
                 )
+                .padding(.top, isTextInputFocused ? 8 : 0)
+                .frame(maxHeight: .infinity, alignment: isTextInputFocused ? .top : .center)
                 .transition(.scale(scale: 0.96).combined(with: .opacity))
             }
 
@@ -83,9 +101,12 @@ struct CaptureSessionView: View {
             }
 
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.88), value: isTextInputFocused)
         .background(Color.black.ignoresSafeArea())
         .overlay(alignment: .top) {
             VStack(spacing: 8) {
+                // The open extracted text card shows its own photo clip; the status chips would cover it.
+                if selectedTextRegion == nil {
                 CameraSessionTopStatus(
                     activeMode: store.activeMode,
                     liveTextCandidates: store.camera.liveTextCandidates,
@@ -100,6 +121,7 @@ struct CaptureSessionView: View {
                         store.sendRecognizedText(candidate.value)
                     }
                 )
+                }
 
                 if let toast = store.captureDeliveryToast {
                     CaptureDeliveryToastView(toast: toast)
@@ -129,6 +151,8 @@ struct CaptureSessionView: View {
                         isPresented = false
                     }
                 )
+                .opacity(isTextInputFocused ? 0 : 1)
+                .allowsHitTesting(!isTextInputFocused)
             } else {
                 CameraSessionControls(
                     activeMode: $store.activeMode,
@@ -225,6 +249,14 @@ struct CaptureSessionView: View {
             await store.camera.requestAccess()
             syncCameraForCaptureState(isReviewingOcr: store.ocrReviewImage != nil)
         }
+        .task {
+            await store.refreshOcrFlaggingAvailability()
+        }
+        .task(id: selectedTextRegion?.id) {
+            selectedTextSnippet = selectedTextRegion.flatMap { region in
+                store.ocrReviewImage?.ocrSnippet(for: region.quadrilateral)
+            }
+        }
         .onChange(of: store.ocrReviewImage != nil) { _, isReviewingOcr in
             syncCameraForCaptureState(isReviewingOcr: isReviewingOcr)
             resetSelectedText()
@@ -289,7 +321,22 @@ struct CaptureSessionView: View {
         }
     }
 
+    private func flagSelectedText(correctedText: String) {
+        guard let region = selectedTextRegion else { return }
+        let cleanedText = selectedCleanedText
+        Task {
+            await store.flagOcrSelection(
+                rawText: region.text,
+                cleanedText: cleanedText,
+                correctedText: correctedText,
+                using: clerk
+            )
+        }
+    }
+
     private func resetSelectedText() {
+        isTextInputFocused = false
+        if store.ocrFlagState != .sending { store.ocrFlagState = .idle }
         cleanupRequestID = UUID()
         selectedCleanedText = nil
         selectedTextRegion = nil

@@ -672,4 +672,35 @@ export default defineSchema({
     .index("by_browserSessionId", ["browserSessionId"])
     .index("by_browserSessionId_and_status", ["browserSessionId", "status"])
     .index("by_expiresAt", ["expiresAt"]),
+  // TestFlight testers flag OCR captures that parsed badly. The photo lives in R2 under
+  // `objectKey`; these rows keep everything the recognizer saw so parsing can be replayed.
+  ocrFlags: defineTable({
+    flagId: v.string(),
+    workspaceId: v.id("workspaces"),
+    sourceDeviceId: v.string(),
+    objectKey: v.string(),
+    contentType: v.string(),
+    byteCount: v.number(),
+    status: v.union(v.literal("uploading"), v.literal("ready")),
+    selectedRawText: v.string(),
+    selectedCleanedText: v.optional(v.string()),
+    regions: v.array(v.object({
+      text: v.string(),
+      confidence: v.number(),
+      isDeviceIdentifier: v.boolean(),
+      x: v.number(),
+      y: v.number(),
+      width: v.number(),
+      height: v.number(),
+    })),
+    rawRegionTexts: v.array(v.string()),
+    appVersion: v.optional(v.string()),
+    appBuild: v.optional(v.string()),
+    note: v.optional(v.string()),
+    createdAt: v.number(),
+    uploadedAt: v.optional(v.number()),
+  })
+    .index("by_flagId", ["flagId"])
+    .index("by_sourceDeviceId_and_createdAt", ["sourceDeviceId", "createdAt"])
+    .index("by_createdAt", ["createdAt"]),
 });
