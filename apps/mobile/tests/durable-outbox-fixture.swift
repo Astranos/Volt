@@ -23,7 +23,8 @@ struct DurableOutboxFixture {
         precondition(record.idempotencyKey == photo.id.uuidString.lowercased())
         let restoredBytes = try restored.photoData(for: record)
         precondition(restoredBytes == bytes, "photo bytes must survive relaunch")
-        precondition(restored.restoredResults[0].imageData == bytes)
+        precondition(restored.restoredResults[0].imageData == nil, "restore must not hold photo bytes in memory")
+        precondition(restored.restoredResults[0].loadPhotoData() == bytes)
         precondition(restored.readyRecords(ownerClerkUserId: "alice").map(\.id) == [photo.id])
         precondition(restored.readyRecords(ownerClerkUserId: "bob").isEmpty)
 
@@ -65,7 +66,7 @@ struct DurableOutboxFixture {
         let delivered = DurableCaptureOutbox(directoryURL: directory)
         precondition(delivered.records.first { $0.id == photo.id }?.state == .uploaded)
         precondition(delivered.readyRecords(ownerClerkUserId: "alice").isEmpty)
-        let history = delivered.restoredResults.first { $0.id == large.id }?.imageData
+        let history = delivered.restoredResults.first { $0.id == large.id }?.loadPhotoData()
         precondition(history != nil, "uploaded photos must stay visible in history after relaunch")
         precondition(history!.count < largeBytes.count, "uploaded photos are kept as a smaller preview")
         precondition(longEdge(of: history!) == DurableCaptureOutbox.historyPreviewMaxPixelSize)

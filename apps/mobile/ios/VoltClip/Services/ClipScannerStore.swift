@@ -355,7 +355,8 @@ final class ClipScannerStore {
                 data: data,
                 filename: filename ?? photoFilename(for: photo),
                 capturedAt: photo.capturedAt,
-                batchId: photo.batchId
+                batchId: photo.batchId,
+                photoId: photo.id
             )
             updatePhoto(photo.id, status: "Delivered")
             statusText = "Photo uploaded to workspace"

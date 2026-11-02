@@ -174,10 +174,8 @@ struct CaptureModeCapturesSection: View {
         return Color.clear
             .aspectRatio(1, contentMode: .fit)
             .overlay {
-                if let imageData = result.imageData, let image = UIImage(data: imageData) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
+                if result.hasPhoto {
+                    GalleryPhotoImage(photo: result.galleryPhoto)
                 } else {
                     Image(systemName: "photo")
                         .font(.title3)
@@ -432,10 +430,8 @@ private struct PhotoResultThumbnail: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack {
-                if let imageData = result.imageData, let image = UIImage(data: imageData) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
+                if result.hasPhoto {
+                    GalleryPhotoImage(photo: result.galleryPhoto)
                         .frame(width: proxy.size.width, height: proxy.size.height)
                         .clipped()
                 } else {

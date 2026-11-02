@@ -266,14 +266,16 @@ struct ClipCaptureSessionView: View {
         return captureSurface
         .animation(.spring(response: 0.28, dampingFraction: 0.86), value: selectedTextRegion?.id)
         .fullScreenCover(isPresented: $isSessionPhotosPresented) {
-            if let latest = sessionPhotos.first {
-                PhotoGalleryViewer(
-                    photos: sessionPhotos,
-                    startID: latest.id,
-                    onSend: { photo in store.resendPhoto(id: photo.id) },
-                    onDelete: { photo in store.removePhoto(id: photo.id) }
-                )
-            }
+            // Stays mounted when the last photo is deleted, so the viewer can dismiss itself.
+            PhotoGalleryViewer(
+                photos: sessionPhotos,
+                startID: sessionPhotos.first?.id ?? UUID(),
+                onSend: { photo in store.resendPhoto(id: photo.id) },
+                onDelete: { photo in store.removePhoto(id: photo.id) }
+            )
+        }
+        .onChange(of: sessionPhotos.isEmpty) { _, isEmpty in
+            if isEmpty { isSessionPhotosPresented = false }
         }
         .sheet(isPresented: $isTargetPickerPresented, onDismiss: {
             isTargetPickerOnScreen = false

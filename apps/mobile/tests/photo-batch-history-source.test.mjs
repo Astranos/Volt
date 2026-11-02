@@ -112,7 +112,30 @@ test('photo runs use the shared strip and full-screen viewer with resend and del
   assert.match(shared, /struct HistoryPhotoStrip: View/);
   assert.match(shared, /\.fullScreenCover\(item: \$viewerStart\)[\s\S]*PhotoGalleryViewer\(/);
   assert.match(shared, /struct PhotoGalleryViewer: View[\s\S]*\.tabViewStyle\(\.page\(indexDisplayMode: \.never\)\)/);
-  assert.match(shared, /ShareLink\(item: Image\(uiImage: image\)/);
+  assert.match(shared, /ShareLink\(item: Image\(uiImage: shareImage\)/);
   assert.match(shared, /struct CameraLastPhotoButton: View/);
   assert.doesNotMatch(rows, /LazyVGrid|View all|previewedPhoto/);
+});
+
+test('camera photo viewers close when the last session photo is deleted', () => {
+  for (const path of ['../ios/Volt/Views/CaptureSessionView.swift', '../ios/VoltClip/Views/ClipCaptureSessionView.swift']) {
+    const source = readFileSync(new URL(path, import.meta.url), 'utf8');
+    assert.match(source, /\.fullScreenCover\(isPresented: \$isSessionPhotosPresented\) \{\s*\/\/[^\n]*\n\s*PhotoGalleryViewer\(/);
+    assert.match(source, /\.onChange\(of: sessionPhotos\.isEmpty\) \{ _, isEmpty in\s*if isEmpty \{ isSessionPhotosPresented = false \}/);
+  }
+});
+
+test('history loads restored photos from disk on demand, not into memory at launch', () => {
+  const outbox = readFileSync(new URL('../ios/Volt/Services/DurableCaptureOutbox.swift', import.meta.url), 'utf8');
+  const model = readFileSync(new URL('../ios/Volt/Models/ScanResult.swift', import.meta.url), 'utf8');
+  assert.match(outbox, /photoURL: storedPhotoURL\(for: record\)/);
+  assert.doesNotMatch(outbox, /imageData: try\? photoData/);
+  assert.match(model, /func loadPhotoData\(\) -> Data\?/);
+});
+
+test('app clip photo retries reuse the result id of the first attempt', () => {
+  const client = readFileSync(new URL('../ios/VoltClip/Services/AppClipGuestCloudClient.swift', import.meta.url), 'utf8');
+  const store = readFileSync(new URL('../ios/VoltClip/Services/ClipScannerStore.swift', import.meta.url), 'utf8');
+  assert.match(client, /let resultId = "appclip-photo-\\\(photoId\.uuidString\.lowercased\(\)\)"/);
+  assert.match(store, /batchId: photo\.batchId,\s*photoId: photo\.id/);
 });

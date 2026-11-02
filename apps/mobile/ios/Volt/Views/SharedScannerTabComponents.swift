@@ -748,7 +748,50 @@ struct GalleryPhoto: Identifiable {
 
 @MainActor
 private enum GalleryThumbnailCache {
-    static let images = NSCache<NSUUID, UIImage>()
+    static let images = NSCache<NSString, UIImage>()
+
+    static func key(_ id: UUID, _ pixels: CGFloat) -> NSString { "\(id.uuidString)-\(Int(pixels))" as NSString }
+}
+
+/// A gallery photo, downsampled off the main thread and cached, filling whatever frame the
+/// caller gives it (callers clip). Shows a photo icon, in the caller's font, when the phone no
+/// longer has the bytes.
+struct GalleryPhotoImage: View {
+    let photo: GalleryPhoto
+    let maxPixelSize: CGFloat
+    @State private var image: UIImage?
+
+    init(photo: GalleryPhoto, maxPixelSize: CGFloat = 240) {
+        self.photo = photo
+        self.maxPixelSize = maxPixelSize
+        // Start from the cache so a re-shown image never flashes empty.
+        _image = State(initialValue: GalleryThumbnailCache.images.object(forKey: GalleryThumbnailCache.key(photo.id, maxPixelSize)))
+    }
+
+    var body: some View {
+        Color.clear
+            .overlay {
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else if !photo.isStored {
+                    Image(systemName: "photo")
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .task(id: photo.id) {
+                guard photo.isStored else { return }
+                let key = GalleryThumbnailCache.key(photo.id, maxPixelSize)
+                if let cached = GalleryThumbnailCache.images.object(forKey: key) {
+                    image = cached
+                    return
+                }
+                let prepared = await photo.image()?.byPreparingThumbnail(ofSize: CGSize(width: maxPixelSize, height: maxPixelSize))
+                if let prepared { GalleryThumbnailCache.images.setObject(prepared, forKey: key) }
+                image = prepared
+            }
+    }
 }
 
 /// A square, downsampled thumbnail with a small badge when the photo hasn't been sent.
@@ -756,45 +799,17 @@ struct GalleryThumbnail: View {
     let photo: GalleryPhoto
     var size: CGFloat = 72
     var showsStatus = true
-    @State private var thumbnail: UIImage?
-
-    init(photo: GalleryPhoto, size: CGFloat = 72, showsStatus: Bool = true) {
-        self.photo = photo
-        self.size = size
-        self.showsStatus = showsStatus
-        // Start from the cache so a re-shown thumbnail never flashes empty.
-        _thumbnail = State(initialValue: GalleryThumbnailCache.images.object(forKey: photo.id as NSUUID))
-    }
 
     var body: some View {
         ZStack {
             Color(.tertiarySystemFill)
-            if let thumbnail {
-                Image(uiImage: thumbnail)
-                    .resizable()
-                    .scaledToFill()
-            } else if !photo.isStored {
-                Image(systemName: "photo")
-                    .font(.system(size: size * 0.32))
-                    .foregroundStyle(.tertiary)
-            }
+            GalleryPhotoImage(photo: photo, maxPixelSize: size * 3)
+                .font(.system(size: size * 0.32))
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: size * 0.16, style: .continuous))
         .overlay(alignment: .bottomTrailing) {
             if showsStatus { statusBadge.padding(4) }
-        }
-        .task(id: photo.id) {
-            guard photo.isStored else { return }
-            let key = photo.id as NSUUID
-            if let cached = GalleryThumbnailCache.images.object(forKey: key) {
-                thumbnail = cached
-                return
-            }
-            let pixels = size * 3
-            let prepared = await photo.image()?.byPreparingThumbnail(ofSize: CGSize(width: pixels, height: pixels))
-            if let prepared { GalleryThumbnailCache.images.setObject(prepared, forKey: key) }
-            thumbnail = prepared
         }
     }
 
@@ -937,6 +952,8 @@ struct PhotoGalleryViewer: View {
     let onSend: (GalleryPhoto) -> Void
     let onDelete: (GalleryPhoto) -> Void
     @State private var selection: UUID
+    /// Full image of the current photo for Share, loaded when the page changes rather than in `body`.
+    @State private var shareImage: UIImage?
     @Environment(\.dismiss) private var dismiss
 
     init(photos: [GalleryPhoto], startID: UUID, onSend: @escaping (GalleryPhoto) -> Void, onDelete: @escaping (GalleryPhoto) -> Void) {
@@ -963,6 +980,11 @@ struct PhotoGalleryViewer: View {
         .overlay(alignment: .top) { topBar }
         .overlay(alignment: .bottom) { bottomBar }
         .preferredColorScheme(.dark)
+        .task(id: selection) {
+            shareImage = nil
+            guard let current, current.isStored else { return }
+            shareImage = current.image()
+        }
         .onChange(of: photos.map(\.id)) { oldIDs, newIDs in
             guard !newIDs.contains(selection) else { return }
             guard !newIDs.isEmpty else {
@@ -1008,8 +1030,8 @@ struct PhotoGalleryViewer: View {
                 if current.isStored {
                     barButton("Send", systemImage: "paperplane") { onSend(current) }
                     Spacer()
-                    if let image = current.image() {
-                        ShareLink(item: Image(uiImage: image), preview: SharePreview("Photo", image: Image(uiImage: image))) {
+                    if let shareImage {
+                        ShareLink(item: Image(uiImage: shareImage), preview: SharePreview("Photo", image: Image(uiImage: shareImage))) {
                             barLabel("Share", systemImage: "square.and.arrow.up")
                         }
                     }

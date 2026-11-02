@@ -34,7 +34,7 @@ final class DurableCaptureOutbox {
                 format: record.format,
                 capturedAt: record.capturedAt,
                 deliveryState: deliveryState(for: record),
-                imageData: try? photoData(for: record),
+                photoURL: storedPhotoURL(for: record),
                 batchId: record.batchId
             )
         }
@@ -101,6 +101,12 @@ final class DurableCaptureOutbox {
             }
             throw error
         }
+    }
+
+    private func storedPhotoURL(for record: CloudCaptureRecord) -> URL? {
+        guard let filename = record.photoFilename else { return nil }
+        let url = directoryURL.appending(path: filename)
+        return fileManager.fileExists(atPath: url.path) ? url : nil
     }
 
     func photoData(for record: CloudCaptureRecord) throws -> Data? {

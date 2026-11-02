@@ -51,7 +51,7 @@ test("native and app clip can reopen photo capture into a selected batch", () =>
   assert.match(scannerStoreCaptureActionsSwiftSource, /func captureSquarePhoto\(\) async \{\s*let batchId = currentCaptureBatchId\(\)[\s\S]*sendPhoto\(preparedImage, result: photoResult, batchId: batchId\)/);
   assert.match(scannerViewSwiftSource, /CaptureHistorySessionCard\(/);
   assert.match(scannerViewSwiftSource, /Continue session/);
-  assert.match(captureSessionViewSwiftSource, /\.onAppear \{\s*store\.activeMode = mode/);
+  assert.match(captureSessionViewSwiftSource, /\.onAppear \{\s*if !hasStartedSession \{\s*hasStartedSession = true\s*store\.activeMode = mode/);
   assert.doesNotMatch(captureSessionViewSwiftSource, /\.onAppear \{\s*store\.activeMode = \.ocr/);
 
   assert.match(clipScannerStoreSwiftSource, /func resumeCaptureSession\(batchId: String\) -> String \{\s*activeCaptureBatchId = batchId\s*return batchId\s*\}/);

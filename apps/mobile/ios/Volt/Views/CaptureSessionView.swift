@@ -17,6 +17,8 @@ struct CaptureSessionView: View {
     @State private var isTargetPickerPresented = false
     @State private var isQuotaAlertPresented = false
     @State private var isSessionPhotosPresented = false
+    /// `onAppear` fires again when a full-screen cover closes; only the first one picks the mode.
+    @State private var hasStartedSession = false
     /// Focus of the extracted text field. While typing, the card moves to the top so the keyboard
     /// never hides its photo clip, and the camera controls step aside.
     @FocusState private var isTextInputFocused: Bool
@@ -25,7 +27,7 @@ struct CaptureSessionView: View {
     private var sessionPhotos: [GalleryPhoto] {
         guard let batchId = store.activeCaptureBatchId else { return [] }
         return store.results
-            .filter { $0.kind == .photo && $0.batchId == batchId && $0.imageData != nil }
+            .filter { $0.kind == .photo && $0.batchId == batchId && $0.hasPhoto }
             .sorted { $0.capturedAt > $1.capturedAt }
             .map(\.galleryPhoto)
     }
@@ -244,14 +246,16 @@ struct CaptureSessionView: View {
             CloudTargetPickerSheet()
         }
         .fullScreenCover(isPresented: $isSessionPhotosPresented) {
-            if let latest = sessionPhotos.first {
-                PhotoGalleryViewer(
-                    photos: sessionPhotos,
-                    startID: latest.id,
-                    onSend: { photo in Task { await store.insertResultIntoComputer(id: photo.id) } },
-                    onDelete: { photo in store.removeResult(id: photo.id) }
-                )
-            }
+            // Stays mounted when the last photo is deleted, so the viewer can dismiss itself.
+            PhotoGalleryViewer(
+                photos: sessionPhotos,
+                startID: sessionPhotos.first?.id ?? UUID(),
+                onSend: { photo in Task { await store.insertResultIntoComputer(id: photo.id) } },
+                onDelete: { photo in store.removeResult(id: photo.id) }
+            )
+        }
+        .onChange(of: sessionPhotos.isEmpty) { _, isEmpty in
+            if isEmpty { isSessionPhotosPresented = false }
         }
         .alert("Free AI scans used", isPresented: $isQuotaAlertPresented) {
             Button("OK", role: .cancel) {}
@@ -259,8 +263,11 @@ struct CaptureSessionView: View {
             Text(store.productScanQuotaText ?? "Your free AI scans will reset later.")
         }
         .onAppear {
-            store.activeMode = mode
-            store.deactivateProductScanner()
+            if !hasStartedSession {
+                hasStartedSession = true
+                store.activeMode = mode
+                store.deactivateProductScanner()
+            }
             store.updateProductScanQuota(
                 accessStore.status?.aiScannerQuota,
                 plan: accessStore.status?.plan

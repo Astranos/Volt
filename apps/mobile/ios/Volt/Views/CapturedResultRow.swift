@@ -2,15 +2,15 @@ import SwiftUI
 
 extension ScanResult {
     var galleryPhoto: GalleryPhoto {
-        let data = imageData
+        let result = self
         let status: HistoryCaptureStatus = switch deliveryState {
         case .sent: .sent
         case .sending: .sending
         case .failed: .failed
         case .saved: .unsent
         }
-        return GalleryPhoto(id: id, capturedAt: capturedAt, status: status, isStored: data != nil) {
-            data.flatMap(UIImage.init(data:))
+        return GalleryPhoto(id: id, capturedAt: capturedAt, status: status, isStored: hasPhoto) {
+            result.loadPhotoData().flatMap(UIImage.init(data:))
         }
     }
 }
@@ -55,10 +55,8 @@ struct CapturedResultRow: View {
             onSend: onResend,
             onDelete: onDelete
         ) {
-            if result.kind == .photo, let imageData = result.imageData, let image = UIImage(data: imageData) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
+            if result.kind == .photo, result.hasPhoto {
+                GalleryPhotoImage(photo: result.galleryPhoto, maxPixelSize: 120)
                     .frame(width: 40, height: 40)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             } else {
@@ -74,7 +72,7 @@ struct CapturedResultRow: View {
         case .photo: .photo
         case .dictation: .dictation
         }
-        let value = result.kind == .photo && result.imageData == nil ? "Photo preview unavailable" : result.value
+        let value = result.kind == .photo && !result.hasPhoto ? "Photo preview unavailable" : result.value
         return HistoryCaptureClassification(kind: kind, value: value, format: result.format)
     }
 

@@ -124,11 +124,14 @@ struct AppClipGuestCloudClient: Sendable {
         data: Data,
         filename: String,
         capturedAt: Date,
-        batchId: String? = nil
+        batchId: String? = nil,
+        photoId: UUID = UUID()
     ) async throws {
         try requireActive(session)
-        let resolvedBatchId = batchId ?? "appclip-batch-\(UUID().uuidString.lowercased())"
-        let resultId = "appclip-photo-\(UUID().uuidString.lowercased())"
+        let resolvedBatchId = batchId ?? "appclip-batch-\(photoId.uuidString.lowercased())"
+        // Stable per photo: a retry re-uploads into the result the first attempt registered,
+        // instead of leaving that one without its object.
+        let resultId = "appclip-photo-\(photoId.uuidString.lowercased())"
         let result = GuestCloudResult(
             resultId: resultId,
             kind: "photo",
