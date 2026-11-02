@@ -40,7 +40,16 @@ struct ScanResult: Identifiable, Equatable {
     /// until the server grows a separate session field.
     var batchId: String?
     var deliveryState: DeliveryState
+    /// Photo bytes captured in this run of the app.
     var imageData: Data?
+    /// Photo restored from disk at launch; read on demand so history never holds every photo in memory.
+    var photoURL: URL?
+
+    var hasPhoto: Bool { imageData != nil || photoURL != nil }
+
+    func loadPhotoData() -> Data? {
+        imageData ?? photoURL.flatMap { try? Data(contentsOf: $0) }
+    }
 
     init(
         id: UUID = UUID(),
@@ -51,6 +60,7 @@ struct ScanResult: Identifiable, Equatable {
         capturedAt: Date = .now,
         deliveryState: DeliveryState = .saved,
         imageData: Data? = nil,
+        photoURL: URL? = nil,
         batchId: String? = nil
     ) {
         self.id = id
@@ -61,6 +71,7 @@ struct ScanResult: Identifiable, Equatable {
         self.capturedAt = capturedAt
         self.deliveryState = deliveryState
         self.imageData = imageData
+        self.photoURL = photoURL
         self.batchId = batchId
     }
 }

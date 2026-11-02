@@ -86,8 +86,10 @@ print("photo batch history Swift fixtures passed")
 });
 
 test('both history surfaces use the shared card with photo runs instead of individual photo rows', () => {
-  assert.equal((scanner.match(/CaptureHistorySessionCard\(/g) ?? []).length, 2);
-  assert.match(scanner, /ForEach\(session\.entries\)/);
+  // Both history surfaces render through the one day-grouped session list.
+  assert.equal((scanner.match(/CaptureHistorySessionList\(/g) ?? []).length, 2);
+  assert.equal((scanner.match(/CaptureHistorySessionCard\(/g) ?? []).length, 1);
+  assert.match(scanner, /ForEach\(Array\(session\.entries\.enumerated\(\)\)/);
   assert.match(scanner, /case \.photos\(let batch\):[\s\S]*CaptureHistoryPhotoBatch/);
   assert.doesNotMatch(scanner, /ForEach\(session\.results\)/);
 });
@@ -102,13 +104,38 @@ test('photo runs stop at non-photos and source changes, keeping mixed capture or
   assert.match(scanner, /results: \$0\.value\.sorted \{ \$0\.capturedAt < \$1\.capturedAt \}/);
 });
 
-test('compact photos retain expandable gallery, preview, resend and delete', () => {
-  assert.match(rows, /Array\(batch\.results\.suffix\(4\)\)/);
-  assert.match(rows, /LazyVGrid/);
-  assert.match(rows, /adaptive\(minimum: 96, maximum: 112\)/);
-  assert.match(rows, /View all/);
-  assert.match(rows, /sheet\(item: \$previewedPhoto\)/);
-  assert.match(rows, /onResend\(result\)/);
-  assert.match(rows, /onDelete\(result\)/);
-  assert.match(rows, /Preview photo/);
+test('photo runs use the shared strip and full-screen viewer with resend and delete', () => {
+  const shared = readFileSync(new URL('../ios/Volt/Views/SharedPhotoGalleryComponents.swift', import.meta.url), 'utf8');
+  assert.match(rows, /HistoryPhotoStrip\(/);
+  assert.match(rows, /onSend: \{ photo in result\(for: photo\)\.map\(onResend\) \}/);
+  assert.match(rows, /onDelete: \{ photo in result\(for: photo\)\.map\(onDelete\) \}/);
+  assert.match(shared, /struct HistoryPhotoStrip: View/);
+  assert.match(shared, /\.fullScreenCover\(item: \$viewerStart\)[\s\S]*PhotoGalleryViewer\(/);
+  assert.match(shared, /struct PhotoGalleryViewer: View[\s\S]*\.tabViewStyle\(\.page\(indexDisplayMode: \.never\)\)/);
+  assert.match(shared, /ShareLink\(item: Image\(uiImage: shareImage\)/);
+  assert.match(shared, /struct CameraLastPhotoButton: View/);
+  assert.doesNotMatch(rows, /LazyVGrid|View all|previewedPhoto/);
+});
+
+test('camera photo viewers close when the last session photo is deleted', () => {
+  for (const path of ['../ios/Volt/Views/CaptureSessionView.swift', '../ios/VoltClip/Views/ClipCaptureSessionView.swift']) {
+    const source = readFileSync(new URL(path, import.meta.url), 'utf8');
+    assert.match(source, /\.fullScreenCover\(isPresented: \$isSessionPhotosPresented\) \{\s*\/\/[^\n]*\n\s*PhotoGalleryViewer\(/);
+    assert.match(source, /\.onChange\(of: sessionPhotos\.isEmpty\) \{ _, isEmpty in\s*if isEmpty \{ isSessionPhotosPresented = false \}/);
+  }
+});
+
+test('history loads restored photos from disk on demand, not into memory at launch', () => {
+  const outbox = readFileSync(new URL('../ios/Volt/Services/DurableCaptureOutbox.swift', import.meta.url), 'utf8');
+  const model = readFileSync(new URL('../ios/Volt/Models/ScanResult.swift', import.meta.url), 'utf8');
+  assert.match(outbox, /photoURL: storedPhotoURL\(for: record\)/);
+  assert.doesNotMatch(outbox, /imageData: try\? photoData/);
+  assert.match(model, /func loadPhotoData\(\) -> Data\?/);
+});
+
+test('app clip photo retries reuse the result id of the first attempt', () => {
+  const client = readFileSync(new URL('../ios/VoltClip/Services/AppClipGuestCloudClient.swift', import.meta.url), 'utf8');
+  const store = readFileSync(new URL('../ios/VoltClip/Services/ClipScannerStore.swift', import.meta.url), 'utf8');
+  assert.match(client, /let resultId = "appclip-photo-\\\(photoId\.uuidString\.lowercased\(\)\)"/);
+  assert.match(store, /batchId: photo\.batchId,\s*photoId: photo\.id/);
 });

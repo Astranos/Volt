@@ -18,6 +18,15 @@ struct ClipCaptureSessionView: View {
     let onClearOcrReview: () -> Void
     let onConnectionScannerRequested: () -> Void
 
+    /// Photos taken in this camera session, newest first.
+    private var sessionPhotos: [GalleryPhoto] {
+        guard let captureBatchId else { return [] }
+        return store.photos
+            .filter { $0.batchId == captureBatchId }
+            .sorted { $0.capturedAt > $1.capturedAt }
+            .map(\.galleryPhoto)
+    }
+
     @Environment(\.dismiss) private var dismiss
     @State private var cameraService = ClipBarcodeScannerService()
     @State private var captureError: String?
@@ -25,6 +34,7 @@ struct ClipCaptureSessionView: View {
     @State private var isCapturingPhoto = false
     @State private var photoCaptureCount = 0
     @State private var gridVisible = true
+    @State private var isSessionPhotosPresented = false
     @State private var liveTextCandidates: [LiveTextCandidate] = []
     @State private var detectedBarcodeBounds: CGRect?
     @State private var detectedBarcodeFormat: String?
@@ -242,6 +252,11 @@ struct ClipCaptureSessionView: View {
                         }
                     },
                     onConnection: showConnectionOptions,
+                    lastPhoto: sessionPhotos.first,
+                    sessionPhotoCount: sessionPhotos.count,
+                    onOpenSessionPhotos: {
+                        isSessionPhotosPresented = true
+                    },
                     onFinish: {
                         dismiss()
                     }
@@ -250,6 +265,18 @@ struct ClipCaptureSessionView: View {
         }
         return captureSurface
         .animation(.spring(response: 0.28, dampingFraction: 0.86), value: selectedTextRegion?.id)
+        .fullScreenCover(isPresented: $isSessionPhotosPresented) {
+            // Stays mounted when the last photo is deleted, so the viewer can dismiss itself.
+            PhotoGalleryViewer(
+                photos: sessionPhotos,
+                startID: sessionPhotos.first?.id ?? UUID(),
+                onSend: { photo in store.resendPhoto(id: photo.id) },
+                onDelete: { photo in store.removePhoto(id: photo.id) }
+            )
+        }
+        .onChange(of: sessionPhotos.isEmpty) { _, isEmpty in
+            if isEmpty { isSessionPhotosPresented = false }
+        }
         .sheet(isPresented: $isTargetPickerPresented, onDismiss: {
             isTargetPickerOnScreen = false
             if opensConnectionAfterTargetPicker {

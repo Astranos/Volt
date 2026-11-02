@@ -1,4 +1,6 @@
 import Foundation
+import ImageIO
+import UniformTypeIdentifiers
 
 @main
 struct DurableOutboxFixture {
@@ -21,7 +23,8 @@ struct DurableOutboxFixture {
         precondition(record.idempotencyKey == photo.id.uuidString.lowercased())
         let restoredBytes = try restored.photoData(for: record)
         precondition(restoredBytes == bytes, "photo bytes must survive relaunch")
-        precondition(restored.restoredResults[0].imageData == bytes)
+        precondition(restored.restoredResults[0].imageData == nil, "restore must not hold photo bytes in memory")
+        precondition(restored.restoredResults[0].loadPhotoData() == bytes)
         precondition(restored.readyRecords(ownerClerkUserId: "alice").map(\.id) == [photo.id])
         precondition(restored.readyRecords(ownerClerkUserId: "bob").isEmpty)
 
@@ -51,14 +54,48 @@ struct DurableOutboxFixture {
                      "future retry deadlines must prevent immediate replay")
 
         try restored.markUploaded(id: photo.id)
-        precondition(restored.exportPhotoURLs(for: [photo.id]).isEmpty,
-                     "upload completion must remove temporary photo bytes")
+        let keptBytes = try restored.photoData(for: restored.records.first { $0.id == photo.id }!)
+        precondition(keptBytes == bytes,
+                     "an upload that can't be downscaled keeps its original bytes for history")
+
+        let large = ScanResult(kind: .photo, value: "large", format: "jpeg", batchId: "session-a")
+        let largeBytes = jpeg(width: 4_000, height: 3_000)
+        try restored.enqueue(result: large, photoData: largeBytes, ownerClerkUserId: "alice", workspaceId: "alice-workspace")
+        try restored.markUploaded(id: large.id)
+
         let delivered = DurableCaptureOutbox(directoryURL: directory)
         precondition(delivered.records.first { $0.id == photo.id }?.state == .uploaded)
         precondition(delivered.readyRecords(ownerClerkUserId: "alice").isEmpty)
-        try delivered.remove(ids: [photo.id, anonymous.id])
+        let history = delivered.restoredResults.first { $0.id == large.id }?.loadPhotoData()
+        precondition(history != nil, "uploaded photos must stay visible in history after relaunch")
+        precondition(history!.count < largeBytes.count, "uploaded photos are kept as a smaller preview")
+        precondition(longEdge(of: history!) == DurableCaptureOutbox.historyPreviewMaxPixelSize)
+        try delivered.remove(ids: [photo.id, anonymous.id, large.id])
+        precondition(delivered.exportPhotoURLs(for: [large.id]).isEmpty)
         precondition(DurableCaptureOutbox(directoryURL: directory).records.isEmpty,
                      "deletion must persist across relaunch")
         print("durable outbox fixtures passed")
+    }
+
+    static func jpeg(width: Int, height: Int) -> Data {
+        let context = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+        )!
+        for index in 0..<40 {
+            context.setFillColor(red: CGFloat(index % 5) / 4, green: CGFloat(index % 7) / 6, blue: CGFloat(index % 3) / 2, alpha: 1)
+            context.fill(CGRect(x: index * 97 % width, y: index * 61 % height, width: 400, height: 300))
+        }
+        let output = NSMutableData()
+        let destination = CGImageDestinationCreateWithData(output, UTType.jpeg.identifier as CFString, 1, nil)!
+        CGImageDestinationAddImage(destination, context.makeImage()!, nil)
+        precondition(CGImageDestinationFinalize(destination))
+        return output as Data
+    }
+
+    static func longEdge(of data: Data) -> Int {
+        let source = CGImageSourceCreateWithData(data as CFData, nil)!
+        let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as! [CFString: Any]
+        return max(properties[kCGImagePropertyPixelWidth] as! Int, properties[kCGImagePropertyPixelHeight] as! Int)
     }
 }

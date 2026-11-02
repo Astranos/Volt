@@ -3,41 +3,6 @@ import PhotosUI
 import SwiftUI
 import UIKit
 
-struct ClipWorkspaceTargetCard: View {
-    @Bindable var store: ClipScannerStore
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 14) {
-                Image(systemName: "cursorarrow.motionlines")
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(.green)
-                    .frame(width: 46, height: 46)
-                    .background(.green.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(store.isConnected ? "Typing to \(store.typingTargetLabel)" : "Connect to a workspace")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                    Text(store.isConnected ? "Choose from \(store.availableWorkspaceComputers.count) online workspace computer\(store.availableWorkspaceComputers.count == 1 ? "" : "s")" : "Scan a Volt QR code to start a guest session.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(16)
-            .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .accessibilityHint("Changes the computer that receives text and barcode captures.")
-    }
-}
-
 struct ClipWorkspaceTargetPickerSheet: View {
     @Bindable var store: ClipScannerStore
     let onManageConnection: () -> Void

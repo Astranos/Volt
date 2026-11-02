@@ -6,7 +6,6 @@ import UIKit
 struct ClipUnifiedHistoryView: View {
     @Bindable var store: ClipScannerStore
     let onContinue: (String) -> Void
-    @State private var previewedPhoto: ClipScannerStore.ClipPhoto?
 
     private var sessionIDs: [String] {
         let ids = Set(store.captures.map(\.batchId) + store.photos.map { $0.batchId ?? $0.id.uuidString.lowercased() })
@@ -16,8 +15,7 @@ struct ClipUnifiedHistoryView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
-            Text("History").font(.title2.bold())
+        VStack(alignment: .leading, spacing: 12) {
             if sessionIDs.isEmpty {
                 ContentUnavailableView(
                     "No Scans Yet",
@@ -28,15 +26,12 @@ struct ClipUnifiedHistoryView: View {
                 .padding(.vertical, 34)
                 .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             } else {
-                ForEach(sessionIDs, id: \.self) { id in
-                    sessionCard(id: id)
+                ForEach(historyDaySections(sessionIDs, date: latestDate(for:)), id: \.title) { section in
+                    HistoryDayHeader(title: section.title)
+                    ForEach(section.items, id: \.self) { id in
+                        sessionCard(id: id)
+                    }
                 }
-            }
-        }
-        .sheet(item: $previewedPhoto) { photo in
-            ClipPhotoPreviewSheet(photo: photo) {
-                store.removePhoto(id: photo.id)
-                previewedPhoto = nil
             }
         }
     }
@@ -45,66 +40,136 @@ struct ClipUnifiedHistoryView: View {
         let captures = store.captures.filter { $0.batchId == id }.sorted { $0.capturedAt < $1.capturedAt }
         let photos = store.photos.filter { ($0.batchId ?? $0.id.uuidString.lowercased()) == id }.sorted { $0.capturedAt < $1.capturedAt }
         return VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("\(captures.count + photos.count) capture\(captures.count + photos.count == 1 ? "" : "s")")
-                        .font(.headline)
-                    Text("\(captures.map { $0.mode.title }.uniqued().joined(separator: " · "))\(captures.isEmpty || photos.isEmpty ? "" : " · ")\(photos.isEmpty ? "" : "Photos")")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text(latestDate(for: id), format: .dateTime.hour().minute())
-                        .font(.caption2).foregroundStyle(.secondary)
-                }
+            HStack(alignment: .firstTextBaseline) {
+                Text("\(captures.count + photos.count) capture\(captures.count + photos.count == 1 ? "" : "s")")
+                    .font(.headline)
                 Spacer()
-            }
-            Button("Continue session", systemImage: "camera.fill") {
-                onContinue(id)
-            }
-            .font(.subheadline.weight(.semibold))
-            .buttonStyle(.borderedProminent)
-            .tint(.accentColor)
-            Button("Delete session", systemImage: "trash", role: .destructive) {
-                store.removeSession(batchId: id)
-            }
-            .font(.subheadline.weight(.semibold))
-            ForEach(captures) { capture in
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: capture.mode.symbolName)
-                        .foregroundStyle(.green)
-                        .frame(width: 32, height: 32)
-                        .background(.green.opacity(0.12), in: RoundedRectangle(cornerRadius: 9))
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(capture.value).lineLimit(4).textSelection(.enabled)
-                        Text(capture.status).font(.caption).foregroundStyle(.secondary)
+                Menu {
+                    Button("Delete session", systemImage: "trash", role: .destructive) {
+                        store.removeSession(batchId: id)
                     }
-                    Spacer()
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 32, height: 28)
+                        .contentShape(Rectangle())
                 }
-                .padding(12)
-                .background(.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .accessibilityLabel("Session options")
+            }
+            HStack(alignment: .center, spacing: 8) {
+                Text("\(sessionSummary(captures: captures, photos: photos)) · \(latestDate(for: id).formatted(date: .omitted, time: .shortened))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                // Secondary to the bar's Start button, so tinted rather than filled.
+                Button("Continue", systemImage: "camera.fill") {
+                    onContinue(id)
+                }
+                .font(.subheadline.weight(.semibold))
+                .accessibilityLabel("Continue session")
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.capsule)
+                .controlSize(.small)
+                .tint(.green)
+            }
+            if !captures.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(Array(captures.enumerated()), id: \.element.id) { index, capture in
+                        if index > 0 {
+                            Divider().padding(.leading, 64)
+                        }
+                        ClipCaptureHistoryRow(
+                            capture: capture,
+                            isConnected: store.isConnected,
+                            onSend: { store.resendCapture(id: capture.id) },
+                            onDelete: { store.removeCapture(id: capture.id) }
+                        )
+                    }
+                }
+                .background(Color(.tertiarySystemGroupedBackground).opacity(0.6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             if !photos.isEmpty {
-                ClipPhotoBatchCard(
-                    batch: ClipPhotoBatch(
-                        id: id,
-                        photos: photos,
-                        expectedTotal: store.photoUploadProgress?.id == id ? store.photoUploadProgress?.total ?? photos.count : photos.count,
-                        isActive: store.photoUploadProgress?.id == id && store.photoUploadProgress?.isActive == true
-                    ),
-                    canAddPhotos: true,
-                    onAddPhotos: { onContinue(id) },
-                    onPreview: { previewedPhoto = $0 },
-                    onDeletePhoto: { store.removePhoto(id: $0.id) },
-                    onDeleteBatch: { store.removePhotos(batchId: id) }
+                let isUploading = store.photoUploadProgress?.id == id && store.photoUploadProgress?.isActive == true
+                let expected = isUploading ? store.photoUploadProgress?.total ?? photos.count : photos.count
+                HistoryPhotoStrip(
+                    title: "\(photos.count) \(photos.first?.source == .upload ? "uploaded" : "captured") photo\(photos.count == 1 ? "" : "s")",
+                    photos: photos.map(\.galleryPhoto),
+                    placeholderCount: max(0, expected - photos.count),
+                    onSend: { store.resendPhoto(id: $0.id) },
+                    onDelete: { store.removePhoto(id: $0.id) },
+                    onDeleteAll: { store.removePhotos(batchId: id) }
                 )
+                .background(Color(.tertiarySystemGroupedBackground).opacity(0.6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
         }
         .padding(14)
         .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
+    private func sessionSummary(captures: [ClipScannerStore.ClipCapture], photos: [ClipScannerStore.ClipPhoto]) -> String {
+        var modes = captures.map { $0.mode.title }.uniqued()
+        if !photos.isEmpty { modes.append("Photos") }
+        return modes.joined(separator: " · ")
+    }
+
     private func latestDate(for id: String) -> Date {
         let captureDate = store.captures.filter { $0.batchId == id }.map(\.capturedAt).max() ?? .distantPast
         let photoDate = store.photos.filter { ($0.batchId ?? $0.id.uuidString.lowercased()) == id }.map(\.capturedAt).max() ?? .distantPast
         return max(captureDate, photoDate)
+    }
+}
+
+extension ClipScannerStore.ClipPhoto {
+    var galleryPhoto: GalleryPhoto {
+        let image = image
+        let status: HistoryCaptureStatus = switch self.status {
+        case "Sending": .sending
+        case "Failed": .failed
+        case "Saved until connected": .unsent
+        default: .sent
+        }
+        return GalleryPhoto(id: id, capturedAt: capturedAt, status: status) { image }
+    }
+}
+
+/// An App Clip capture rendered with the shared history row.
+private struct ClipCaptureHistoryRow: View {
+    let capture: ClipScannerStore.ClipCapture
+    let isConnected: Bool
+    let onSend: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        let classification = HistoryCaptureClassification(
+            kind: capture.mode == .barcode ? .barcode : capture.mode == .dictation ? .dictation : .text,
+            value: capture.value,
+            format: capture.format
+        )
+        HistoryCaptureRow(
+            classification: classification,
+            copyText: capture.value,
+            capturedAt: capture.capturedAt,
+            status: status,
+            statusDescription: capture.status,
+            sendTitle: capture.status == "Failed" ? "Retry sending" : "Send to workspace",
+            canSend: isConnected,
+            onSend: onSend,
+            onDelete: onDelete
+        ) {
+            HistoryCaptureIcon(symbol: classification.symbol, color: capture.mode == .dictation ? .orange : .green)
+        }
+    }
+
+    private var status: HistoryCaptureStatus {
+        switch capture.status {
+        case "Sending": .sending
+        case "Failed": .failed
+        case "Saved until connected": .unsent
+        default: .sent
+        }
     }
 }
 
@@ -233,229 +298,6 @@ struct ClipPhotoStatusBadge: View {
             return .red
         default:
             return .secondary
-        }
-    }
-}
-
-struct ClipPhotoBatch: Identifiable, Equatable {
-    let id: String
-    let photos: [ClipScannerStore.ClipPhoto]
-    let expectedTotal: Int
-    let isActive: Bool
-
-    var source: ClipScannerStore.ClipPhoto.Source {
-        photos.first?.source ?? .capture
-    }
-
-    var latestCapturedAt: Date {
-        photos.map(\.capturedAt).max() ?? .distantPast
-    }
-
-    var title: String {
-        if source == .upload && isActive {
-            return "Uploading \(photos.count) of \(expectedTotal) photo\(expectedTotal == 1 ? "" : "s")"
-        }
-        let action = source == .upload ? "uploaded" : "captured"
-        return "\(photos.count) \(action) photo\(photos.count == 1 ? "" : "s")"
-    }
-
-    var statusText: String {
-        if photos.contains(where: { $0.status == "Failed" }) {
-            return "Some failed"
-        }
-        if photos.contains(where: { $0.status == "Sending" }) {
-            return "Sending"
-        }
-        if photos.allSatisfy({ $0.status == "Delivered" }) {
-            return "Delivered"
-        }
-        return "Saved"
-    }
-}
-
-struct ClipPhotoBatchCard: View {
-    let batch: ClipPhotoBatch
-    let canAddPhotos: Bool
-    let onAddPhotos: () -> Void
-    let onPreview: (ClipScannerStore.ClipPhoto) -> Void
-    let onDeletePhoto: (ClipScannerStore.ClipPhoto) -> Void
-    let onDeleteBatch: () -> Void
-
-    private var visiblePhotos: [ClipScannerStore.ClipPhoto] {
-        Array(batch.photos.suffix(4))
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(batch.title)
-                        .font(.headline)
-                        .accessibilityAddTraits(.isHeader)
-                    Text(batch.latestCapturedAt, format: .dateTime.hour().minute())
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer(minLength: 8)
-
-                Text(batch.statusText)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 9)
-                    .frame(minHeight: 26)
-                    .background(.secondary.opacity(0.12), in: Capsule())
-
-                Button(role: .destructive, action: onDeleteBatch) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 16, weight: .semibold))
-                        .frame(width: 36, height: 36)
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel("Delete \(batch.title)")
-            }
-
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 86), spacing: 8)], spacing: 8) {
-                ForEach(visiblePhotos) { photo in
-                    ClipPhotoThumbnail(
-                        photo: photo,
-                        onPreview: {
-                            onPreview(photo)
-                        },
-                        onDelete: {
-                            onDeletePhoto(photo)
-                        }
-                    )
-                }
-            }
-
-            if batch.source == .capture {
-                Button(action: onAddPhotos) {
-                    Label("Add Photos", systemImage: "plus.viewfinder")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(!canAddPhotos)
-                .accessibilityLabel("Add photos to \(batch.title) from \(batch.latestCapturedAt.formatted(date: .abbreviated, time: .shortened))")
-            }
-
-            if batch.photos.count > 4 {
-                NavigationLink {
-                    ClipPhotoBatchGallery(batch: batch, onDelete: onDeletePhoto)
-                } label: {
-                    Label("View all \(batch.photos.count) photos", systemImage: "photo.stack")
-                    .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-            }
-        }
-        .padding(14)
-        .background(.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
-}
-
-struct ClipPhotoThumbnail: View {
-    let photo: ClipScannerStore.ClipPhoto
-    let onPreview: () -> Void
-    let onDelete: () -> Void
-
-    var body: some View {
-        GeometryReader { proxy in
-            ZStack(alignment: .topTrailing) {
-                Button(action: onPreview) {
-                    Image(uiImage: photo.image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                        .clipped()
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Preview photo")
-
-                Button(role: .destructive, action: onDelete) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title3)
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(.white, .black.opacity(0.5))
-                }
-                .buttonStyle(.plain)
-                .padding(5)
-                .accessibilityLabel("Delete photo")
-            }
-        }
-        .aspectRatio(1, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-}
-
-struct ClipPhotoBatchGallery: View {
-    @State private var previewedPhoto: ClipScannerStore.ClipPhoto?
-
-    let batch: ClipPhotoBatch
-    let onDelete: (ClipScannerStore.ClipPhoto) -> Void
-
-    private let columns = [GridItem(.adaptive(minimum: 104), spacing: 8)]
-
-    var body: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(batch.photos) { photo in
-                    ClipPhotoThumbnail(
-                        photo: photo,
-                        onPreview: { previewedPhoto = photo },
-                        onDelete: { delete(photo) }
-                    )
-                }
-            }
-            .padding()
-        }
-        .background(ScannerTabLayout.background)
-        .navigationTitle(batch.title.capitalized)
-        .navigationBarTitleDisplayMode(.inline)
-        .sheet(item: $previewedPhoto) { photo in
-            ClipPhotoPreviewSheet(photo: photo) {
-                delete(photo)
-                previewedPhoto = nil
-            }
-        }
-    }
-
-    private func delete(_ photo: ClipScannerStore.ClipPhoto) {
-        onDelete(photo)
-    }
-}
-
-struct ClipPhotoPreviewSheet: View {
-    let photo: ClipScannerStore.ClipPhoto
-    let onDelete: () -> Void
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                Color.black.ignoresSafeArea()
-                Image(uiImage: photo.image)
-                    .resizable()
-                    .scaledToFit()
-                    .padding()
-            }
-            .navigationTitle(Text(photo.capturedAt, format: .dateTime.hour().minute()))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(role: .destructive, action: onDelete) {
-                        Label("Delete", systemImage: "trash")
-                    }
-                }
-            }
         }
     }
 }

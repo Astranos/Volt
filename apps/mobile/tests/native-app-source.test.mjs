@@ -156,10 +156,9 @@ test("native upload batches expose clear progress while photos are preparing and
   assert.match(scannerStoreCaptureActionsSwiftSource, /updatePhotoUploadProgress\(batchId: batch, prepared: index \+ 1, phase: \.uploading\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /finishPhotoUploadItem\(batchId: batch, resultId: photoResult\.id\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /finishPhotoUploadBatch\(batchId: batch\)/);
-  assert.match(uploadViewSwiftSource, /PhotoPreparationProgressSummary\(\s*prepared: selectedUploadPrepared,\s*total: selectedUploadTotal\s*\)/);
-  assert.match(uploadViewSwiftSource, /PhotoUploadProgressSummary\(progress: progress\)/);
+  assert.match(uploadViewSwiftSource, /PhotoImportStatusBanner\(\s*isPreparing: isPreparingUploads,\s*prepared: selectedUploadPrepared,\s*total: selectedUploadTotal,\s*progress: activeUploadProgress/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /struct PhotoImportStatusBanner: View[\s\S]*PhotoPreparationProgressSummary\(prepared: prepared, total: total\)[\s\S]*PhotoUploadProgressSummary\(progress: progress\)/);
   assert.match(sharedScannerTabComponentsSwiftSource, /ProgressView\(value: progress\.fractionCompleted\)/);
-  assert.match(uploadViewSwiftSource, /"Reading \\\(selectedUploadReadCount\) of \\\(selectedUploadTotal\) selected photos"/);
   assert.match(sharedScannerTabComponentsSwiftSource, /struct PhotoPreparationProgressSummary: View/);
   assert.match(sharedScannerTabComponentsSwiftSource, /struct PhotoUploadProgressSummary: View/);
   assert.match(captureModeCardsSwiftSource, /GeometryReader \{ proxy in/);
@@ -170,9 +169,7 @@ test("native upload batches expose clear progress while photos are preparing and
   assert.match(captureModeCardsSwiftSource, /private struct PhotoBatchGallery: View \{\s*let batch: PhotoBatch[\s\S]*ForEach\(batch\.results\)/);
   assert.doesNotMatch(captureModeCardsSwiftSource, /_results = State\(initialValue: batch\.results\)/);
   assert.doesNotMatch(captureModeCardsSwiftSource, /paperplane\.circle\.fill/);
-  assert.match(uploadViewSwiftSource, /"\\\(progress\.title\)\. \\\(progress\.detail\)\."/);
   assert.match(captureModeCardsSwiftSource, /let action = source == \.upload \? "uploaded" : "captured"/);
-  assert.match(readFileSync(new URL("../ios/Volt/Views/SharedScannerTabComponents.swift", import.meta.url), "utf8"), /var isUploading = false/);
 });
 
 test("native upload picker accepts and queues more photos while a batch is active", () => {
@@ -182,10 +179,10 @@ test("native upload picker accepts and queues more photos while a batch is activ
   assert.doesNotMatch(uploadViewSwiftSource, /guard store\.connectionStatus\.isConnected/);
   assert.doesNotMatch(uploadViewSwiftSource, /\.onChange\(of: store\.connectionStatus\)/);
   assert.match(uploadViewSwiftSource, /selectedItems = \[\][\s\S]*enqueueUploadSelection\(newItems\)/);
-  assert.match(uploadViewSwiftSource, /else if let progress = activeUploadProgress/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /\} else if let progress \{\s*PhotoUploadProgressSummary/);
   assert.doesNotMatch(uploadViewSwiftSource, /defer \{[\s\S]*isPreparingUploads = false/);
-  assert.match(sharedScannerTabComponentsSwiftSource, /let isPickerEnabled = isConnected/);
-  assert.match(sharedScannerTabComponentsSwiftSource, /return "Add More Photos"/);
+  assert.match(uploadViewSwiftSource, /more photo\\\(queuedUploadPhotoCount == 1 \? "" : "s"\) queued\./);
+  assert.match(sharedScannerTabComponentsSwiftSource, /PhotosPicker\(selection: \$photoSelection, maxSelectionCount: 30, matching: \.images\)/);
 });
 
 test("full app main Scan surface exposes the photo-library upload control", () => {
@@ -195,7 +192,8 @@ test("full app main Scan surface exposes the photo-library upload control", () =
 
   assert.ok(scanStart > -1);
   assert.ok(scanEnd > scanStart);
-  assert.match(scanSource, /PhotoLibraryUploadSection\(\)/);
+  assert.match(scanSource, /PhotoLibraryUploadSection\(selectedItems: \$photoSelection\)/);
+  assert.match(rootViewSwiftSource, /@State private var photoSelection: \[PhotosPickerItem\] = \[\]/);
 });
 
 test("full app presents Volt, unified History, and Settings roots", () => {
@@ -206,32 +204,32 @@ test("full app presents Volt, unified History, and Settings roots", () => {
   assert.doesNotMatch(rootViewSwiftSource, /TabView\(|\.tabItem/);
   assert.match(rootViewSwiftSource, /@State private var presentedSheet: RootPresentedSheet\?/);
   assert.match(rootViewSwiftSource, /@ViewBuilder\s*private var selectedContent: some View/);
-  assert.match(rootViewSwiftSource, /case \.text, \.barcode, \.dictation:[\s\S]*UnifiedCaptureHomeView\(\)/);
-  assert.match(rootViewSwiftSource, /case \.photos:[\s\S]*CaptureHistoryView\(\)/);
+  assert.match(rootViewSwiftSource, /case \.text, \.barcode, \.dictation:[\s\S]*UnifiedCaptureHomeView\(photoSelection: \$photoSelection\)/);
+  assert.match(rootViewSwiftSource, /case \.photos:[\s\S]*CaptureHistoryView\(photoSelection: \$photoSelection\)/);
   assert.match(rootViewSwiftSource, /case \.settings:[\s\S]*SettingsView\(showsAccountSettings: showsAccountSettings\)/);
-  assert.match(rootViewSwiftSource, /ScannerHomeControls\([\s\S]*onScan: startCapture,[\s\S]*onConnections: \{ presentedSheet = \.connections \},[\s\S]*onSettings: \{ presentedSheet = \.settings \}/);
-  assert.match(rootViewSwiftSource, /\.sheet\(item: \$presentedSheet\)[\s\S]*case \.connections:[\s\S]*CloudTargetPickerSheet\(\)[\s\S]*case \.settings:[\s\S]*SettingsSheet\(showsAccountSettings: showsAccountSettings\)/);
+  assert.match(rootViewSwiftSource, /ScannerHomeControls\([\s\S]*onScan: startCapture,[\s\S]*photoSelection: \$photoSelection,[\s\S]*onSettings: \{ presentedSheet = \.settings \}/);
+  assert.match(rootViewSwiftSource, /\.sheet\(item: \$presentedSheet\)[\s\S]*case \.settings:[\s\S]*SettingsSheet\(showsAccountSettings: showsAccountSettings\)/);
+  assert.doesNotMatch(rootViewSwiftSource, /case \.connections|onConnections/);
   assert.match(sharedScannerTabComponentsSwiftSource, /struct ScannerHomeControls: View/);
   assert.match(sharedScannerTabComponentsSwiftSource, /GlassEffectContainer\(spacing: 12\)/);
   assert.match(sharedScannerTabComponentsSwiftSource, /\.buttonStyle\([\s\S]*\.glass\(\.regular\.tint\(/);
   assert.match(sharedScannerTabComponentsSwiftSource, /content\.buttonStyle\(\.glassProminent\)/);
   assert.doesNotMatch(rootViewSwiftSource, /\.background\(\.bar\)|Divider\(\)/);
-  assert.match(sharedScannerTabComponentsSwiftSource, /private var connectionsButton: some View[\s\S]*Image\(systemName: targetSymbol\)[\s\S]*\.frame\(width: 48, height: 48\)/);
-  assert.match(rootViewSwiftSource, /private var targetSymbol: String[\s\S]*"cursorarrow\.motionlines"[\s\S]*"desktopcomputer\.trianglebadge\.exclamationmark"[\s\S]*"iphone"/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /private var photosButton: some View[\s\S]*Image\(systemName: "photo\.on\.rectangle\.angled"\)[\s\S]*\.frame\(width: 48, height: 48\)/);
+  assert.doesNotMatch(rootViewSwiftSource, /targetSymbol/);
   assert.match(cloudTargetPickerSwiftSource, /Label\(targetLabel, systemImage: "character\.cursor\.ibeam"\)[\s\S]*\.lineLimit\(1\)[\s\S]*\.frame\(minHeight: isCompact \? 36 : 48\)[\s\S]*\.contentShape\(Rectangle\(\)\)/);
   assert.match(cloudTargetPickerSwiftSource, /struct CloudTargetLabel: View[\s\S]*Label\(Self\.targetLabel\(for: store\), systemImage: "character\.cursor\.ibeam"\)[\s\S]*\.accessibilityElement\(children: \.combine\)/);
   assert.doesNotMatch(cloudTargetPickerSwiftSource, /pencil\.and\.scribble/);
-  assert.match(scannerViewSwiftSource, /Text\("Volt"\)\.font\(\.largeTitle\.bold\(\)\)[\s\S]*CloudTargetLabel\(\)/);
-  const scanHeaderStart = scannerViewSwiftSource.indexOf('Text("Volt").font(.largeTitle.bold())');
-  const scanHeaderEnd = scannerViewSwiftSource.indexOf("UnifiedCaptureLaunchCard", scanHeaderStart);
-  const scanHeaderSource = scannerViewSwiftSource.slice(scanHeaderStart, scanHeaderEnd);
-  assert.doesNotMatch(scanHeaderSource, /CloudTargetButton|Button\(|buttonStyle|glass/);
-  assert.match(scannerViewSwiftSource, /ComputerAvailabilityCard \{ isTargetPickerPresented = true \}/);
+  assert.match(scannerViewSwiftSource, /ScannerHomeHeader\(chip: targetChip\)/);
+  assert.match(scannerViewSwiftSource, /private var targetChip: HomeTargetChip[\s\S]*CloudTargetLabel\.targetLabel\(for: store\)[\s\S]*\{ isTargetPickerPresented = true \}/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /struct ScannerHomeHeader: View[\s\S]*Text\("Volt"\)[\s\S]*\.font\(\.largeTitle\.bold\(\)\)/);
+  assert.doesNotMatch(scannerViewSwiftSource, /ComputerAvailabilityCard/);
   assert.match(scannerViewSwiftSource, /\.sheet\(isPresented: \$isTargetPickerPresented\)[\s\S]*CloudTargetPickerSheet\(\)/);
   assert.match(scannerViewSwiftSource, /CaptureHistoryView[\s\S]*CloudTargetButton/);
   assert.match(cloudTargetPickerSwiftSource, /content\.buttonStyle\(\.glass\)[\s\S]*content\.buttonStyle\(\.bordered\)/);
   assert.ok(cloudTargetPickerSwiftSource.includes('.accessibilityLabel("Type destination: \\(targetLabel)")'));
-  assert.match(sharedScannerTabComponentsSwiftSource, /\.accessibilityLabel\("Connections"\)[\s\S]*Choose the computer/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /\.accessibilityLabel\("Add Photos"\)/);
+  assert.doesNotMatch(sharedScannerTabComponentsSwiftSource, /\.accessibilityLabel\("Connections"\)/);
   assert.match(sharedScannerTabComponentsSwiftSource, /Label\("Start", systemImage: "camera\.viewfinder"\)[\s\S]*\.accessibilityLabel\("Start"\)[\s\S]*\.accessibilityHint\("Starts the scanner"\)/);
   assert.match(sharedScannerTabComponentsSwiftSource, /Label\("Start", systemImage: "camera\.viewfinder"\)[\s\S]*\.frame\(maxWidth: \.infinity, minHeight: 48\)/);
   assert.match(sharedScannerTabComponentsSwiftSource, /Label\("Settings", systemImage: "gearshape"\)[\s\S]*\.labelStyle\(\.iconOnly\)/);
@@ -243,7 +241,7 @@ test("full app presents Volt, unified History, and Settings roots", () => {
 });
 
 test("full app side controls keep an explicit 48 point hit target with native glass buttons", () => {
-  const connectionsStart = sharedScannerTabComponentsSwiftSource.indexOf("private var connectionsButton: some View");
+  const connectionsStart = sharedScannerTabComponentsSwiftSource.indexOf("private var photosButton: some View");
   const scanStart = sharedScannerTabComponentsSwiftSource.indexOf("private var scanButton: some View", connectionsStart);
   const settingsStart = sharedScannerTabComponentsSwiftSource.indexOf("private var settingsButton: some View", scanStart);
   const connectionsSource = sharedScannerTabComponentsSwiftSource.slice(connectionsStart, scanStart);

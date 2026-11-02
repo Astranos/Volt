@@ -51,11 +51,10 @@ test("native and app clip can reopen photo capture into a selected batch", () =>
   assert.match(scannerStoreCaptureActionsSwiftSource, /func captureSquarePhoto\(\) async \{\s*let batchId = currentCaptureBatchId\(\)[\s\S]*sendPhoto\(preparedImage, result: photoResult, batchId: batchId\)/);
   assert.match(scannerViewSwiftSource, /CaptureHistorySessionCard\(/);
   assert.match(scannerViewSwiftSource, /Continue session/);
-  assert.match(captureSessionViewSwiftSource, /\.onAppear \{\s*store\.activeMode = mode/);
+  assert.match(captureSessionViewSwiftSource, /\.onAppear \{\s*if !hasStartedSession \{\s*hasStartedSession = true\s*store\.activeMode = mode/);
   assert.doesNotMatch(captureSessionViewSwiftSource, /\.onAppear \{\s*store\.activeMode = \.ocr/);
 
   assert.match(clipScannerStoreSwiftSource, /func resumeCaptureSession\(batchId: String\) -> String \{\s*activeCaptureBatchId = batchId\s*return batchId\s*\}/);
-  assert.match(clipViewsSwiftSource, /Label\("Add Photos", systemImage: "plus\.viewfinder"\)/);
   assert.match(clipViewsSwiftSource, /store\.activeCaptureMode = \.ocr\s*captureSessionBatchId = store\.resumeCaptureSession\(batchId: batchId\)\s*isCaptureSessionPresented = true/);
   assert.match(clipViewsSwiftSource, /let batchId = captureBatchId[\s\S]*onCaptureImage\(image, mode, batchId\)/);
   assert.match(clipViewsSwiftSource, /store\.activeCaptureMode = \.ocr\s*captureSessionBatchId = store\.beginCaptureSession\(\)/);
@@ -84,8 +83,8 @@ test("installed app removes pairing headers while App Clip keeps connection cont
   assert.doesNotMatch(scannerViewSwiftSource, /PairingSessionsView|isSessionsPresented|onConnectionControlTapped/);
   assert.doesNotMatch(uploadViewSwiftSource, /PairingSessionsView|isSessionsPresented|onConnectionControlTapped/);
   assert.match(scannerViewSwiftSource, /CloudTargetButton/);
-  assert.match(clipViewsSwiftSource, /private func clipConnectionTitle\(/);
-  assert.match(clipViewsSwiftSource, /if isPairing \{\s*return "Connecting"\s*\}/);
+  assert.match(clipViewsSwiftSource, /private var targetChip: HomeTargetChip/);
+  assert.match(clipViewsSwiftSource, /if store\.isPairing \{\s*\("Connecting", "desktopcomputer", \.busy/);
   assert.match(clipViewsSwiftSource, /struct ClipPairingFailureView: View/);
   assert.match(clipViewsSwiftSource, /Label\("Scan QR Code", systemImage: "qrcode\.viewfinder"\)/);
   assert.doesNotMatch(clipViewsSwiftSource, /struct ClipPairingSessionsView: View/);
@@ -187,15 +186,15 @@ test("app clip capture modes share one camera and unified History area", () => {
   assert.match(clipScannerStoreSwiftSource, /func removeSession\(batchId: String\)/);
   assert.match(clipViewsSwiftSource, /private var sessionIDs: \[String\]/);
   assert.match(clipViewsSwiftSource, /let photos = store\.photos\.filter/);
-  assert.match(clipViewsSwiftSource, /ClipPhotoLibraryUploadSection\(store: store\)[\s\S]*ClipUnifiedHistoryView\(store: store\)/);
-  assert.match(clipViewsSwiftSource, /ClipPhotoBatchCard\(/);
+  assert.match(clipViewsSwiftSource, /ClipPhotoLibraryUploadSection\(store: store, pickerItems: \$photoSelection\)[\s\S]*ClipUnifiedHistoryView\(store: store\)/);
+  assert.match(clipViewsSwiftSource, /HistoryPhotoStrip\(/);
   assert.doesNotMatch(clipViewsSwiftSource, /Recent Uploads|ClipUploadPhotoBatchesSection/);
   assert.doesNotMatch(clipViewsSwiftSource, /capturedSessionPhotos|capturedThumbnails|capturedSessionItemCount/);
 });
 
 test("app clip main Scan surface exposes the photo-library upload control without a mode gate", () => {
   const scanSource = readClipView("ClipCaptureHomeView.swift");
-  const uploadControl = scanSource.indexOf("ClipPhotoLibraryUploadSection(store: store)");
+  const uploadControl = scanSource.indexOf("ClipPhotoLibraryUploadSection(store: store, pickerItems: $photoSelection)");
   const photoModeGate = scanSource.indexOf("if mode == .photo");
 
   assert.match(scanSource, /struct ClipCaptureView: View/);
@@ -205,21 +204,16 @@ test("app clip main Scan surface exposes the photo-library upload control withou
 
 test("app clip captured photos are grouped, previewable, and removable after leaving camera", () => {
   assert.doesNotMatch(clipViewsSwiftSource, /expandedBatchIds/);
-  assert.match(clipViewsSwiftSource, /@State private var previewedPhoto: ClipScannerStore\.ClipPhoto\?/);
   assert.match(clipViewsSwiftSource, /let photos = store\.photos\.filter \{ \(\$0\.batchId \?\? \$0\.id\.uuidString\.lowercased\(\)\) == id \}/);
-  assert.match(clipViewsSwiftSource, /\.sheet\(item: \$previewedPhoto\)/);
-  assert.match(clipViewsSwiftSource, /struct ClipPhotoBatchCard: View/);
-  assert.match(clipViewsSwiftSource, /private var visiblePhotos: \[ClipScannerStore\.ClipPhoto\] \{\s*Array\(batch\.photos\.suffix\(4\)\)/);
-  assert.match(clipViewsSwiftSource, /NavigationLink \{\s*ClipPhotoBatchGallery\(batch: batch, onDelete: onDeletePhoto\)/);
-  assert.match(clipViewsSwiftSource, /struct ClipPhotoBatchGallery: View \{\s*@State private var previewedPhoto:[\s\S]*let batch: ClipPhotoBatch[\s\S]*ForEach\(batch\.photos\)/);
-  assert.doesNotMatch(clipViewsSwiftSource, /_photos = State\(initialValue: batch\.photos\)/);
-  assert.match(clipViewsSwiftSource, /accessibilityLabel\("Add photos to \\\(batch\.title\) from/);
-  assert.match(clipViewsSwiftSource, /struct ClipPhotoThumbnail: View/);
-  assert.match(clipViewsSwiftSource, /struct ClipPhotoPreviewSheet: View/);
-  assert.match(clipViewsSwiftSource, /store\.removePhoto\(id: photo\.id\)/);
+  assert.match(clipViewsSwiftSource, /photos: photos\.map\(\\\.galleryPhoto\)/);
+  assert.match(clipViewsSwiftSource, /extension ClipScannerStore\.ClipPhoto \{\s*var galleryPhoto: GalleryPhoto/);
+  // The camera's last-photo button opens the same full-screen viewer for this session's photos.
+  assert.match(clipViewsSwiftSource, /lastPhoto: sessionPhotos\.first,[\s\S]*onOpenSessionPhotos:/);
+  assert.match(clipViewsSwiftSource, /PhotoGalleryViewer\([\s\S]*onSend: \{ photo in store\.resendPhoto\(id: photo\.id\) \}[\s\S]*onDelete: \{ photo in store\.removePhoto\(id: photo\.id\) \}/);
   assert.match(clipViewsSwiftSource, /store\.removePhotos\(batchId: id\)/);
   assert.match(clipScannerStoreSwiftSource, /func removePhoto\(id: UUID\)/);
   assert.match(clipScannerStoreSwiftSource, /func removePhotos\(batchId: String\)/);
+  assert.match(clipScannerStoreSwiftSource, /func resendPhoto\(id: UUID\)/);
 });
 
 test("app clip photo capture keeps the stable shared control geometry", () => {
@@ -263,13 +257,13 @@ test("app clip bottom CTAs show connection progress while pairing", () => {
   assert.match(sharedScannerTabComponentsSwiftSource, /var isConnecting = false/);
   assert.match(sharedScannerTabComponentsSwiftSource, /isConnecting \? "Connecting\.\.\." : title/);
   assert.match(sharedScannerTabComponentsSwiftSource, /isConnecting \? "hourglass" : systemImage/);
-  assert.match(sharedScannerTabComponentsSwiftSource, /if isConnecting \{\s*return "Connecting\.\.\."\s*\}/);
   assert.match(sharedScannerTabComponentsSwiftSource, /\.background\(\.bar\)\s*\.shadow\(color: \.black\.opacity\(0\.12\), radius: 10, y: -3\)/);
   assert.match(clipViewsSwiftSource, /ScannerHomeControls\([\s\S]*onScan: startCapture/);
-  assert.match(clipViewsSwiftSource, /ClipChromeSectionHeader\([\s\S]*connection: connectionSummary/);
-  assert.match(clipViewsSwiftSource, /ScannerPhotoPickerAccessory\([\s\S]*isConnecting: store\.isPairing[\s\S]*statusText: uploadStatusText/);
+  assert.match(clipViewsSwiftSource, /ScannerHomeHeader\(chip: targetChip\)/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /if status == \.busy \{\s*ProgressView\(\)\.controlSize\(\.small\)/);
+  assert.match(clipViewsSwiftSource, /isPhotoPickerEnabled: store\.isConnected/);
   assert.match(clipViewsSwiftSource, /private var captureStatusText: String \{\s*if store\.isPairing \{\s*store\.statusText/);
-  assert.match(clipViewsSwiftSource, /private var uploadStatusText: String \{[\s\S]*else if store\.isPairing \{\s*status = store\.statusText/);
+  assert.match(clipViewsSwiftSource, /waiting for a workspace connection\./);
   assert.doesNotMatch(clipViewsSwiftSource, /Label\(\s*"Start Dictation",\s*systemImage: "mic\.fill"/);
   assert.doesNotMatch(clipViewsSwiftSource, /Button\(store\.isSendingDictation \? "Sending…" : "Send"\)/);
 });
@@ -378,16 +372,9 @@ test("app clip unified history groups library photos with captures and shows sha
   assert.match(clipScannerStoreSwiftSource, /finishPhotoUploadBatch\(batchId: batchId\)/);
   assert.match(clipViewsSwiftSource, /private var sessionIDs: \[String\]/);
   assert.match(clipViewsSwiftSource, /let photos = store\.photos\.filter \{ \(\$0\.batchId \?\? \$0\.id\.uuidString\.lowercased\(\)\) == id \}/);
-  assert.match(clipViewsSwiftSource, /PhotoPreparationProgressSummary\(\s*prepared: selectedUploadPrepared,\s*total: selectedUploadTotal\s*\)/);
-  assert.match(clipViewsSwiftSource, /PhotoUploadProgressSummary\(progress: progress\)/);
-  assert.match(clipViewsSwiftSource, /ClipPhotoBatchCard\(/);
-  assert.match(clipViewsSwiftSource, /struct ClipPhotoBatchCard: View/);
-  assert.match(clipViewsSwiftSource, /struct ClipPhotoThumbnail: View/);
-  assert.match(clipViewsSwiftSource, /let action = source == \.upload \? "uploaded" : "captured"/);
-  assert.match(clipViewsSwiftSource, /if batch\.source == \.capture/);
-  assert.match(clipViewsSwiftSource, /isUploading: activeUploadProgress != nil/);
-  assert.match(clipViewsSwiftSource, /"Reading \\\(selectedUploadReadCount\) of \\\(selectedUploadTotal\) selected photos"/);
-  assert.match(clipViewsSwiftSource, /"\\\(progress\.title\)\. \\\(progress\.detail\)\."/);
+  assert.match(clipViewsSwiftSource, /PhotoImportStatusBanner\(\s*isPreparing: isPreparingUploads,\s*prepared: selectedUploadPrepared,\s*total: selectedUploadTotal,\s*progress: activeUploadProgress/);
+  assert.match(clipViewsSwiftSource, /HistoryPhotoStrip\([\s\S]*placeholderCount: max\(0, expected - photos\.count\)/);
+  assert.match(clipViewsSwiftSource, /photos\.first\?\.source == \.upload \? "uploaded" : "captured"/);
   assert.match(clipViewsSwiftSource, /store\.removePhotos\(batchId: id\)/);
   assert.doesNotMatch(clipViewsSwiftSource, /Recent Uploads/);
 });
@@ -398,7 +385,7 @@ test("app clip upload picker accepts and queues more photos while a batch is act
   assert.match(clipViewsSwiftSource, /while store\.isConnected, !queuedUploadSelections\.isEmpty/);
   assert.match(clipViewsSwiftSource, /\.onChange\(of: store\.isConnected\)[\s\S]*if isConnected \{\s*startUploadQueueIfNeeded\(\)/);
   assert.match(clipViewsSwiftSource, /pickerItems = \[\][\s\S]*enqueueUploadSelection\(items\)/);
-  assert.match(clipViewsSwiftSource, /else if let progress = activeUploadProgress/);
+  assert.match(clipViewsSwiftSource, /if banner\.isVisible \{ banner \}/);
 });
 
 test("app clip replays saved captures and photos after connecting", () => {

@@ -11,7 +11,7 @@ final class VoltScreenshots: XCTestCase {
         app.launchEnvironment["VOLT_SCREENSHOT_SCENARIO"] = "captureReviewSend"
         app.launch()
 
-        let openCamera = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Open Camera'")).firstMatch
+        let openCamera = app.buttons["Start"]
         if openCamera.waitForExistence(timeout: 10) {
             openCamera.tap()
         }
@@ -62,7 +62,7 @@ final class VoltScreenshots: XCTestCase {
         app.launchEnvironment["VOLT_SCREENSHOT_APP_STORE"] = "1"
         app.launch()
 
-        let openCamera = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Open Camera'")).firstMatch
+        let openCamera = app.buttons["Start"]
         if openCamera.waitForExistence(timeout: 10) {
             openCamera.tap()
         }
@@ -79,6 +79,58 @@ final class VoltScreenshots: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    /// Home screen: header target chip, day-grouped history, and the Photos/Start/Settings bar.
+    @MainActor
+    func testHomeScreen() throws {
+        continueAfterFailure = false
+        for (scenario, name) in [("captureTextPre", "home-history")] {
+            let app = XCUIApplication()
+            app.launchArguments += ["--ui-testing", "--screenshots"]
+            app.launchEnvironment["VOLT_SCREENSHOTS"] = "1"
+            app.launchEnvironment["VOLT_SCREENSHOT_SCENARIO"] = scenario
+            app.launch()
+            XCTAssertTrue(app.buttons["home-target-chip"].waitForExistence(timeout: 15))
+            XCTAssertTrue(app.buttons["Add Photos"].exists)
+            XCTAssertFalse(app.buttons["Connections"].exists)
+            attachScreenshot(named: name)
+            app.terminate()
+        }
+    }
+
+    /// Photo strip in history, the camera's last-photo thumbnail in Photo mode, and the viewer.
+    @MainActor
+    func testPhotoViews() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-testing", "--screenshots"]
+        app.launchEnvironment["VOLT_SCREENSHOTS"] = "1"
+        app.launchEnvironment["VOLT_SCREENSHOT_SCENARIO"] = "captureTextPre"
+        app.launch()
+
+        let continueButtons = app.buttons.matching(NSPredicate(format: "label == 'Continue session'"))
+        XCTAssertTrue(continueButtons.firstMatch.waitForExistence(timeout: 15))
+        app.swipeUp()
+        attachScreenshot(named: "history-photos")
+
+        app.swipeDown()
+        let resume = continueButtons.element(boundBy: continueButtons.count - 1)
+        XCTAssertTrue(resume.isHittable)
+        resume.tap()
+        XCTAssertTrue(app.buttons["End session"].waitForExistence(timeout: 10))
+        let photoMode = app.buttons["Capture mode Photo"]
+        XCTAssertTrue(photoMode.waitForExistence(timeout: 10))
+        photoMode.tap()
+        let lastPhoto = app.buttons["camera-last-photo"]
+        XCTAssertTrue(lastPhoto.waitForExistence(timeout: 10))
+        Thread.sleep(forTimeInterval: 1)
+        attachScreenshot(named: "camera-last-photo")
+
+        lastPhoto.tap()
+        XCTAssertTrue(app.staticTexts["1 of 5"].waitForExistence(timeout: 10))
+        attachScreenshot(named: "photo-viewer")
+        app.terminate()
     }
 
     @MainActor

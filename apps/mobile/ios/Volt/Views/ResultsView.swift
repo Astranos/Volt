@@ -1,9 +1,13 @@
 import PhotosUI
 import SwiftUI
 
-struct PhotoLibraryUploadSection: View {
+/// Runs photo-library imports picked from the home bar's Photos button and shows progress
+/// above `content` only while an import is happening. It wraps content (rather than sitting
+/// beside it) so the selection observer stays alive when no banner is shown.
+struct PhotoLibraryUploadSection<Content: View>: View {
     @Environment(ScannerStore.self) private var store
-    @State private var selectedItems: [PhotosPickerItem] = []
+    @Binding var selectedItems: [PhotosPickerItem]
+    @ViewBuilder let content: () -> Content
     @State private var isPreparingUploads = false
     @State private var selectedUploadTotal = 0
     @State private var selectedUploadPrepared = 0
@@ -17,29 +21,17 @@ struct PhotoLibraryUploadSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("From Photo Library")
-                .font(.headline)
-
-            if isPreparingUploads {
-                PhotoPreparationProgressSummary(
-                    prepared: selectedUploadPrepared,
-                    total: selectedUploadTotal
-                )
-            } else if let progress = activeUploadProgress {
-                PhotoUploadProgressSummary(progress: progress)
-            }
-
-            ScannerPhotoPickerAccessory(
-                selectedItems: $selectedItems,
-                isConnected: true,
-                isPreparing: isPreparingUploads,
-                isUploading: activeUploadProgress != nil,
-                statusText: uploadStatusText,
-                showsError: uploadError != nil,
-                disabledHint: uploadError ?? "Photos save on this iPhone before cloud sync."
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        let banner = PhotoImportStatusBanner(
+            isPreparing: isPreparingUploads,
+            prepared: selectedUploadPrepared,
+            total: selectedUploadTotal,
+            progress: activeUploadProgress,
+            message: statusMessage,
+            isError: uploadError != nil
+        )
+        VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
+            if banner.isVisible { banner }
+            content()
         }
         .onChange(of: selectedItems) { _, newItems in
             guard !newItems.isEmpty else { return }
@@ -48,29 +40,10 @@ struct PhotoLibraryUploadSection: View {
         }
     }
 
-    private var selectedUploadReadCount: Int {
-        guard selectedUploadTotal > 0 else { return 0 }
-        return min(max(selectedUploadPrepared, 1), selectedUploadTotal)
-    }
-
-    private var uploadStatusText: String {
-        let status: String
-        if let uploadError {
-            status = uploadError
-        } else if isPreparingUploads {
-            if selectedUploadTotal > 0 {
-                status = "Reading \(selectedUploadReadCount) of \(selectedUploadTotal) selected photos"
-            } else {
-                status = "Preparing uploads..."
-            }
-        } else if let progress = activeUploadProgress {
-            status = "\(progress.title). \(progress.detail)."
-        } else {
-            status = "Selected photos save locally and sync to your Volt workspace when signed in."
-        }
-
-        guard queuedUploadPhotoCount > 0 else { return status }
-        return "\(status) \(queuedUploadPhotoCount) more photo\(queuedUploadPhotoCount == 1 ? "" : "s") queued."
+    private var statusMessage: String? {
+        if let uploadError { return uploadError }
+        guard queuedUploadPhotoCount > 0 else { return nil }
+        return "\(queuedUploadPhotoCount) more photo\(queuedUploadPhotoCount == 1 ? "" : "s") queued."
     }
 
     private func uploadSelectedItems(_ items: [PhotosPickerItem]) async {
