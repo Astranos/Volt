@@ -1,4 +1,6 @@
 import Foundation
+import ImageIO
+import UniformTypeIdentifiers
 
 @MainActor
 final class DurableCaptureOutbox {
@@ -196,9 +198,34 @@ final class DurableCaptureOutbox {
 
     func markUploaded(id: UUID) throws {
         try update(id: id, state: .uploaded, retryAt: nil)
-        if let filename = records.first(where: { $0.id == id })?.photoFilename {
-            try? fileManager.removeItem(at: directoryURL.appending(path: filename))
+        // History keeps showing delivered photos, so swap the full upload for a smaller local
+        // copy instead of deleting it. Deleting the capture from history removes the file.
+        guard let filename = records.first(where: { $0.id == id })?.photoFilename else { return }
+        let url = directoryURL.appending(path: filename)
+        guard let original = try? Data(contentsOf: url),
+              let preview = Self.historyPreview(of: original),
+              preview.count < original.count
+        else { return }
+        try? preview.write(to: url, options: [.atomic, .completeFileProtection])
+    }
+
+    /// Long edge of the photo kept on the phone after upload: plenty for the history viewer.
+    static let historyPreviewMaxPixelSize = 1280
+
+    private static func historyPreview(of data: Data) -> Data? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                  kCGImageSourceCreateThumbnailFromImageAlways: true,
+                  kCGImageSourceCreateThumbnailWithTransform: true,
+                  kCGImageSourceThumbnailMaxPixelSize: historyPreviewMaxPixelSize,
+              ] as CFDictionary)
+        else { return nil }
+        let output = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(output, UTType.jpeg.identifier as CFString, 1, nil) else {
+            return nil
         }
+        CGImageDestinationAddImage(destination, image, [kCGImageDestinationLossyCompressionQuality: 0.75] as CFDictionary)
+        return CGImageDestinationFinalize(destination) ? output as Data : nil
     }
 
     func markFailed(id: UUID, now: Date = .now) throws {

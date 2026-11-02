@@ -741,6 +741,8 @@ struct GalleryPhoto: Identifiable {
     let id: UUID
     let capturedAt: Date
     let status: HistoryCaptureStatus
+    /// False when the phone no longer has the bytes (builds ≤ 74 deleted photos after upload).
+    var isStored = true
     let image: () -> UIImage?
 }
 
@@ -771,6 +773,10 @@ struct GalleryThumbnail: View {
                 Image(uiImage: thumbnail)
                     .resizable()
                     .scaledToFill()
+            } else if !photo.isStored {
+                Image(systemName: "photo")
+                    .font(.system(size: size * 0.32))
+                    .foregroundStyle(.tertiary)
             }
         }
         .frame(width: size, height: size)
@@ -779,6 +785,7 @@ struct GalleryThumbnail: View {
             if showsStatus { statusBadge.padding(4) }
         }
         .task(id: photo.id) {
+            guard photo.isStored else { return }
             let key = photo.id as NSUUID
             if let cached = GalleryThumbnailCache.images.object(forKey: key) {
                 thumbnail = cached
@@ -884,8 +891,10 @@ struct HistoryPhotoStrip: View {
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
-                            Button("Send", systemImage: "paperplane") { onSend(photo) }
-                            Divider()
+                            if photo.isStored {
+                                Button("Send", systemImage: "paperplane") { onSend(photo) }
+                                Divider()
+                            }
                             Button("Delete", systemImage: "trash", role: .destructive) { onDelete(photo) }
                         }
                         .accessibilityLabel("Photo from \(photo.capturedAt.formatted(date: .omitted, time: .shortened))")
@@ -996,14 +1005,16 @@ struct PhotoGalleryViewer: View {
     private var bottomBar: some View {
         if let current {
             HStack {
-                barButton("Send", systemImage: "paperplane") { onSend(current) }
-                Spacer()
-                if let image = current.image() {
-                    ShareLink(item: Image(uiImage: image), preview: SharePreview("Photo", image: Image(uiImage: image))) {
-                        barLabel("Share", systemImage: "square.and.arrow.up")
+                if current.isStored {
+                    barButton("Send", systemImage: "paperplane") { onSend(current) }
+                    Spacer()
+                    if let image = current.image() {
+                        ShareLink(item: Image(uiImage: image), preview: SharePreview("Photo", image: Image(uiImage: image))) {
+                            barLabel("Share", systemImage: "square.and.arrow.up")
+                        }
                     }
+                    Spacer()
                 }
-                Spacer()
                 barButton("Delete", systemImage: "trash", role: .destructive) { onDelete(current) }
             }
             .foregroundStyle(.white)
@@ -1039,11 +1050,21 @@ private struct GalleryPage: View {
         Group {
             if let image {
                 ZoomableImageView(image: image)
-            } else {
+            } else if photo.isStored {
                 ProgressView().tint(.white)
+            } else {
+                ContentUnavailableView(
+                    "Not on this iPhone",
+                    systemImage: "photo",
+                    description: Text("This photo was uploaded before Volt kept copies on the phone. It was already delivered to your workspace.")
+                )
+                .foregroundStyle(.white)
             }
         }
-        .task(id: photo.id) { image = photo.image() }
+        .task(id: photo.id) {
+            guard photo.isStored else { return }
+            image = photo.image()
+        }
     }
 }
 

@@ -9,7 +9,7 @@ extension ScanResult {
         case .failed: .failed
         case .saved: .unsent
         }
-        return GalleryPhoto(id: id, capturedAt: capturedAt, status: status) {
+        return GalleryPhoto(id: id, capturedAt: capturedAt, status: status, isStored: data != nil) {
             data.flatMap(UIImage.init(data:))
         }
     }
