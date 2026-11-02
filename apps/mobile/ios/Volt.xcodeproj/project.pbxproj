@@ -38,6 +38,7 @@
 		B1000000000000000000000C /* ScreenshotFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000C /* ScreenshotFixtures.swift */; };
 		B1000000000000000000000D /* SharedCameraSessionControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000D /* SharedCameraSessionControls.swift */; };
 		B1000000000000000000000E /* SharedScannerTabComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000E /* SharedScannerTabComponents.swift */; };
+		B10000000000000000000099 /* SharedPhotoGalleryComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000099 /* SharedPhotoGalleryComponents.swift */; };
 		B10000000000000000000010 /* BarcodeDetectionReticle.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000010 /* BarcodeDetectionReticle.swift */; };
 		B10000000000000000000011 /* SharedCaptureSessionOverlays.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000011 /* SharedCaptureSessionOverlays.swift */; };
 		B10000000000000000000012 /* CloudPhotoRendition.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000012 /* CloudPhotoRendition.swift */; };
@@ -54,6 +55,7 @@
 		B30000000000000000000010 /* ClipOCRService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3000000000000000000000E /* ClipOCRService.swift */; };
 		B30000000000000000000011 /* SharedCameraSessionControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000D /* SharedCameraSessionControls.swift */; };
 		B30000000000000000000012 /* SharedScannerTabComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000E /* SharedScannerTabComponents.swift */; };
+		B30000000000000000000099 /* SharedPhotoGalleryComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000099 /* SharedPhotoGalleryComponents.swift */; };
 		B30000000000000000000013 /* SharedPairingSessionComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000F /* SharedPairingSessionComponents.swift */; };
 		B30000000000000000000014 /* ClipAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C3000000000000000000000F /* ClipAssets.xcassets */; };
 		B30000000000000000000015 /* ScannerRecognitionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001E /* ScannerRecognitionModels.swift */; };
@@ -188,6 +190,7 @@
 		C1000000000000000000000C /* ScreenshotFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotFixtures.swift; sourceTree = "<group>"; };
 		C1000000000000000000000D /* SharedCameraSessionControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCameraSessionControls.swift; sourceTree = "<group>"; };
 		C1000000000000000000000E /* SharedScannerTabComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedScannerTabComponents.swift; sourceTree = "<group>"; };
+		C10000000000000000000099 /* SharedPhotoGalleryComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedPhotoGalleryComponents.swift; sourceTree = "<group>"; };
 		C1000000000000000000000F /* SharedPairingSessionComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedPairingSessionComponents.swift; sourceTree = "<group>"; };
 		C10000000000000000000010 /* BarcodeDetectionReticle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeDetectionReticle.swift; sourceTree = "<group>"; };
 		C10000000000000000000011 /* SharedCaptureSessionOverlays.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCaptureSessionOverlays.swift; sourceTree = "<group>"; };
@@ -415,6 +418,7 @@
 				C10000000000000000000005 /* CaptureSessionView.swift */,
 				C1000000000000000000000D /* SharedCameraSessionControls.swift */,
 				C1000000000000000000000E /* SharedScannerTabComponents.swift */,
+				C10000000000000000000099 /* SharedPhotoGalleryComponents.swift */,
 				C1000000000000000000000F /* SharedPairingSessionComponents.swift */,
 				C10000000000000000000011 /* SharedCaptureSessionOverlays.swift */,
 				C10000000000000000000006 /* CameraSessionControls.swift */,
@@ -714,6 +718,7 @@
 				B10000000000000000000005 /* CaptureSessionView.swift in Sources */,
 				B1000000000000000000000D /* SharedCameraSessionControls.swift in Sources */,
 				B1000000000000000000000E /* SharedScannerTabComponents.swift in Sources */,
+				B10000000000000000000099 /* SharedPhotoGalleryComponents.swift in Sources */,
 				B10000000000000000000011 /* SharedCaptureSessionOverlays.swift in Sources */,
 				B10000000000000000000006 /* CameraSessionControls.swift in Sources */,
 				B10000000000000000000007 /* ScannerCameraLayer.swift in Sources */,
@@ -757,6 +762,7 @@
 				B30000000000000000000010 /* ClipOCRService.swift in Sources */,
 				B30000000000000000000011 /* SharedCameraSessionControls.swift in Sources */,
 				B30000000000000000000012 /* SharedScannerTabComponents.swift in Sources */,
+				B30000000000000000000099 /* SharedPhotoGalleryComponents.swift in Sources */,
 				B30000000000000000000013 /* SharedPairingSessionComponents.swift in Sources */,
 				B30000000000000000000015 /* ScannerRecognitionModels.swift in Sources */,
 				B30000000000000000000025 /* TextRecognizer.swift in Sources */,

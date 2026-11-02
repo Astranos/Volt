@@ -105,7 +105,7 @@ test('photo runs stop at non-photos and source changes, keeping mixed capture or
 });
 
 test('photo runs use the shared strip and full-screen viewer with resend and delete', () => {
-  const shared = readFileSync(new URL('../ios/Volt/Views/SharedScannerTabComponents.swift', import.meta.url), 'utf8');
+  const shared = readFileSync(new URL('../ios/Volt/Views/SharedPhotoGalleryComponents.swift', import.meta.url), 'utf8');
   assert.match(rows, /HistoryPhotoStrip\(/);
   assert.match(rows, /onSend: \{ photo in result\(for: photo\)\.map\(onResend\) \}/);
   assert.match(rows, /onDelete: \{ photo in result\(for: photo\)\.map\(onDelete\) \}/);
