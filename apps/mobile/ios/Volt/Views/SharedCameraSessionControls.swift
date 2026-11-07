@@ -4,19 +4,11 @@ struct CameraSessionTopStatus: View {
     let activeMode: CaptureMode
     var liveTextCandidates: [LiveTextCandidate] = []
     var barcodeHint = "Point camera at barcode"
-    var isProductScannerSelected = false
-    var productScanMode: ProductScanMode = .upc
-    var isProductScanBusy = false
-    var productScanQuotaText: String?
-    var productScanOutput: ProductScanOutput?
-    var productScanError: String?
     let onSendLiveText: (LiveTextCandidate) -> Void
 
     var body: some View {
         Group {
-            if isProductScannerSelected {
-                productStatus
-            } else if activeMode == .ocr, !liveTextCandidates.isEmpty {
+            if activeMode == .ocr, !liveTextCandidates.isEmpty {
                 LiveIdentifierStrip(
                     candidates: liveTextCandidates,
                     onSend: onSendLiveText
@@ -41,42 +33,6 @@ struct CameraSessionTopStatus: View {
         .accessibilityElement(children: .contain)
     }
 
-    @ViewBuilder
-    private var productStatus: some View {
-        if let productScanError {
-            Label(productScanError, systemImage: "exclamationmark.triangle.fill")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.orange)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-        } else if let productScanOutput {
-            VStack(spacing: 3) {
-                Label(
-                    productScanOutput.mode == .upc ? "UPC found" : "Product found",
-                    systemImage: productScanOutput.mode.systemImage
-                )
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.76))
-
-                Text(productScanOutput.value)
-                    .font(productScanOutput.mode == .upc ? .headline.monospaced() : .headline)
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.82)
-            }
-        } else {
-            VStack(spacing: 4) {
-                ProductScanProgressText(mode: productScanMode, isBusy: isProductScanBusy)
-                if let productScanQuotaText {
-                    Text(productScanQuotaText)
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.72))
-                        .lineLimit(1)
-                }
-            }
-        }
-    }
-
     private var captureHint: String {
         switch activeMode {
         case .ocr:
@@ -92,11 +48,6 @@ struct CameraSessionTopStatus: View {
 }
 
 struct CameraSessionControls: View {
-    private enum ModeID: Hashable {
-        case capture(CaptureMode)
-        case productScanner
-    }
-
     private let sideToolSlotWidth: CGFloat = 64
     private let toolRowMaxWidth: CGFloat = 380
     private let modeButtonWidth: CGFloat = 64
@@ -107,7 +58,7 @@ struct CameraSessionControls: View {
     private let captureActionsRowHeight: CGFloat = 96
 
     @Binding var activeMode: CaptureMode
-    @State private var centeredModeID: ModeID?
+    @State private var centeredMode: CaptureMode?
     @State private var isModePickerScrolling = false
     let torchEnabled: Bool
     let zoomLabel: String
@@ -117,10 +68,6 @@ struct CameraSessionControls: View {
     var isModeSelectionEnabled = true
     var showsModePicker = true
     var controlRotation: Angle = .zero
-    var showsProductScanner = false
-    var isProductScannerSelected = false
-    var productScannerAvailable = true
-    var productScanMode: ProductScanMode = .upc
     var connectionSystemImage = "character.cursor.ibeam"
     var connectionLabel = "Write"
     var connectionAccessibilityLabel = "Choose write destination"
@@ -134,9 +81,6 @@ struct CameraSessionControls: View {
     var lastPhoto: GalleryPhoto?
     var sessionPhotoCount = 0
     var onOpenSessionPhotos: (() -> Void)?
-    var onSelectProductScanner: (() -> Void)?
-    var onToggleProductScanMode: (() -> Void)?
-    var onDeactivateProductScanner: (() -> Void)?
     let onFinish: () -> Void
 
     var body: some View {
@@ -172,11 +116,7 @@ struct CameraSessionControls: View {
             )
             .ignoresSafeArea(edges: .bottom)
         }
-        .sensoryFeedback(.selection, trigger: selectedModeID)
-    }
-
-    private var selectedModeID: ModeID {
-        isProductScannerSelected ? .productScanner : .capture(activeMode)
+        .sensoryFeedback(.selection, trigger: activeMode)
     }
 
     private var modePicker: some View {
@@ -186,25 +126,20 @@ struct CameraSessionControls: View {
                     modeButton("Text", mode: .ocr)
                     modeButton("Barcode", mode: .barcode)
                     modeButton("Photo", mode: .photo)
-                    if showsProductScanner, onSelectProductScanner != nil {
-                        productModeButton {
-                            selectCenteredMode(.productScanner)
-                        }
-                    }
                     modeButton("Audio", mode: .dictation)
                 }
                 .scrollTargetLayout()
                 .padding(.horizontal, max(0, (geometry.size.width - modeButtonWidth) / 2))
             }
             .scrollTargetBehavior(.viewAligned(limitBehavior: .never, anchor: .center))
-            .scrollPosition(id: $centeredModeID, anchor: .center)
+            .scrollPosition(id: $centeredMode, anchor: .center)
             .onAppear {
-                centeredModeID = selectedModeID
+                centeredMode = activeMode
             }
-            .onChange(of: selectedModeID) { _, modeID in
-                guard centeredModeID != modeID else { return }
+            .onChange(of: activeMode) { _, mode in
+                guard centeredMode != mode else { return }
                 withAnimation(.easeInOut(duration: 0.24)) {
-                    centeredModeID = modeID
+                    centeredMode = mode
                 }
             }
             .onScrollPhaseChange { _, newPhase in
@@ -215,10 +150,10 @@ struct CameraSessionControls: View {
                     await Task.yield()
                     guard !isModePickerScrolling,
                           isModeSelectionEnabled,
-                          let modeID = centeredModeID,
-                          modeID != selectedModeID
+                          let mode = centeredMode,
+                          mode != activeMode
                     else { return }
-                    selectCenteredMode(modeID)
+                    activeMode = mode
                 }
             }
         }
@@ -244,11 +179,7 @@ struct CameraSessionControls: View {
 
     private var cameraToolsRow: some View {
         HStack {
-            if isProductScannerSelected, let onToggleProductScanMode {
-                productScanToolSlot(action: onToggleProductScanMode)
-            } else {
-                gridToolSlot
-            }
+            gridToolSlot
 
             Spacer()
 
@@ -332,7 +263,7 @@ struct CameraSessionControls: View {
         ZStack {
             Color.clear
             // Photos don't type into a computer, so in Photo mode this slot previews the last shot.
-            if activeMode == .photo, !isProductScannerSelected, let lastPhoto, let onOpenSessionPhotos {
+            if activeMode == .photo, let lastPhoto, let onOpenSessionPhotos {
                 CameraLastPhotoButton(
                     photo: lastPhoto,
                     count: sessionPhotoCount,
@@ -364,10 +295,10 @@ struct CameraSessionControls: View {
     }
 
     private func modeButton(_ title: String, mode: CaptureMode) -> some View {
-        let isSelected = !isProductScannerSelected && activeMode == mode
+        let isSelected = activeMode == mode
 
         return Button {
-            selectCenteredMode(.capture(mode))
+            activeMode = mode
         } label: {
             VStack(spacing: 5) {
                 Text(title)
@@ -380,51 +311,9 @@ struct CameraSessionControls: View {
             .frame(width: modeButtonWidth, height: 36)
         }
         .buttonStyle(.plain)
-        .id(ModeID.capture(mode))
+        .id(mode)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityLabel("Capture mode \(title)")
-    }
-
-    private func productModeButton(action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 5) {
-                Text("AI")
-                    .font(.subheadline.weight(isProductScannerSelected ? .bold : .medium))
-                Capsule()
-                    .fill(isProductScannerSelected ? .white : .clear)
-                    .frame(width: 22, height: 3)
-            }
-            .foregroundStyle(.white.opacity(productScannerAvailable ? 0.92 : 0.56))
-            .frame(width: modeButtonWidth, height: 36)
-        }
-        .buttonStyle(.plain)
-        .id(ModeID.productScanner)
-        .accessibilityAddTraits(isProductScannerSelected ? .isSelected : [])
-        .accessibilityLabel("AI product scan")
-        .accessibilityValue(productScannerAvailable ? "Available" : "AI scan limit reached for this period")
-        .accessibilityHint("Returns the selected product UPC or name")
-    }
-
-    private func selectCenteredMode(_ modeID: ModeID) {
-        switch modeID {
-        case .capture(let mode):
-            onDeactivateProductScanner?()
-            activeMode = mode
-        case .productScanner:
-            onSelectProductScanner?()
-        }
-    }
-
-    private func productScanToolSlot(action: @escaping () -> Void) -> some View {
-        toolSlot {
-            SessionIconButton(
-                systemImage: productScanMode.systemImage,
-                isEnabled: isCaptureEnabled && productScannerAvailable,
-                label: productScanMode == .upc ? "Product scan UPC; switch to name" : "Product scan name; switch to UPC",
-                rotation: controlRotation,
-                action: action
-            )
-        }
     }
 
     private var shutterSymbol: String {
@@ -480,52 +369,6 @@ struct CameraSessionControls: View {
         .accessibilityLabel(shutterAccessibilityLabel)
     }
 }
-
-private struct ProductScanProgressText: View {
-    let mode: ProductScanMode
-    let isBusy: Bool
-    @State private var step = 0
-
-    private var messages: [String] {
-        switch mode {
-        case .upc:
-            ["Identifying game", "Searching game catalog", "Verifying UPC"]
-        case .name:
-            ["Identifying product", "Reading the title", "Finishing result"]
-        }
-    }
-
-    private var message: String {
-        isBusy ? messages[step % messages.count] + "…" : "Frame the game case or disc"
-    }
-
-    var body: some View {
-        ZStack {
-            Text(message)
-                .id(message)
-                .transition(.asymmetric(
-                    insertion: .move(edge: .bottom).combined(with: .opacity),
-                    removal: .move(edge: .top).combined(with: .opacity)
-                ))
-        }
-        .font(.subheadline.bold())
-        .foregroundStyle(.white)
-        .frame(maxWidth: .infinity, minHeight: 20)
-        .clipped()
-        .animation(.easeInOut(duration: 0.32), value: message)
-        .task(id: isBusy) {
-            step = 0
-            guard isBusy else { return }
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(2.2))
-                guard !Task.isCancelled else { return }
-                step = (step + 1) % messages.count
-            }
-        }
-        .accessibilityLabel(message)
-    }
-}
-
 struct SessionIconButton: View {
     let systemImage: String
     var isActive = false

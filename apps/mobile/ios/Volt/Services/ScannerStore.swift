@@ -59,12 +59,6 @@ final class ScannerStore {
     var isOcrFlaggingAvailable = false
     var isRecognizingText = false
     var captureDeliveryToast: CaptureDeliveryToast?
-    var isProductScannerActive = false
-    var productScanMode: ProductScanMode = .upc
-    var isProductScanBusy = false
-    var productScanOutput: ProductScanOutput?
-    var productScanError: String?
-    var productScanQuota: AIScannerQuota?
     var photoUploadProgress: PhotoUploadProgress?
     /// Bumped on every successful shutter capture so the viewfinder can flash and tap.
     var photoCaptureCount = 0
@@ -104,6 +98,7 @@ final class ScannerStore {
 
     init(cloudWorkspace: CloudWorkspaceStore = CloudWorkspaceStore()) {
         self.cloudWorkspace = cloudWorkspace
+        _ = cloudWorkspace.pruneExpiredHistory()
         self.results = cloudWorkspace.restoredResults
         barcodeRecognitionMode = Self.savedBarcodeRecognitionMode()
         camera.updateBarcodeRecognitionMode(barcodeRecognitionMode)
@@ -150,30 +145,15 @@ final class ScannerStore {
         activeCaptureBatchId ?? beginCaptureSession()
     }
 
+    /// The app can stay alive for days, so this also runs each time it returns to the foreground.
+    func pruneExpiredHistory() {
+        let expired = cloudWorkspace.pruneExpiredHistory()
+        guard !expired.isEmpty else { return }
+        results.removeAll { expired.contains($0.id) }
+    }
+
     var activeSessionCaptureCount: Int {
         guard let activeCaptureBatchId else { return 0 }
         return results.count { $0.batchId == activeCaptureBatchId }
-    }
-
-    var isProductScanQuotaExhausted: Bool {
-        productScanQuota?.remaining == 0
-    }
-
-    var productScanQuotaText: String? {
-        guard let productScanQuota else { return nil }
-        switch productScanQuota {
-        case .unlimited:
-            return "Unlimited AI scans"
-        case .metered(_, _, let remaining, let resetsAt):
-            return "Free AI scans remaining: \(remaining) · Resets \(resetsAt.formatted(date: .abbreviated, time: .shortened))"
-        }
-    }
-
-    func updateProductScanQuota(_ quota: AIScannerQuota?, plan: AccessPlan? = nil) {
-        if let quota {
-            productScanQuota = quota
-        } else if plan == .pro {
-            productScanQuota = .unlimited
-        }
     }
 }

@@ -1,6 +1,5 @@
 import type { QueryCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
-import { hasFullAppEntitlement } from "./access";
 
 const DAY = 86_400_000;
 export function workspaceLifecycleEnabled() {
@@ -78,24 +77,11 @@ export async function accountPolicy(
       q.eq("ownerClerkUserId", ownerClerkUserId).eq("product", "workspace"),
     )
     .take(100);
-  const legacyPaid = await hasFullAppEntitlement(ctx, ownerClerkUserId, now);
-  const legacy = await ctx.db
-    .query("entitlements")
-    .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", ownerClerkUserId))
-    .take(100);
-  const paid = legacyPaid || rows.some((row) => hasPaidAccess(row, now));
+  // Volt is free, so old App Store and complimentary entitlements earn no longer history:
+  // they would exempt an account from the 7-day window, or lock it read-only once they lapse.
+  const paid = rows.some((row) => hasPaidAccess(row, now));
   const offers = monetizationOfferLimits();
-  const latestEnd = Math.max(
-    0,
-    ...rows.map(paidEnd),
-    ...legacy
-      .filter((row) => row.validFrom <= now)
-      .map((row) =>
-        row.status === "revoked"
-          ? Math.min(row.expiresAt ?? row.updatedAt, row.updatedAt)
-          : (row.expiresAt ?? 0),
-      ),
-  );
+  const latestEnd = Math.max(0, ...rows.map(paidEnd));
   const paidThrough = latestEnd > 0 ? latestEnd : null;
   const graceEndsAt = paidThrough === null ? null : paidThrough + 30 * DAY;
   return {

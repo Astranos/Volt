@@ -151,6 +151,8 @@ The App Clip is free and uses a short-lived, workspace-scoped cloud grant create
 
 ## AI product scanner
 
+The iOS app no longer offers the AI product scanner. The endpoint and quota below stay in place for older installed builds, and can be removed once those builds are gone.
+
 Every signed-in account can use the AI product scanner. Free accounts receive 10 analyses per UTC calendar month by default. Set `AI_SCANNER_FREE_MONTHLY_LIMIT` on the server to adjust that quota. Pro accounts, including StoreKit and complimentary workplace or admin Pro, have no monthly AI quota. Metered deployments still apply a safety rate limit. A development or preview deployment can set `AI_SCANNER_QUOTA_MODE=unlimited`; that setting is server-side only.
 
 An analysis counts after OpenRouter processes the image, including a response with no confident product match. Image validation failures and upstream or server failures do not consume the monthly quota. The app checks this capability when the user starts an AI analysis. Exhausted accounts see their reset time and can continue ordinary barcode and text capture without a purchase prompt. Account and StoreKit refresh can update the display in the background, but they never block app launch.

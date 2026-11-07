@@ -197,7 +197,9 @@ test("native OCR target dialog defaults to cleaned text and can reveal raw text"
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /TextField\("Text to send", text: \$draft, axis: \.vertical\)/);
   // The field is always editable; once the user types over the OCR value, Raw/Cleaned becomes Reset.
   assert.doesNotMatch(sharedCaptureSessionOverlaysSwiftSource, /"Edit"/);
-  assert.match(sharedCaptureSessionOverlaysSwiftSource, /if isEdited \{\s*Button\(action: resetDraft\) \{\s*Label\("Reset", systemImage: "arrow\.uturn\.backward"\)/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /if isEdited \{\s*Button\(action: resetDraft\) \{\s*headerIcon\("arrow\.uturn\.backward"\)\s*\}\s*\.accessibilityLabel\("Reset"\)/);
+  // Raw/Cleaned/Reset is the round header button; Close is the wide button beside Send.
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /Button\(action: onDismiss\) \{\s*Label\("Close", systemImage: "xmark"\)[\s\S]*Button\(action: send\)/);
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /\.onChange\(of: text\) \{ oldText, newText in\s*[\s\S]*?if draft == oldText \{\s*draft = newText/);
   // Keyboard: Return closes it, there is a hide-keyboard button, and the card moves above it.
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /\.submitLabel\(\.done\)/);
@@ -206,14 +208,13 @@ test("native OCR target dialog defaults to cleaned text and can reveal raw text"
   assert.match(captureSessionViewSwiftSource, /\.onTapGesture \{ isTextInputFocused = false \}/);
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /onSend\(outgoingText\)/);
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /let onToggleRepresentation: \(\) -> Void/);
-  assert.match(sharedCaptureSessionOverlaysSwiftSource, /Label\(isShowingRaw \? "Cleaned" : "Raw"/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /headerIcon\(isShowingRaw \? "wand\.and\.sparkles" : "doc\.text"\)[\s\S]*\.accessibilityLabel\(isShowingRaw \? "Cleaned" : "Raw"\)/);
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /Label\("Cleaning…", systemImage: "wand\.and\.sparkles"\)\s*\.labelStyle\(\.iconOnly\)/);
   assert.match(captureSessionViewSwiftSource, /onSend: \{ outgoingText in[\s\S]*store\.sendRecognizedText\(outgoingText\)/);
   assert.match(captureSessionViewSwiftSource, /selectTextRegion\(_ region: RecognizedTextRegion\) \{\s*resetSelectedText\(\)\s*selectedTextRegion = region\s*cleanupSelectedText\(region\)/);
   assert.match(captureSessionViewSwiftSource, /OcrTextCleaner\.clean\(text: region\.text, context: context\)/);
   assert.match(captureSessionViewSwiftSource, /guard cleanupRequestID == requestID,[\s\S]*selectedTextRegion\?\.id == region\.id/);
   assert.match(captureSessionViewSwiftSource, /private func resetSelectedText\(\)/);
-  assert.match(sharedCaptureSessionOverlaysSwiftSource, /Button\(action: onDismiss\) \{[\s\S]*Image\(systemName: "xmark"\)/);
   assert.match(captureSessionViewSwiftSource, /private var selectedTextPreview: String/);
 });
 

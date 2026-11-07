@@ -86,6 +86,10 @@ export const cloudTargetPickerSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/CloudTargetPickerSheet.swift", import.meta.url),
   "utf8"
 );
+export const durableCaptureOutboxSwiftSource = readFileSync(
+  new URL("../ios/Volt/Services/DurableCaptureOutbox.swift", import.meta.url),
+  "utf8"
+);
 export const settingsViewSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/SettingsView.swift", import.meta.url),
   "utf8"

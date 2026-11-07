@@ -3,7 +3,6 @@ import SwiftUI
 
 struct CaptureSessionView: View {
     @Environment(ScannerStore.self) private var store
-    @Environment(AccessStore.self) private var accessStore
     @Environment(Clerk.self) private var clerk
     @Binding var isPresented: Bool
     let mode: CaptureMode
@@ -15,7 +14,6 @@ struct CaptureSessionView: View {
     @State private var isCleaningSelectedText = false
     @State private var cleanupRequestID = UUID()
     @State private var isTargetPickerPresented = false
-    @State private var isQuotaAlertPresented = false
     @State private var isSessionPhotosPresented = false
     /// `onAppear` fires again when a full-screen cover closes; only the first one picks the mode.
     @State private var hasStartedSession = false
@@ -50,7 +48,7 @@ struct CaptureSessionView: View {
                 // Photo mode stays inside the safe area so the square viewfinder can centre itself in
                 // whatever the status bar and the control deck leave behind. Text and barcode keep
                 // their full-bleed preview.
-                ScannerCameraLayer(gridVisible: gridVisible && !store.isProductScannerActive)
+                ScannerCameraLayer(gridVisible: gridVisible)
                     .ignoresSafeArea(edges: store.activeMode == .photo ? [] : .all)
                     .shutterFeedback(trigger: store.photoCaptureCount)
                     .opacity(store.activeMode == .dictation ? 0 : 1)
@@ -123,12 +121,6 @@ struct CaptureSessionView: View {
                     activeMode: store.activeMode,
                     liveTextCandidates: store.camera.liveTextCandidates,
                     barcodeHint: ScreenshotScenario.current == .captureBarcode ? "Send '883929739929'" : "Point camera at barcode",
-                    isProductScannerSelected: store.isProductScannerActive,
-                    productScanMode: store.productScanMode,
-                    isProductScanBusy: store.isProductScanBusy,
-                    productScanQuotaText: store.productScanQuotaText,
-                    productScanOutput: store.productScanOutput,
-                    productScanError: store.productScanError,
                     onSendLiveText: { candidate in
                         store.sendRecognizedText(candidate.value)
                     }
@@ -171,15 +163,11 @@ struct CaptureSessionView: View {
                     torchEnabled: store.camera.torchEnabled,
                     zoomLabel: store.camera.zoomDisplayLabel,
                     gridVisible: gridVisible,
-                    isRecognizingText: store.isRecognizingText || store.isDictationBusy || store.isProductScanBusy,
-                    isCaptureEnabled: !store.isDictationBusy && !store.isProductScanBusy,
-                    isModeSelectionEnabled: !store.isDictating && !store.isDictationBusy && !store.isProductScanBusy,
+                    isRecognizingText: store.isRecognizingText || store.isDictationBusy,
+                    isCaptureEnabled: !store.isDictationBusy,
+                    isModeSelectionEnabled: !store.isDictating && !store.isDictationBusy,
                     showsModePicker: true,
                     controlRotation: .degrees(store.camera.captureOrientation.controlRotationDegrees),
-                    showsProductScanner: true,
-                    isProductScannerSelected: store.isProductScannerActive,
-                    productScannerAvailable: !store.isProductScanQuotaExhausted,
-                    productScanMode: store.productScanMode,
                     connectionSystemImage: "character.cursor.ibeam",
                     connectionLabel: "Write",
                     connectionAccessibilityLabel: "Choose write destination",
@@ -197,13 +185,7 @@ struct CaptureSessionView: View {
                     },
                     onCapture: {
                         Task {
-                            if store.isProductScannerActive {
-                                if store.isProductScanQuotaExhausted {
-                                    isQuotaAlertPresented = true
-                                } else {
-                                    await store.captureProduct(using: clerk)
-                                }
-                            } else if store.activeMode == .dictation {
+                            if store.activeMode == .dictation {
                                 if store.isDictating {
                                     await store.stopLiveDictation()
                                 } else {
@@ -221,19 +203,6 @@ struct CaptureSessionView: View {
                     sessionPhotoCount: sessionPhotos.count,
                     onOpenSessionPhotos: {
                         isSessionPhotosPresented = true
-                    },
-                    onSelectProductScanner: {
-                        if !store.isProductScanQuotaExhausted {
-                            store.activateProductScanner()
-                        } else {
-                            isQuotaAlertPresented = true
-                        }
-                    },
-                    onToggleProductScanMode: {
-                        store.toggleProductScanMode()
-                    },
-                    onDeactivateProductScanner: {
-                        store.deactivateProductScanner()
                     },
                     onFinish: {
                         store.clearOcrReview()
@@ -257,21 +226,11 @@ struct CaptureSessionView: View {
         .onChange(of: sessionPhotos.isEmpty) { _, isEmpty in
             if isEmpty { isSessionPhotosPresented = false }
         }
-        .alert("Free AI scans used", isPresented: $isQuotaAlertPresented) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(store.productScanQuotaText ?? "Your free AI scans will reset later.")
-        }
         .onAppear {
             if !hasStartedSession {
                 hasStartedSession = true
                 store.activeMode = mode
-                store.deactivateProductScanner()
             }
-            store.updateProductScanQuota(
-                accessStore.status?.aiScannerQuota,
-                plan: accessStore.status?.plan
-            )
             if ScreenshotScenario.current == .captureReviewSend,
                let region = store.ocrTextRegions.first {
                 selectTextRegion(region)
@@ -293,15 +252,9 @@ struct CaptureSessionView: View {
             syncCameraForCaptureState(isReviewingOcr: isReviewingOcr)
             resetSelectedText()
         }
-        .onChange(of: store.activeMode) { _, mode in
-            if mode != .photo {
-                store.deactivateProductScanner()
-            }
+        .onChange(of: store.activeMode) { _, _ in
             guard !store.isDictating else { return }
             syncCameraForCaptureState(isReviewingOcr: store.ocrReviewImage != nil)
-        }
-        .onChange(of: accessStore.status?.aiScannerQuota) { _, quota in
-            store.updateProductScanQuota(quota, plan: accessStore.status?.plan)
         }
         .task(id: store.captureDeliveryToast?.id) {
             guard let toast = store.captureDeliveryToast else { return }

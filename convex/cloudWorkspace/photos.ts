@@ -13,7 +13,7 @@ import {
 import { ConvexError, v, type ObjectType } from "convex/values";
 import { makeFunctionReference } from "convex/server";
 import { type Doc } from "../_generated/dataModel";
-import { assertWorkspaceWritable, resultExpiredForPolicy, resultIsExpired } from "../workspaceStorage";
+import { assertWorkspaceWritable, liveBatchResults, resultIsExpired } from "../workspaceStorage";
 import { accountPolicy } from "../monetization";
 
 export const PRESIGN_TTL_SECONDS = 5 * 60;
@@ -41,10 +41,7 @@ async function photoManifestForPrincipal(
       )
       .take(500);
     const policy = (await accountPolicy(ctx, workspace.ownerClerkUserId)).workspace;
-    for (const result of results) {
-      if (result.deletedAt !== undefined || resultExpiredForPolicy(result, policy)) throw new ConvexError("Batch contains deleted or expired results");
-    }
-    return results
+    return liveBatchResults(results, policy)
       .filter((item) => item.kind === "photo" && item.objectKey)
       .map((item) => ({ objectKey: item.objectKey as string, byteCount: item.byteCount }));
 }

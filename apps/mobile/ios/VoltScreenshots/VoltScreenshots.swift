@@ -24,7 +24,7 @@ final class VoltScreenshots: XCTestCase {
         XCTAssertTrue(app.buttons["OCR result flagged"].waitForExistence(timeout: 5))
         attachScreenshot(named: "extracted-text-card-flagged")
 
-        // The longest secondary label ("Cleaned") must still fit beside Edit.
+        // Raw/Cleaned is the round icon button in the card header.
         let raw = app.buttons["Raw"]
         XCTAssertTrue(raw.waitForExistence(timeout: 5))
         let enabled = expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: raw)

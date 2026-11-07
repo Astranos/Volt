@@ -17,52 +17,36 @@ import {
   captureModeCardsSwiftSource,
   captureSessionViewSwiftSource,
   subscriptionActionsSwiftSource,
+  durableCaptureOutboxSwiftSource,
   sharedCameraSessionControlsSwiftSource,
   sharedScannerTabComponentsSwiftSource,
   uploadViewSwiftSource,
 } from "./native-source-fixtures.mjs";
 
-test("signed-in AI product scanning is metered, request-id scoped, and uses existing result delivery", () => {
-  assert.match(captureModeSwiftSource, /enum ProductScanMode: String, CaseIterable, Identifiable, Codable, Sendable/);
-  assert.match(captureModeSwiftSource, /case upc\s*case name/);
-  assert.match(captureModeSwiftSource, /case \.upc:[\s\S]*"barcode"[\s\S]*case \.name:[\s\S]*"textformat\.characters"/);
-  assert.match(scannerStoreSwiftSource, /var isProductScannerActive = false[\s\S]*var productScanMode: ProductScanMode = \.upc[\s\S]*var isProductScanBusy = false/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /func captureProduct\(using clerk: Clerk\) async[\s\S]*guard !isProductScanQuotaExhausted[\s\S]*let requestId = UUID\(\)[\s\S]*capturePhoto\(matchingDeviceOrientation: true\)[\s\S]*boundedJPEGData\(maxLongEdge: 1600, maxBytes: 1_500_000\)[\s\S]*analyzeProductImage\([\s\S]*requestId: requestId,[\s\S]*using: clerk/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /updateProductScanQuota\(response\.quota\)/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /updateProductScanQuota\(error\.aiQuota\)/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /case \.upc:[\s\S]*kind: \.barcode,[\s\S]*format: "ai-upc\/\\\(normalized\.format\)"/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /case \.name:[\s\S]*kind: \.text,[\s\S]*format: "ai-item-name"/);
-  assert.match(cloudWorkspaceStoreSwiftSource, /func analyzeProductImage\([\s\S]*requestId: UUID,[\s\S]*using clerk: Clerk[\s\S]*async throws -> ProductScanResponse/);
-  assert.match(cloudWorkspaceStoreSwiftSource, /catch MobileCloudError\.credentialRevoked[\s\S]*revokeLocalCredential\(\)[\s\S]*await bootstrapIfNeeded\(using: clerk\)[\s\S]*requestId: requestId/);
-  assert.match(cloudAPIContractsSwiftSource, /struct ProductScanResponse: Decodable, Sendable[\s\S]*let value: String\?[\s\S]*let quota: AIScannerQuota\?/);
-  assert.match(mobileCloudAPIClientSwiftSource, /api\/mobile\/ai\/analyze[\s\S]*URLQueryItem\(name: "mode", value: mode\.rawValue\)/);
-  assert.match(mobileCloudAPIClientSwiftSource, /setValue\("image\/jpeg", forHTTPHeaderField: "Content-Type"\)/);
-  assert.match(mobileCloudAPIClientSwiftSource, /X-Volt-Device-Id[\s\S]*X-Volt-Device-Secret/);
-  assert.match(mobileCloudAPIClientSwiftSource, /X-Volt-AI-Request-Id/);
-  assert.match(mobileCloudAPIClientSwiftSource, /statusCode == 429[\s\S]*quota-exhausted[\s\S]*aiQuotaExhausted[\s\S]*rate-limited[\s\S]*aiRateLimited/);
-  assert.match(mobileCloudAPIClientSwiftSource, /case \.aiQuotaExhausted[\s\S]*Your free AI scans are used up/);
-  assert.match(mobileCloudAPIClientSwiftSource, /case \.aiRateLimited[\s\S]*AI scanning is busy right now/);
+test("iPhone history is a rolling 7-day window that never drops unsent captures", () => {
+  assert.match(durableCaptureOutboxSwiftSource, /static let historyRetention: TimeInterval = 7 \* 24 \* 60 \* 60/);
+  assert.match(durableCaptureOutboxSwiftSource, /records\.filter \{ \$0\.state == \.uploaded && \$0\.capturedAt < cutoff \}/);
+  assert.match(scannerStoreSwiftSource, /pruneExpiredHistory\(\)\s*self\.results = cloudWorkspace\.restoredResults/);
+  assert.match(rootViewSwiftSource, /case \.active:[\s\S]*store\.pruneExpiredHistory\(\)[\s\S]*case \.background:/);
+  assert.match(settingsViewSwiftSource, /Captures are kept for 7 days\./);
+});
+
+test("AI mode stays out of the iOS app while cloud access stays free", () => {
+  const aiModeSources = [
+    captureModeSwiftSource,
+    scannerStoreSwiftSource,
+    scannerStoreCaptureActionsSwiftSource,
+    cloudWorkspaceStoreSwiftSource,
+    cloudAPIContractsSwiftSource,
+    mobileCloudAPIClientSwiftSource,
+    sharedCameraSessionControlsSwiftSource,
+    captureSessionViewSwiftSource,
+  ].join("\n");
+  assert.doesNotMatch(aiModeSources, /ProductScan|productScan|ProductScanner|AIScannerQuota|aiQuotaExhausted|api\/mobile\/ai/);
+  assert.doesNotMatch(sharedCameraSessionControlsSwiftSource, /Text\("AI"\)/);
   assert.match(mobileCloudAPIClientSwiftSource, /case \.cloudWorkspaceRequired[\s\S]*Cloud workspace access is unavailable/);
   assert.doesNotMatch(mobileCloudAPIClientSwiftSource, /paidSubscriptionRequired|paid Volt subscription/);
-  assert.match(sharedCameraSessionControlsSwiftSource, /var showsProductScanner = false[\s\S]*var productScanMode: ProductScanMode = \.upc/);
-  assert.match(sharedCameraSessionControlsSwiftSource, /if isProductScannerSelected, let onToggleProductScanMode[\s\S]*productScanToolSlot/);
-  assert.match(sharedCameraSessionControlsSwiftSource, /systemImage: productScanMode\.systemImage[\s\S]*SessionIconButton/);
-  assert.match(sharedCameraSessionControlsSwiftSource, /modeButton\("Audio", mode: \.dictation\)[\s\S]*productModeButton/);
-  assert.match(captureSessionViewSwiftSource, /showsProductScanner: true[\s\S]*isProductScannerSelected: store\.isProductScannerActive[\s\S]*productScannerAvailable: !store\.isProductScanQuotaExhausted/);
-  assert.match(captureSessionViewSwiftSource, /productScanQuotaText: store\.productScanQuotaText/);
-  assert.match(captureSessionViewSwiftSource, /isRecognizingText: store\.isRecognizingText \|\| store\.isDictationBusy \|\| store\.isProductScanBusy/);
-  assert.match(captureSessionViewSwiftSource, /ScannerCameraLayer\(gridVisible: gridVisible && !store\.isProductScannerActive\)/);
-  assert.match(captureSessionViewSwiftSource, /if store\.isProductScannerActive \{[\s\S]*if store\.isProductScanQuotaExhausted \{\s*isQuotaAlertPresented = true[\s\S]*await store\.captureProduct\(using: clerk\)/);
-  assert.match(captureSessionViewSwiftSource, /\.alert\("Free AI scans used", isPresented: \$isQuotaAlertPresented\)[\s\S]*Text\(store\.productScanQuotaText/);
   assert.doesNotMatch(captureSessionViewSwiftSource, /SubscriptionPaywallView|Upgrade to Volt Pro|Subscribe/);
-  assert.doesNotMatch(captureSessionViewSwiftSource, /hasPaidProductScannerAccess|accessStore\.status\?\.access == \.subscription/);
-  assert.match(sharedCameraSessionControlsSwiftSource, /struct CameraSessionTopStatus: View[\s\S]*if let productScanQuotaText[\s\S]*Text\(productScanQuotaText\)/);
-  assert.match(sharedCameraSessionControlsSwiftSource, /else if let productScanOutput[\s\S]*"UPC found"[\s\S]*Text\(productScanOutput\.value\)/);
-  assert.match(sharedCameraSessionControlsSwiftSource, /ProductScanProgressText\(mode: productScanMode, isBusy: isProductScanBusy\)/);
-  assert.match(sharedCameraSessionControlsSwiftSource, /"Identifying game", "Searching game catalog", "Verifying UPC"/);
-  assert.match(scannerStoreSwiftSource, /var isProductScanQuotaExhausted: Bool \{\s*productScanQuota\?\.remaining == 0/);
-  assert.match(scannerStoreSwiftSource, /Free AI scans remaining:/);
-  assert.match(scannerStoreSwiftSource, /resetsAt\.formatted\(date: \.abbreviated, time: \.shortened\)/);
   assert.match(cloudWorkspaceStoreSwiftSource, /func setCloudWorkspaceEnabled\(_ isEnabled: Bool\)/);
   assert.match(cloudWorkspaceStoreSwiftSource, /func requestSync\(\) \{\s*guard cloudWorkspaceEnabled, activeCredential != nil/);
 });
@@ -206,9 +190,9 @@ test("full app presents Volt, unified History, and Settings roots", () => {
   assert.match(rootViewSwiftSource, /@ViewBuilder\s*private var selectedContent: some View/);
   assert.match(rootViewSwiftSource, /case \.text, \.barcode, \.dictation:[\s\S]*UnifiedCaptureHomeView\(photoSelection: \$photoSelection\)/);
   assert.match(rootViewSwiftSource, /case \.photos:[\s\S]*CaptureHistoryView\(photoSelection: \$photoSelection\)/);
-  assert.match(rootViewSwiftSource, /case \.settings:[\s\S]*SettingsView\(showsAccountSettings: showsAccountSettings\)/);
+  assert.match(rootViewSwiftSource, /case \.settings:[\s\S]*SettingsView\(\)/);
   assert.match(rootViewSwiftSource, /ScannerHomeControls\([\s\S]*onScan: startCapture,[\s\S]*photoSelection: \$photoSelection,[\s\S]*onSettings: \{ presentedSheet = \.settings \}/);
-  assert.match(rootViewSwiftSource, /\.sheet\(item: \$presentedSheet\)[\s\S]*case \.settings:[\s\S]*SettingsSheet\(showsAccountSettings: showsAccountSettings\)/);
+  assert.match(rootViewSwiftSource, /\.sheet\(item: \$presentedSheet\)[\s\S]*case \.settings:[\s\S]*SettingsSheet\(\)/);
   assert.doesNotMatch(rootViewSwiftSource, /case \.connections|onConnections/);
   assert.match(sharedScannerTabComponentsSwiftSource, /struct ScannerHomeControls: View/);
   assert.match(sharedScannerTabComponentsSwiftSource, /GlassEffectContainer\(spacing: 12\)/);
@@ -261,7 +245,7 @@ test("full app side controls keep an explicit 48 point hit target with native gl
   assert.match(sharedScannerTabComponentsSwiftSource, /GlassEffectContainer\(spacing: 12\)[\s\S]*\.shadow\(color: \.black\.opacity\(0\.24\), radius: 12, y: 6\)/);
   assert.match(rootViewSwiftSource, /\.safeAreaInset\(edge: \.bottom, spacing: 0\)[\s\S]*ScannerHomeControls\.reservedSpace/);
   assert.match(rootViewSwiftSource, /\.overlay\(alignment: \.bottom\)[\s\S]*GeometryReader \{ proxy in[\s\S]*\.padding\(\.horizontal, 16\)[\s\S]*\.padding\(\.bottom, 20\)[\s\S]*\.offset\(y: proxy\.safeAreaInsets\.bottom\)/);
-  assert.match(settingsViewSwiftSource, /struct SettingsSheet: View[\s\S]*SettingsView\(showsAccountSettings: showsAccountSettings, showsDoneButton: true\)[\s\S]*\.presentationDetents\(\[\.large\]\)[\s\S]*\.presentationDragIndicator\(\.visible\)/);
+  assert.match(settingsViewSwiftSource, /struct SettingsSheet: View[\s\S]*SettingsView\(showsDoneButton: true\)[\s\S]*\.presentationDetents\(\[\.large\]\)[\s\S]*\.presentationDragIndicator\(\.visible\)/);
   assert.match(settingsViewSwiftSource, /if !showsDoneButton \{\s*store\.selectedSection = \.settings/);
 });
 
@@ -270,7 +254,7 @@ test("full app uses Liquid Glass for floating status chrome without glassing con
   assert.match(voltBrandSwiftSource, /content\.glassEffect\(\.regular, in: \.rect\(cornerRadius: cornerRadius\)\)/);
   assert.match(voltBrandSwiftSource, /content\.background\([\s\S]*\.regularMaterial/);
   assert.match(captureSessionViewSwiftSource, /CaptureDeliveryToastView[\s\S]*\.voltGlassSurface\(cornerRadius: 16\)/);
-  assert.match(subscriptionActionsSwiftSource, /Section\("Existing App Store purchases"\)/);
+  assert.match(subscriptionActionsSwiftSource, /Text\("App Store"\)/);
   assert.doesNotMatch(subscriptionActionsSwiftSource, /Paywall|Volt Pro|Subscribe/);
   assert.doesNotMatch(scannerViewSwiftSource, /glassEffect|voltGlassSurface/);
   assert.doesNotMatch(settingsViewSwiftSource, /glassEffect|voltGlassSurface/);

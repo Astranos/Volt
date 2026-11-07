@@ -21,6 +21,11 @@ const purge = makeFunctionReference<
   Record<string, never>,
   { purged: number; failed: number }
 >("workspaceStorage:purgeExpiredObjects");
+const enroll = makeFunctionReference<
+  "mutation",
+  { cursor: string | null; dryRun: boolean; workspaceId?: Id<"workspaces"> },
+  { cursor: string; isDone: boolean; enrolled: number; pastWindow: number; photos: number; userDeleted: number }
+>("workspaceStorage:enrollLegacyHistory");
 const usage = makeFunctionReference<
   "query",
   Record<string, never>,
@@ -147,23 +152,93 @@ test("legacy results stay protected and disabling rollout keeps new results unma
   ).not.toHaveProperty("deletedAt");
 });
 
-test("paid persistence and free-to-paid upgrade preserve managed records", async () => {
+test("full-app access does not exempt captures from the 7-day window", async () => {
   const t = convexTest(schema, modules);
   const { signedIn, credential } = await owner(t);
-  await capture(t, credential, "before-upgrade");
+  await capture(t, credential, "before-grant");
   await grantFullAppAccess(t, "owner");
-  await capture(t, credential, "after-upgrade");
-  vi.setSystemTime(Date.now() + 90 * DAY);
+  await capture(t, credential, "after-grant");
+  vi.setSystemTime(Date.now() + 6 * DAY);
   expect(await t.mutation(sweep, {})).toBe(0);
+  vi.setSystemTime(Date.now() + 2 * DAY);
+  expect(await t.mutation(sweep, {})).toBe(2);
   expect(await signedIn.query(usage, {})).toMatchObject({
-    tier: "workspace",
-    recordsUsed: 2,
+    tier: "free",
+    access: "write",
+    recordsUsed: 0,
   });
+});
+
+test("a session keeps taking captures after its older captures expire", async () => {
+  const t = convexTest(schema, modules);
+  const { credential } = await owner(t);
+  await capture(t, credential, "session");
+  vi.setSystemTime(Date.now() + 8 * DAY);
+  expect(await t.mutation(sweep, {})).toBe(1);
+  await expect(
+    t.mutation(api.cloudWorkspace.putBatch, {
+      ...credential,
+      batchId: "session",
+      clientCreatedAt: 2,
+      results: [result("later")],
+    }),
+  ).resolves.toMatchObject({ batchId: "session" });
+  await expect(
+    t.mutation(markBatchReady, { ...credential, batchId: "session" }),
+  ).resolves.toMatchObject({ idempotent: false });
+});
+
+test("a capture the user deleted still blocks adding to its session", async () => {
+  const t = convexTest(schema, modules);
+  const { signedIn, credential } = await owner(t);
+  await capture(t, credential, "session");
+  await signedIn.mutation(api.cloudWorkspace.deleteWorkspaceResults, { resultIds: ["session"] });
+  await expect(
+    t.mutation(api.cloudWorkspace.putBatch, {
+      ...credential,
+      batchId: "session",
+      clientCreatedAt: 2,
+      results: [result("later")],
+    }),
+  ).rejects.toThrow(/deleted/);
+});
+
+test("legacy enrollment moves old captures onto the window without touching anything in dry run", async () => {
+  const t = convexTest(schema, modules);
+  const { signedIn, credential, workspaceId } = await owner(t);
+  vi.stubEnv("WORKSPACE_STORAGE_POLICY_ENABLED", "false");
+  await capture(t, credential, "old");
+  await capture(t, credential, "old-photo", "photo");
+  await capture(t, credential, "old-deleted");
+  await signedIn.mutation(api.cloudWorkspace.deleteWorkspaceResults, { resultIds: ["old-deleted"] });
+  vi.setSystemTime(Date.now() + 10 * DAY);
+  await capture(t, credential, "recent");
+  vi.stubEnv("WORKSPACE_STORAGE_POLICY_ENABLED", "true");
+  await capture(t, credential, "managed");
+
+  const dry = await t.mutation(enroll, { cursor: null, dryRun: true });
+  expect(dry).toMatchObject({ isDone: true, enrolled: 4, pastWindow: 3, photos: 1, userDeleted: 1 });
+  expect(await t.mutation(sweep, {})).toBe(0);
   expect(
-    (await t.run((ctx) => ctx.db.query("scanResults").collect())).every(
-      (row) => row.deletedAt === undefined,
-    ),
-  ).toBe(true);
+    (await t.run((ctx) => ctx.db.query("scanResults").collect())).filter((row) => row.storageManaged),
+  ).toHaveLength(1);
+
+  expect(
+    await t.mutation(enroll, { cursor: null, dryRun: false, workspaceId }),
+  ).toMatchObject({ enrolled: 4, pastWindow: 3 });
+  expect(await t.mutation(enroll, { cursor: null, dryRun: false })).toMatchObject({ enrolled: 0 });
+  expect(await t.mutation(sweep, {})).toBe(2);
+
+  const rows = await t.run((ctx) => ctx.db.query("scanResults").collect());
+  const row = (id: string) => rows.find((item) => item.resultId === id);
+  expect(row("old")?.deletedAt).toBeDefined();
+  expect(row("old-photo")?.deletedAt).toBeDefined();
+  expect(row("old-deleted")?.purgeAfter).toBeDefined();
+  expect(row("recent")?.deletedAt).toBeUndefined();
+  expect(row("managed")?.deletedAt).toBeUndefined();
+
+  vi.setSystemTime(Date.now() + 8 * DAY);
+  expect(await t.mutation(sweep, {})).toBe(2);
 });
 
 async function setStorageUsage(

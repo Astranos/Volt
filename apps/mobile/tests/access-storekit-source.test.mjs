@@ -13,8 +13,7 @@ const accessStatusSource = readIOSSource("Volt/Models/AccessStatus.swift");
 const accessStoreSource = readIOSSource("Volt/Services/AccessStore.swift");
 const apiClientSource = readIOSSource("Volt/Services/MobileAccessAPIClient.swift");
 const storeKitSource = readIOSSource("Volt/Services/StoreKitSubscriptionStore.swift");
-const accessSettingsSource = readIOSSource("Volt/Views/AccessSettingsSection.swift");
-const accountViewSource = readIOSSource("Volt/Views/AccountAccessView.swift");
+const settingsViewSource = readIOSSource("Volt/Views/SettingsView.swift");
 const subscriptionViewSource = readIOSSource("Volt/Views/SubscriptionActionsView.swift");
 const rootSceneSource = readIOSSource("Volt/Views/VoltRootScene.swift");
 const screenshotFixtureSource = readIOSSource("Volt/Services/ScreenshotFixtures.swift");
@@ -65,9 +64,6 @@ test("authenticated access calls use fresh Clerk Convex tokens and authoritative
   assert.match(accessStatusSource, /let access: AccessKind/);
   assert.match(accessStatusSource, /enum AccessPlan: String, Decodable, Sendable/);
   assert.match(accessStatusSource, /struct AccessCapabilities: Decodable, Sendable/);
-  assert.match(accessStatusSource, /enum AIScannerQuota: Decodable, Equatable, Sendable/);
-  assert.match(accessStatusSource, /timeIntervalSince1970: try container\.decode\(Double\.self, forKey: \.resetsAt\) \/ 1_000/);
-  assert.match(accessStatusSource, /let aiScannerQuota: AIScannerQuota\?/);
   assert.match(accessStatusSource, /let legacyProAccess = access == \.complimentary \|\| access == \.subscription/);
   assert.match(accessStatusSource, /let hasFullAppAccess: Bool/);
   assert.match(accessStatusSource, /let freeSessionsRemaining: Int/);
@@ -112,38 +108,34 @@ test("full app launches signed-in users immediately and refreshes access in the 
   assert.doesNotMatch(subscriptionViewSource, /SubscriptionPaywallView|Volt Pro|See Volt Pro Plan|Start.*Trial/i);
 });
 
-test("account keeps restore and manage controls for existing App Store purchases only", () => {
-  assert.match(subscriptionViewSource, /Section\("Existing App Store purchases"\)/);
+test("old App Store subscribers keep restore and cancellation, and nobody else sees them", () => {
+  assert.match(subscriptionViewSource, /status\.organizationId == clerk\.organization\?\.id/);
+  assert.match(subscriptionViewSource, /status\.subscriptionStatus == \.active \|\| status\.subscriptionStatus == \.expired/);
+  assert.match(subscriptionViewSource, /if let subscriptionStatus \{\s*Section \{/);
   assert.match(subscriptionViewSource, /Restore Purchases/);
-  assert.match(subscriptionViewSource, /Manage in App Store/);
+  assert.match(subscriptionViewSource, /Manage Subscription/);
   assert.match(subscriptionViewSource, /subscriptionStore\.restore\(using: clerk\)/);
   assert.doesNotMatch(subscriptionViewSource, /SubscriptionPaywallView|Volt Pro|See Volt Pro Plan|Start.*Trial/i);
   assert.doesNotMatch(subscriptionViewSource, /\$\d/);
+  assert.doesNotMatch(subscriptionViewSource, /Transaction\.currentEntitlements/);
 });
 
 test("canceled StoreKit purchases do not become visible errors", () => {
   assert.match(storeKitSource, /catch let error as StoreKitError[\s\S]*if case \.userCancelled = error[\s\S]*return/);
 });
 
-test("account UI shows free scanner access, cloud workspace, AI quota, and purchase status", () => {
-  assert.match(accountViewSource, /UserButton\(\)/);
-  assert.match(accountViewSource, /OrganizationSwitcher\(\)/);
-  assert.match(accountViewSource, /Section\("Account"\)/);
-  assert.match(accountViewSource, /Section\("Workspace"\)/);
-  assert.match(accountViewSource, /Section\("Volt access"\)/);
-  assert.match(accountViewSource, /LabeledContent\("Scanner"/);
-  assert.match(accountViewSource, /LabeledContent\("Local Capture", value: "Included"\)/);
-  assert.match(accountViewSource, /"Cloud Workspace"/);
-  assert.match(accountViewSource, /LabeledContent\("AI Scans"/);
-  assert.match(accountViewSource, /remaining this month/);
-  assert.match(accountViewSource, /planLabel\(for _: AccessStatus\)[\s\S]*"Free"/);
-  assert.match(accountViewSource, /status\.capabilities\.cloudWorkspace \? "Included" : "Unavailable"/);
-  assert.match(accountViewSource, /LabeledContent\("Subscription"/);
-  assert.doesNotMatch(accountViewSource + accessSettingsSource, /Full App Access|Subscription required/);
-  assert.match(subscriptionViewSource, /accessStore\.isRefreshing \|\| !hasCurrentAccessContext/);
-  assert.match(subscriptionViewSource, /status\.organizationId == clerk\.organization\?\.id/);
-  assert.doesNotMatch(accountViewSource + accessSettingsSource, /Free Sessions/);
-  assert.doesNotMatch(subscriptionViewSource + accessSettingsSource, /Transaction\.currentEntitlements/);
+test("settings puts the account up front and drops plan and access rows", () => {
+  assert.match(settingsViewSource, /private struct SettingsAccountSection: View/);
+  assert.match(settingsViewSource, /UserProfileView\(\)/);
+  assert.match(settingsViewSource, /OrganizationSwitcher \{\s*workspaceRow/);
+  assert.match(settingsViewSource, /clerk\.session\?\.tasks\?\.isEmpty == false/);
+  assert.match(settingsViewSource, /AppConfiguration\.privacyPolicyURL/);
+  assert.doesNotMatch(settingsViewSource, /AccountAccessView|NavigationLink/);
+  assert.doesNotMatch(
+    settingsViewSource + subscriptionViewSource,
+    /Cloud Workspace|LabeledContent\("Scanner"|AI Scans|Included by workplace|Not subscribed|Local Capture/
+  );
+  assert.doesNotMatch(accessStatusSource, /aiScannerQuota|aiProductScanner/);
 });
 
 test("review screenshot shows the free workspace pilot", () => {

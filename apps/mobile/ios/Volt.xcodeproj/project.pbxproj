@@ -83,8 +83,6 @@
 		B40000000000000000000008 /* MobileAccessError.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000008 /* MobileAccessError.swift */; };
 		B40000000000000000000009 /* StoreKitSubscriptionError.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000009 /* StoreKitSubscriptionError.swift */; };
 		B4000000000000000000000A /* StoreKitSubscriptionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4000000000000000000000A /* StoreKitSubscriptionStore.swift */; };
-		B4000000000000000000000B /* AccessSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4000000000000000000000B /* AccessSettingsSection.swift */; };
-		B4000000000000000000000C /* AccountAccessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4000000000000000000000C /* AccountAccessView.swift */; };
 		B4000000000000000000000D /* ClerkImagePrefetchModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4000000000000000000000D /* ClerkImagePrefetchModifier.swift */; };
 		B4000000000000000000000E /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4000000000000000000000E /* SettingsView.swift */; };
 		B4000000000000000000000F /* SubscriptionActionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4000000000000000000000F /* SubscriptionActionsView.swift */; };
@@ -219,8 +217,6 @@
 		C40000000000000000000008 /* MobileAccessError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileAccessError.swift; sourceTree = "<group>"; };
 		C40000000000000000000009 /* StoreKitSubscriptionError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreKitSubscriptionError.swift; sourceTree = "<group>"; };
 		C4000000000000000000000A /* StoreKitSubscriptionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreKitSubscriptionStore.swift; sourceTree = "<group>"; };
-		C4000000000000000000000B /* AccessSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessSettingsSection.swift; sourceTree = "<group>"; };
-		C4000000000000000000000C /* AccountAccessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountAccessView.swift; sourceTree = "<group>"; };
 		C4000000000000000000000D /* ClerkImagePrefetchModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClerkImagePrefetchModifier.swift; sourceTree = "<group>"; };
 		C4000000000000000000000E /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		C4000000000000000000000F /* SubscriptionActionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionActionsView.swift; sourceTree = "<group>"; };
@@ -401,8 +397,6 @@
 		E00000000000000000000007 /* Views */ = {
 			isa = PBXGroup;
 			children = (
-				C4000000000000000000000B /* AccessSettingsSection.swift */,
-				C4000000000000000000000C /* AccountAccessView.swift */,
 				C4000000000000000000000D /* ClerkImagePrefetchModifier.swift */,
 				C4000000000000000000000E /* SettingsView.swift */,
 				C4000000000000000000000F /* SubscriptionActionsView.swift */,
@@ -688,8 +682,6 @@
 				B40000000000000000000008 /* MobileAccessError.swift in Sources */,
 				B40000000000000000000009 /* StoreKitSubscriptionError.swift in Sources */,
 				B4000000000000000000000A /* StoreKitSubscriptionStore.swift in Sources */,
-				B4000000000000000000000B /* AccessSettingsSection.swift in Sources */,
-				B4000000000000000000000C /* AccountAccessView.swift in Sources */,
 				B4000000000000000000000D /* ClerkImagePrefetchModifier.swift in Sources */,
 				B4000000000000000000000E /* SettingsView.swift in Sources */,
 				B4000000000000000000000F /* SubscriptionActionsView.swift in Sources */,

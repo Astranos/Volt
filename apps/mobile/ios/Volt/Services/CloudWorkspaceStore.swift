@@ -116,6 +116,10 @@ final class CloudWorkspaceStore {
         updateOwnershipConflict()
     }
 
+    func pruneExpiredHistory() -> Set<UUID> {
+        (try? outbox.pruneExpiredHistory()) ?? []
+    }
+
     func bootstrapIfNeeded(using clerk: Clerk) async {
         guard let clerkUserId = clerk.user?.id else {
             pauseForSignOut()
@@ -374,33 +378,6 @@ final class CloudWorkspaceStore {
         return false
     }
 
-    func analyzeProductImage(
-        _ data: Data,
-        mode: ProductScanMode,
-        requestId: UUID,
-        using clerk: Clerk
-    ) async throws -> ProductScanResponse {
-        await bootstrapIfNeeded(using: clerk)
-        guard let credential = activeCredential else {
-            throw MobileCloudError.credentialRevoked
-        }
-        do {
-            return try await requestProductAnalysis(data, mode: mode, requestId: requestId, credential: credential)
-        } catch MobileCloudError.credentialRevoked {
-            revokeLocalCredential()
-            await bootstrapIfNeeded(using: clerk)
-            guard let recoveredCredential = activeCredential else {
-                throw MobileCloudError.credentialRevoked
-            }
-            return try await requestProductAnalysis(
-                data,
-                mode: mode,
-                requestId: requestId,
-                credential: recoveredCredential
-            )
-        }
-    }
-
     /// Sends a flagged OCR capture (photo to R2, recognizer output to Convex) for parser work.
     func flagOcrCapture(_ capture: OcrFlagCapture, flagId: UUID, using clerk: Clerk) async throws {
         await bootstrapIfNeeded(using: clerk)
@@ -445,21 +422,6 @@ final class CloudWorkspaceStore {
             deviceSecret: credential.value,
             flagId: flagIdString
         ))
-    }
-
-    private func requestProductAnalysis(
-        _ data: Data,
-        mode: ProductScanMode,
-        requestId: UUID,
-        credential: CloudDeviceCredential
-    ) async throws -> ProductScanResponse {
-        try await api.analyzeProductImage(
-            data,
-            mode: mode,
-            deviceId: credential.deviceId,
-            deviceSecret: credential.value,
-            requestId: requestId
-        )
     }
 
     func updateDictationDraft(draftId: String, text: String) async -> String? {

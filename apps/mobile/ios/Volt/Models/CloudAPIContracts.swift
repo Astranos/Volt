@@ -174,27 +174,3 @@ struct CursorDeliveryStatus: Codable, Sendable {
 struct CursorDeliveryStatusResponse: Codable, Sendable {
     let statuses: [CursorDeliveryStatus]
 }
-
-struct ProductScanResponse: Decodable, Sendable {
-    let mode: ProductScanMode?
-    let value: String?
-    let quota: AIScannerQuota?
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        mode = try container.decodeIfPresent(ProductScanMode.self, forKey: .mode)
-        value = try container.decodeIfPresent(String.self, forKey: .value)
-        quota = try container.decodeIfPresent(AIScannerQuota.self, forKey: .quota)
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case mode
-        case value
-        case quota
-    }
-}
-
-struct ProductScanErrorResponse: Decodable, Sendable {
-    let errorCode: String?
-    let quota: AIScannerQuota?
-}

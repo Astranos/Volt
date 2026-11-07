@@ -65,7 +65,7 @@ test("unified camera starts from the hero card and history groups mixed captures
   assert.match(sharedCameraSessionControlsSwiftSource, /if showsModePicker \{\s*modePicker\s*\}[\s\S]*connectionSlot[\s\S]*finishSlot[\s\S]*shutterButton/);
   assert.match(sharedCameraSessionControlsSwiftSource, /\.scrollTargetLayout\(\)/);
   assert.match(sharedCameraSessionControlsSwiftSource, /\.scrollTargetBehavior\(\.viewAligned\(limitBehavior: \.never, anchor: \.center\)\)/);
-  assert.match(sharedCameraSessionControlsSwiftSource, /\.scrollPosition\(id: \$centeredModeID, anchor: \.center\)/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /\.scrollPosition\(id: \$centeredMode, anchor: \.center\)/);
   const modePickerStart = sharedCameraSessionControlsSwiftSource.indexOf("private var modePicker: some View");
   const modePickerEnd = sharedCameraSessionControlsSwiftSource.indexOf("private var cameraToolsRow", modePickerStart);
   const modePickerSource = sharedCameraSessionControlsSwiftSource.slice(modePickerStart, modePickerEnd);
@@ -87,7 +87,6 @@ test("native capture session exposes the optional cloud cursor target", () => {
   assert.doesNotMatch(captureSessionViewSwiftSource, /CloudTargetButton/);
   assert.match(captureSessionViewSwiftSource, /connectionLabel: "Write"[\s\S]*onConnection: \{\s*isTargetPickerPresented = true/);
   assert.match(captureSessionViewSwiftSource, /\.sheet\(isPresented: \$isTargetPickerPresented\) \{\s*CloudTargetPickerSheet\(\)/);
-  assert.match(captureSessionViewSwiftSource, /\.alert\("Free AI scans used", isPresented: \$isQuotaAlertPresented\)/);
   assert.doesNotMatch(captureSessionViewSwiftSource, /SubscriptionPaywallView|isSubscriptionPaywallPresented/);
   assert.match(cloudTargetPickerSwiftSource, /var isCompact = false[\s\S]*frame\(minHeight: isCompact \? 36 : 48\)[\s\S]*controlSize\(isCompact \? \.small : \.regular\)/);
   assert.match(cloudTargetPickerSwiftSource, /frame\(minHeight: isCompact \? 36 : 48\)/);
@@ -126,7 +125,7 @@ test("native photo viewfinder sits below the fixed top status area", () => {
   // Photo mode alone respects the safe area; text and barcode keep their full-bleed preview.
   assert.match(
     captureSessionViewSwiftSource,
-    /ScannerCameraLayer\(gridVisible: gridVisible && !store\.isProductScannerActive\)\s*\.ignoresSafeArea\(edges: store\.activeMode == \.photo \? \[\] : \.all\)/
+    /ScannerCameraLayer\(gridVisible: gridVisible\)\s*\.ignoresSafeArea\(edges: store\.activeMode == \.photo \? \[\] : \.all\)/
   );
   assert.match(captureSessionViewSwiftSource, /\.background\(Color\.black\.ignoresSafeArea\(\)\)/);
   assert.match(scannerCameraLayerSwiftSource, /cameraPreview\s*\.ignoresSafeArea\(\)/);
@@ -214,8 +213,8 @@ test("native barcode recognition defaults to UPC with settings override", () => 
   assert.match(scannerStoreSwiftSource, /var barcodeRecognitionMode: BarcodeRecognitionMode = \.upc/);
   assert.match(scannerStoreSwiftSource, /UserDefaults\.standard\.set\(barcodeRecognitionMode\.rawValue, forKey: Self\.barcodeRecognitionModeStorageKey\)/);
   assert.match(scannerStoreSwiftSource, /camera\.updateBarcodeRecognitionMode\(barcodeRecognitionMode\)/);
-  assert.match(rootViewSwiftSource, /SettingsView\(showsAccountSettings: showsAccountSettings\)/);
-  assert.match(settingsViewSwiftSource, /Picker\("Recognized Codes", selection: \$store\.barcodeRecognitionMode\)/);
+  assert.match(rootViewSwiftSource, /SettingsView\(\)/);
+  assert.match(settingsViewSwiftSource, /Picker\(selection: \$store\.barcodeRecognitionMode\)[\s\S]*Label\("Recognized Codes", systemImage: "barcode\.viewfinder"\)/);
   assert.match(settingsViewSwiftSource, /ForEach\(BarcodeRecognitionMode\.allCases\)/);
 });
 
@@ -336,14 +335,14 @@ test("native camera clears stale torch state when capture sessions stop", () => 
   assert.match(clipBarcodeScannerServiceSwiftSource, /guard let videoDevice, videoDevice\.hasTorch else \{\s*torchEnabled = false\s*onCameraStateChanged\?\(\)\s*return\s*\}/);
 });
 
-test("camera mode scrolling commits after settling, keeps Audio last, and gives AI one selection", () => {
+test("camera mode scrolling commits after settling and keeps Audio last", () => {
   assert.match(
     sharedCameraSessionControlsSwiftSource,
-    /modeButton\("Text", mode: \.ocr\)[\s\S]*modeButton\("Barcode", mode: \.barcode\)[\s\S]*modeButton\("Photo", mode: \.photo\)[\s\S]*if showsProductScanner[\s\S]*productModeButton[\s\S]*modeButton\("Audio", mode: \.dictation\)/
+    /modeButton\("Text", mode: \.ocr\)[\s\S]*modeButton\("Barcode", mode: \.barcode\)[\s\S]*modeButton\("Photo", mode: \.photo\)[\s\S]*modeButton\("Audio", mode: \.dictation\)/
   );
   assert.match(
     sharedCameraSessionControlsSwiftSource,
-    /\.onScrollPhaseChange[\s\S]*newPhase == \.idle[\s\S]*selectCenteredMode\(modeID\)/
+    /\.onScrollPhaseChange[\s\S]*newPhase == \.idle[\s\S]*activeMode = mode/
   );
   assert.match(
     sharedCameraSessionControlsSwiftSource,
@@ -352,7 +351,7 @@ test("camera mode scrolling commits after settling, keeps Audio last, and gives 
   assert.doesNotMatch(sharedCameraSessionControlsSwiftSource, /alwaysByOne/);
   assert.match(
     sharedCameraSessionControlsSwiftSource,
-    /\.onChange\(of: selectedModeID\)[\s\S]*guard centeredModeID != modeID else \{ return \}[\s\S]*centeredModeID = modeID/
+    /\.onChange\(of: activeMode\)[\s\S]*guard centeredMode != mode else \{ return \}[\s\S]*centeredMode = mode/
   );
   assert.match(
     sharedCameraSessionControlsSwiftSource,
@@ -360,19 +359,15 @@ test("camera mode scrolling commits after settling, keeps Audio last, and gives 
   );
   assert.doesNotMatch(
     sharedCameraSessionControlsSwiftSource,
-    /\.onChange\(of: centeredModeID\)[\s\S]*selectCenteredMode\(modeID\)/
+    /\.onChange\(of: centeredMode\)/
   );
-  assert.match(sharedCameraSessionControlsSwiftSource, /\.sensoryFeedback\(\.selection, trigger: selectedModeID\)/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /\.sensoryFeedback\(\.selection, trigger: activeMode\)/);
   assert.match(sharedCameraSessionControlsSwiftSource, /private let controlDeckHeight: CGFloat = \d+/);
   assert.match(sharedCameraSessionControlsSwiftSource, /private let cameraToolsVerticalOffset: CGFloat = -\d+/);
   assert.match(sharedCameraSessionControlsSwiftSource, /cameraToolsRow[\s\S]*\.offset\(y: cameraToolsVerticalOffset\)/);
   assert.match(sharedCameraSessionControlsSwiftSource, /\.frame\(height: controlDeckHeight\)/);
   assert.match(
     sharedCameraSessionControlsSwiftSource,
-    /case \.capture\(let mode\):[\s\S]*onDeactivateProductScanner\?\(\)[\s\S]*activeMode = mode[\s\S]*case \.productScanner:[\s\S]*onSelectProductScanner\?\(\)/
-  );
-  assert.match(
-    sharedCameraSessionControlsSwiftSource,
-    /let isSelected = !isProductScannerSelected && activeMode == mode/
+    /let isSelected = activeMode == mode/
   );
 });
