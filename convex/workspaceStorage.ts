@@ -53,6 +53,22 @@ export function resultExpiredForPolicy(
   return deadline !== null && deadline <= now;
 }
 
+/**
+ * The captures of a batch that still count. Rolling retention expires the older captures of a
+ * session the phone can keep adding to, so those are skipped instead of stranding new uploads.
+ * A capture the user deleted, or a batch with nothing left, is still rejected.
+ */
+export function liveBatchResults(
+  results: Array<Doc<"scanResults">>,
+  policy: WorkspacePolicy,
+) {
+  const live = results.filter((result) => !resultExpiredForPolicy(result, policy));
+  if (live.length === 0 || live.some((result) => result.deletedAt !== undefined)) {
+    throw new ConvexError("Batch contains deleted or expired results");
+  }
+  return live;
+}
+
 export async function resultIsExpired(
   ctx: ReaderCtx,
   result: Doc<"scanResults">,
@@ -271,6 +287,87 @@ export const sweepRetention = internalMutation({
       expired++;
     }
     return expired;
+  },
+});
+
+/**
+ * One-time move of captures saved before retention was enabled onto the 7-day window. It only
+ * marks rows; sweepRetention and purgeExpiredObjects still do all the deleting. Those rows never
+ * reserved usage, so run recountWorkspaceStorage afterwards to make the counters match.
+ */
+export const enrollLegacyHistory = internalMutation({
+  args: {
+    cursor: v.union(v.string(), v.null()),
+    dryRun: v.boolean(),
+    workspaceId: v.optional(v.id("workspaces")),
+  },
+  returns: v.object({
+    cursor: v.string(),
+    isDone: v.boolean(),
+    enrolled: v.number(),
+    pastWindow: v.number(),
+    photos: v.number(),
+    userDeleted: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const query = args.workspaceId
+      ? ctx.db
+          .query("scanResults")
+          .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId!))
+      : ctx.db.query("scanResults");
+    const page = await query.paginate({ cursor: args.cursor, numItems: 200 });
+    let enrolled = 0;
+    let pastWindow = 0;
+    let photos = 0;
+    let userDeleted = 0;
+    for (const result of page.page) {
+      if (result.storageManaged || result.objectPurgedAt !== undefined) continue;
+      const deadline = result.createdAt + 7 * DAY;
+      enrolled++;
+      if (deadline <= now) pastWindow++;
+      if (result.objectKey) photos++;
+      if (result.deletedAt !== undefined) userDeleted++;
+      if (args.dryRun) continue;
+      await ctx.db.patch(result._id, {
+        storageManaged: true,
+        retentionTier: "free",
+        expiresAt: deadline,
+        ...(result.deletedAt === undefined
+          ? { retentionCheckAt: Math.max(deadline, now) }
+          : { purgeAfter: Math.max(deadline, now + PURGE_DELAY_MS) }),
+      });
+    }
+    return {
+      cursor: page.continueCursor,
+      isDone: page.isDone,
+      enrolled,
+      pastWindow,
+      photos,
+      userDeleted,
+    };
+  },
+});
+
+/** Rebuilds a workspace's usage from its rows, on the same terms the sweep and purge decrement. */
+export const recountWorkspaceStorage = internalMutation({
+  args: { workspaceId: v.id("workspaces") },
+  returns: v.object({ records: v.number(), bytes: v.number() }),
+  handler: async (ctx, args) => {
+    const workspace = await ctx.db.get(args.workspaceId);
+    if (!workspace) throw new ConvexError("Workspace no longer exists");
+    const results = await ctx.db
+      .query("scanResults")
+      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
+      .collect();
+    const managed = results.filter((result) => result.storageManaged);
+    const records = managed.filter((result) => result.deletedAt === undefined).length;
+    const bytes = managed
+      .filter((result) => result.objectPurgedAt === undefined)
+      .reduce((sum, result) => sum + result.byteCount, 0);
+    const usage = await storageUsage(ctx, workspace);
+    await writeStorageUsage(ctx, args.workspaceId, usage.row, records, bytes);
+    return { records, bytes };
   },
 });
 

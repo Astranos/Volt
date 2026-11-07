@@ -182,6 +182,20 @@ final class DurableCaptureOutbox {
         try save()
     }
 
+    /// History is a rolling window that matches the cloud's 7-day retention.
+    static let historyRetention: TimeInterval = 7 * 24 * 60 * 60
+
+    /// Drops uploaded captures past the history window and returns their ids. Anything not
+    /// uploaded stays however old it is, because this phone holds the only copy.
+    @discardableResult
+    func pruneExpiredHistory(now: Date = .now) throws -> Set<UUID> {
+        let cutoff = now.addingTimeInterval(-Self.historyRetention)
+        let expired = Set(records.filter { $0.state == .uploaded && $0.capturedAt < cutoff }.map(\.id))
+        guard !expired.isEmpty else { return [] }
+        try remove(ids: expired)
+        return expired
+    }
+
     func exportPhotoURLs(for ids: Set<UUID>) -> [URL] {
         records.compactMap { record in
             guard ids.contains(record.id), let filename = record.photoFilename else { return nil }

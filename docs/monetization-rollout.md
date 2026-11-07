@@ -19,7 +19,7 @@ Existing scan rows without `storageManaged` are preserved and excluded from mana
 
 ## Storage lifecycle
 
-Free managed captures expire seven days after server receipt. Paid history remains while paid within caps. When paid access ends, a 30-day read-only export period precedes expiration. Immediate cancellation starts that period at the subscription end; scheduled cancellation follows the paid period. Upgrade can preserve unswept data; retention tombstones cannot be restored.
+Free managed captures expire seven days after server receipt. Old App Store and complimentary entitlements no longer change workspace history: those accounts follow the same seven-day window and never go read-only. The iPhone removes uploaded captures from its local history on the same window and keeps anything not yet uploaded. Paid history remains while paid within caps. When paid access ends, a 30-day read-only export period precedes expiration. Immediate cancellation starts that period at the subscription end; scheduled cancellation follows the paid period. Upgrade can preserve unswept data; retention tombstones cannot be restored.
 
 Quota reservations are transactional across device/guest upload, append and restore paths. Text size is calculated from UTF-8 content. Photos require a positive declared size of at most 10 MiB and an exact HEAD size match at finalization. Caps bound validated logical storage: presigned PUT does not impose a hard R2 payload limit. Rejected/unfinalized oversized objects need operational monitoring; a bounded upload gateway and orphan-object sweep remain follow-up work.
 

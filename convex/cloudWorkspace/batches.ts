@@ -10,7 +10,7 @@ import {
   requireAuthenticatedWorkspace,
   requireOrCreateAuthenticatedWorkspace,
 } from "./identity";
-import { assertWorkspaceWritable, adjustWorkspaceStorage, managedResultByteCount, reserveWorkspaceStorage, resultExpiredForPolicy, WORKSPACE_UNDO_MS } from "../workspaceStorage";
+import { assertWorkspaceWritable, adjustWorkspaceStorage, liveBatchResults, managedResultByteCount, reserveWorkspaceStorage, resultExpiredForPolicy, WORKSPACE_UNDO_MS } from "../workspaceStorage";
 import { accountPolicy, workspaceLifecycleEnabled } from "../monetization";
 
 const resultInput = v.object({
@@ -130,7 +130,9 @@ async function putBatchForPrincipal(
       }
       const policyForExisting = (await accountPolicy(ctx, workspace.ownerClerkUserId)).workspace;
       for (const result of existingResults) {
-        if (result.deletedAt !== undefined || resultExpiredForPolicy(result, policyForExisting)) throw new ConvexError("Cannot append to a batch with deleted or expired results");
+        // Rolling retention expires older captures in a session the phone can still continue, so
+        // only a capture the user deleted blocks the batch. Otherwise new captures could never upload.
+        if (result.deletedAt !== undefined && !resultExpiredForPolicy(result, policyForExisting)) throw new ConvexError("Cannot append to a batch with deleted results");
       }
       if (existingResults.length + appendedResults.length > 500) {
         throw new ConvexError("A batch may contain at most 500 results");
@@ -230,9 +232,7 @@ async function markBatchReadyForPrincipal(
   await assertWorkspaceWritable(ctx, principal.workspace);
   const results = await ctx.db.query("scanResults").withIndex("by_workspaceId_and_batchId", q => q.eq("workspaceId", principal.workspace._id).eq("batchId", batchId)).take(500);
   const policy = (await accountPolicy(ctx, principal.workspace.ownerClerkUserId)).workspace;
-  for (const result of results) {
-    if (result.deletedAt !== undefined || resultExpiredForPolicy(result, policy)) throw new ConvexError("Batch contains deleted or expired results");
-  }
+  liveBatchResults(results, policy);
   await ctx.db.patch(batch._id, { status: "ready", updatedAt: Date.now() });
   return { idempotent: false };
 }

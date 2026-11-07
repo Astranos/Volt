@@ -57,15 +57,22 @@ struct ExtractedTextActionCard: View {
                     OcrFlagButton(state: flagState, action: { onFlag(draft) })
                 }
 
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.black.opacity(0.68))
-                        .frame(width: 34, height: 34)
-                        .background(.black.opacity(0.1), in: Circle())
+                Group {
+                    if isEdited {
+                        Button(action: resetDraft) {
+                            headerIcon("arrow.uturn.backward")
+                        }
+                        .accessibilityLabel("Reset")
+                        .accessibilityHint("Puts back the text OCR read.")
+                    } else {
+                        Button(action: onToggleRepresentation) {
+                            headerIcon(isShowingRaw ? "wand.and.sparkles" : "doc.text")
+                        }
+                        .accessibilityLabel(isShowingRaw ? "Cleaned" : "Raw")
+                        .disabled(isCleaning)
+                    }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Close")
             }
 
             Group {
@@ -116,20 +123,9 @@ struct ExtractedTextActionCard: View {
             }
 
             HStack(spacing: 12) {
-                Group {
-                    if isEdited {
-                        Button(action: resetDraft) {
-                            Label("Reset", systemImage: "arrow.uturn.backward")
-                                .secondaryActionStyle()
-                        }
-                        .accessibilityHint("Puts back the text OCR read.")
-                    } else {
-                        Button(action: onToggleRepresentation) {
-                            Label(isShowingRaw ? "Cleaned" : "Raw", systemImage: isShowingRaw ? "wand.and.sparkles" : "doc.text")
-                                .secondaryActionStyle()
-                        }
-                        .disabled(isCleaning)
-                    }
+                Button(action: onDismiss) {
+                    Label("Close", systemImage: "xmark")
+                        .secondaryActionStyle()
                 }
                 .buttonStyle(.plain)
                 .frame(width: 128)
@@ -175,6 +171,14 @@ struct ExtractedTextActionCard: View {
             draft = newDraft.replacingOccurrences(of: "\n", with: "")
             inputFocus.wrappedValue = false
         }
+    }
+
+    private func headerIcon(_ systemName: String) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 15, weight: .bold))
+            .foregroundStyle(.black.opacity(0.68))
+            .frame(width: 34, height: 34)
+            .background(.black.opacity(0.1), in: Circle())
     }
 
     private func resetDraft() {

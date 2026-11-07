@@ -10,7 +10,6 @@ struct RootView: View {
     @State private var presentedSheet: RootPresentedSheet?
     /// Picked from the bar's Photos button; the visible home/history view runs the import.
     @State private var photoSelection: [PhotosPickerItem] = []
-    private let showsAccountSettings: Bool
 
     private var ownershipConflictIsPresented: Binding<Bool> {
         Binding(
@@ -19,8 +18,7 @@ struct RootView: View {
         )
     }
 
-    init(showsAccountSettings: Bool = true) {
-        self.showsAccountSettings = showsAccountSettings
+    init() {
         let initialSection = ScreenshotScenario.current?.initialSection
         _selectedTab = State(initialValue: initialSection == .photos ? .photos : .text)
     }
@@ -55,7 +53,7 @@ struct RootView: View {
         .sheet(item: $presentedSheet) { sheet in
             switch sheet {
             case .settings:
-                SettingsSheet(showsAccountSettings: showsAccountSettings)
+                SettingsSheet()
             }
         }
         .sheet(isPresented: ownershipConflictIsPresented) {
@@ -85,6 +83,7 @@ struct RootView: View {
             case .active:
                 store.cloudWorkspace.setSubscriptionsActive(true)
                 store.cloudWorkspace.requestSync()
+                store.pruneExpiredHistory()
             case .background:
                 store.cloudWorkspace.setSubscriptionsActive(false)
                 Task { await store.cancelLiveDictation() }
@@ -109,7 +108,7 @@ struct RootView: View {
         case .photos:
             CaptureHistoryView(photoSelection: $photoSelection)
         case .settings:
-            SettingsView(showsAccountSettings: showsAccountSettings)
+            SettingsView()
         }
     }
 

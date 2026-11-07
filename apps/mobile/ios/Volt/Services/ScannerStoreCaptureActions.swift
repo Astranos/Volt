@@ -3,20 +3,6 @@ import CoreImage
 import CoreImage.CIFilterBuiltins
 import UIKit
 
-private enum ProductScanCaptureError: LocalizedError {
-    case emptyResult
-    case invalidUPC
-
-    var errorDescription: String? {
-        switch self {
-        case .emptyResult:
-            "No product result was found. Try another photo."
-        case .invalidUPC:
-            "The returned UPC was not valid. Try another photo."
-        }
-    }
-}
-
 @MainActor
 extension ScannerStore {
     func saveBarcodeIfNeeded() {
@@ -46,12 +32,6 @@ extension ScannerStore {
 
 
     func capture() async {
-        if isProductScannerActive {
-            productScanError = "AI scanning is still preparing. Try again."
-            statusText = productScanError ?? "AI scanner unavailable"
-            return
-        }
-
         switch activeMode {
         case .ocr:
             await captureTextForReview()
@@ -61,114 +41,6 @@ extension ScannerStore {
             await captureSquarePhoto()
         case .dictation:
             break
-        }
-    }
-
-    func activateProductScanner() {
-        activeMode = .photo
-        isProductScannerActive = true
-        productScanOutput = nil
-        productScanError = nil
-    }
-
-    func deactivateProductScanner() {
-        isProductScannerActive = false
-        isProductScanBusy = false
-        productScanOutput = nil
-        productScanError = nil
-    }
-
-    func toggleProductScanMode() {
-        productScanMode = productScanMode == .upc ? .name : .upc
-        productScanOutput = nil
-        productScanError = nil
-    }
-
-    func captureProduct(using clerk: Clerk) async {
-        guard !isProductScanBusy else { return }
-        guard !isProductScanQuotaExhausted else {
-            productScanError = MobileCloudError.aiQuotaExhausted(productScanQuota).localizedDescription
-            statusText = productScanError ?? "AI scan limit reached"
-            return
-        }
-        let mode = productScanMode
-        let requestId = UUID()
-        isProductScanBusy = true
-        productScanOutput = nil
-        productScanError = nil
-        statusText = "Analyzing product…"
-        defer { isProductScanBusy = false }
-
-        guard let image = await camera.capturePhoto(matchingDeviceOrientation: true) else {
-            productScanError = "Could not capture a product photo."
-            statusText = productScanError ?? "Product scan failed"
-            return
-        }
-
-        let preparedImage = image
-            .normalizedForProcessing()
-            .croppedToVisiblePreview(previewSize: camera.previewLayer.bounds.size)
-        guard let imageData = preparedImage.boundedJPEGData(maxLongEdge: 1600, maxBytes: 1_500_000) else {
-            productScanError = "The product photo could not be prepared."
-            statusText = productScanError ?? "Product scan failed"
-            return
-        }
-
-        do {
-            let response = try await cloudWorkspace.analyzeProductImage(
-                imageData,
-                mode: mode,
-                requestId: requestId,
-                using: clerk
-            )
-            updateProductScanQuota(response.quota)
-            guard let responseValue = response.value else {
-                throw ProductScanCaptureError.emptyResult
-            }
-            let value = responseValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !value.isEmpty else { throw ProductScanCaptureError.emptyResult }
-
-            let result: ScanResult
-            switch mode {
-            case .upc:
-                let normalized = normalizedBarcodeScan(value: value, format: "upc_a")
-                guard normalized.value.count == 12,
-                      normalized.value.allSatisfy(\.isNumber)
-                else { throw ProductScanCaptureError.invalidUPC }
-                result = ScanResult(
-                    kind: .barcode,
-                    value: normalized.value,
-                    format: "ai-upc/\(normalized.format)",
-                    deliveryState: initialDeliveryState,
-                    batchId: currentCaptureBatchId()
-                )
-            case .name:
-                result = ScanResult(
-                    kind: .text,
-                    value: value,
-                    format: "ai-item-name",
-                    deliveryState: initialDeliveryState,
-                    batchId: currentCaptureBatchId()
-                )
-            }
-
-            guard saveResultLocally(result) else {
-                productScanError = "The product result could not be saved on this iPhone."
-                return
-            }
-            sendCaptureResult(result, insertIntoCursor: true)
-            productScanOutput = ProductScanOutput(mode: mode, value: result.value)
-            statusText = mode == .upc ? "UPC found" : "Product name found"
-        } catch let error as MobileCloudError {
-            updateProductScanQuota(error.aiQuota)
-            productScanError = error.localizedDescription
-            statusText = productScanError ?? "Product scan failed"
-        } catch let error as ProductScanCaptureError {
-            productScanError = error.localizedDescription
-            statusText = productScanError ?? "Product scan failed"
-        } catch {
-            productScanError = "Product analysis failed. Try another photo."
-            statusText = productScanError ?? "Product scan failed"
         }
     }
 

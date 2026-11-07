@@ -114,54 +114,25 @@ describe("monetization entitlement policy", () => {
     expect(workspaceLifecycleEnabled()).toBe(false);
   });
 
-  test("active legacy purchases retain paid workspace access, including perpetual grants", async () => {
-    const t = convexTest(schema, modules);
-    await insertLegacy(t, "active", now + DAY);
-    expect(await workspace(t)).toMatchObject({
-      tier: "workspace",
+  test("old App Store and complimentary entitlements leave workspace history on the free 7-day policy", async () => {
+    const freePolicy = {
+      tier: "free",
       access: "write",
-      retentionDays: null,
-      recordsLimit: 25_000,
-      bytesLimit: 1_073_741_824,
-      paidThrough: now + DAY,
-    });
-    const perpetual = convexTest(schema, modules);
-    await insertLegacy(perpetual, "active");
-    expect(await workspace(perpetual)).toMatchObject({
-      tier: "workspace",
-      access: "write",
-      retentionDays: null,
+      retentionDays: 7,
+      recordsLimit: 1_000,
       paidThrough: null,
-    });
-  });
-
-  test("expired legacy purchases enter exactly thirty days of read-only grace", async () => {
-    const t = convexTest(schema, modules);
-    await insertLegacy(t, "expired", now - DAY);
-    expect(await workspace(t)).toMatchObject({
-      tier: "free",
-      access: "read_only",
-      paidThrough: now - DAY,
-      graceEndsAt: now + 29 * DAY,
-    });
-    expect(await workspace(t, now + 29 * DAY - 1)).toMatchObject({
-      access: "read_only",
-    });
-    expect(await workspace(t, now + 29 * DAY)).toMatchObject({
-      tier: "free",
-      access: "write",
-    });
-  });
-
-  test("legacy revocation begins grace at revocation, not a still-future purchase expiration", async () => {
-    const t = convexTest(schema, modules);
-    await insertLegacy(t, "revoked", now + 20 * DAY);
-    expect(await workspace(t)).toMatchObject({
-      tier: "free",
-      access: "read_only",
-      paidThrough: now - DAY,
-      graceEndsAt: now + 29 * DAY,
-    });
+      graceEndsAt: null,
+    };
+    for (const [status, expiresAt] of [
+      ["active", now + DAY],
+      ["active", undefined],
+      ["expired", now - DAY],
+      ["revoked", now + 20 * DAY],
+    ] as const) {
+      const t = convexTest(schema, modules);
+      await insertLegacy(t, status, expiresAt);
+      expect(await workspace(t)).toMatchObject(freePolicy);
+    }
   });
 
   test("Stripe paid periods survive scheduled cancellation and delinquency without unpaid extensions", async () => {

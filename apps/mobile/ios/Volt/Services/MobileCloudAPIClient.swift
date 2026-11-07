@@ -12,13 +12,6 @@ protocol MobileCloudAPI: Sendable {
     func cursorDeliveryStatus(_ request: CursorDeliveryStatusRequest) async throws -> CursorDeliveryStatusResponse
     func createOcrFlag(_ request: CreateOcrFlagRequest) async throws -> CreateOcrFlagResponse
     func finalizeOcrFlag(_ request: FinalizeOcrFlagRequest) async throws
-    func analyzeProductImage(
-        _ data: Data,
-        mode: ProductScanMode,
-        deviceId: String,
-        deviceSecret: String,
-        requestId: UUID
-    ) async throws -> ProductScanResponse
 }
 
 struct MobileCloudAPIClient: MobileCloudAPI {
@@ -112,36 +105,6 @@ struct MobileCloudAPIClient: MobileCloudAPI {
         let _: FinalizeOcrFlagResponse = try await post(request, to: .finalizeOcrFlag)
     }
 
-    func analyzeProductImage(
-        _ data: Data,
-        mode: ProductScanMode,
-        deviceId: String,
-        deviceSecret: String,
-        requestId: UUID
-    ) async throws -> ProductScanResponse {
-        var components = URLComponents(
-            url: baseURL.appending(path: "api/mobile/ai/analyze"),
-            resolvingAgainstBaseURL: false
-        )
-        components?.queryItems = [URLQueryItem(name: "mode", value: mode.rawValue)]
-        guard let url = components?.url else { throw MobileCloudError.invalidResponse }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue(deviceId, forHTTPHeaderField: "X-Volt-Device-Id")
-        request.setValue(deviceSecret, forHTTPHeaderField: "X-Volt-Device-Secret")
-        request.setValue(requestId.uuidString.lowercased(), forHTTPHeaderField: "X-Volt-AI-Request-Id")
-        let (responseData, response) = try await session.upload(for: request, from: data)
-        try validateProductScan(response, data: responseData)
-        do {
-            return try Self.decoder.decode(ProductScanResponse.self, from: responseData)
-        } catch {
-            throw MobileCloudError.invalidResponse
-        }
-    }
-
     private func post<Request: Encodable & Sendable, Response: Decodable & Sendable>(
         _ body: Request,
         to endpoint: Endpoint,
@@ -180,23 +143,6 @@ struct MobileCloudAPIClient: MobileCloudAPI {
         }
     }
 
-    private func validateProductScan(_ response: URLResponse, data: Data) throws {
-        guard let response = response as? HTTPURLResponse else { throw MobileCloudError.invalidResponse }
-        guard response.statusCode == 429 else {
-            try validate(response)
-            return
-        }
-        let payload = try? Self.decoder.decode(ProductScanErrorResponse.self, from: data)
-        switch payload?.errorCode {
-        case "quota-exhausted":
-            throw MobileCloudError.aiQuotaExhausted(payload?.quota)
-        case "rate-limited":
-            throw MobileCloudError.aiRateLimited(payload?.quota)
-        default:
-            throw MobileCloudError.httpStatus(response.statusCode)
-        }
-    }
-
     private static var encoder: JSONEncoder {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -220,24 +166,13 @@ private struct FinalizeOcrFlagResponse: Codable, Sendable {
 enum MobileCloudError: LocalizedError, Equatable {
     case credentialRevoked
     case cloudWorkspaceRequired
-    case aiQuotaExhausted(AIScannerQuota?)
-    case aiRateLimited(AIScannerQuota?)
     case httpStatus(Int)
     case invalidResponse
-
-    var aiQuota: AIScannerQuota? {
-        switch self {
-        case .aiQuotaExhausted(let quota), .aiRateLimited(let quota): quota
-        default: nil
-        }
-    }
 
     var errorDescription: String? {
         switch self {
         case .credentialRevoked: "Volt couldn't reconnect this iPhone. Try again."
         case .cloudWorkspaceRequired: "Cloud workspace access is unavailable for this account. Try again later."
-        case .aiQuotaExhausted: "Your free AI scans are used up for this period. Try again after they reset."
-        case .aiRateLimited: "AI scanning is busy right now. Try again in a moment."
         case .httpStatus(let status): "Cloud sync failed with status \(status)."
         case .invalidResponse: "Cloud sync returned an invalid response."
         }
