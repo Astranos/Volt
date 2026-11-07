@@ -292,8 +292,8 @@ export const sweepRetention = internalMutation({
 
 /**
  * One-time move of captures saved before retention was enabled onto the 7-day window. It only
- * marks rows; sweepRetention and purgeExpiredObjects still do all the deleting. Usage counters are
- * left alone because those paths clamp at zero and the rolling window corrects them within a week.
+ * marks rows; sweepRetention and purgeExpiredObjects still do all the deleting. Those rows never
+ * reserved usage, so run recountWorkspaceStorage afterwards to make the counters match.
  */
 export const enrollLegacyHistory = internalMutation({
   args: {
@@ -346,6 +346,28 @@ export const enrollLegacyHistory = internalMutation({
       photos,
       userDeleted,
     };
+  },
+});
+
+/** Rebuilds a workspace's usage from its rows, on the same terms the sweep and purge decrement. */
+export const recountWorkspaceStorage = internalMutation({
+  args: { workspaceId: v.id("workspaces") },
+  returns: v.object({ records: v.number(), bytes: v.number() }),
+  handler: async (ctx, args) => {
+    const workspace = await ctx.db.get(args.workspaceId);
+    if (!workspace) throw new ConvexError("Workspace no longer exists");
+    const results = await ctx.db
+      .query("scanResults")
+      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
+      .collect();
+    const managed = results.filter((result) => result.storageManaged);
+    const records = managed.filter((result) => result.deletedAt === undefined).length;
+    const bytes = managed
+      .filter((result) => result.objectPurgedAt === undefined)
+      .reduce((sum, result) => sum + result.byteCount, 0);
+    const usage = await storageUsage(ctx, workspace);
+    await writeStorageUsage(ctx, args.workspaceId, usage.row, records, bytes);
+    return { records, bytes };
   },
 });
 

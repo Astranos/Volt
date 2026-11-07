@@ -26,6 +26,11 @@ const enroll = makeFunctionReference<
   { cursor: string | null; dryRun: boolean; workspaceId?: Id<"workspaces"> },
   { cursor: string; isDone: boolean; enrolled: number; pastWindow: number; photos: number; userDeleted: number }
 >("workspaceStorage:enrollLegacyHistory");
+const recount = makeFunctionReference<
+  "mutation",
+  { workspaceId: Id<"workspaces"> },
+  { records: number; bytes: number }
+>("workspaceStorage:recountWorkspaceStorage");
 const usage = makeFunctionReference<
   "query",
   Record<string, never>,
@@ -239,6 +244,25 @@ test("legacy enrollment moves old captures onto the window without touching anyt
 
   vi.setSystemTime(Date.now() + 8 * DAY);
   expect(await t.mutation(sweep, {})).toBe(2);
+});
+
+test("recounting after legacy enrollment keeps expiring captures from erasing newer usage", async () => {
+  const t = convexTest(schema, modules);
+  const { signedIn, credential, workspaceId } = await owner(t);
+  vi.stubEnv("WORKSPACE_STORAGE_POLICY_ENABLED", "false");
+  await capture(t, credential, "legacy");
+  vi.stubEnv("WORKSPACE_STORAGE_POLICY_ENABLED", "true");
+  vi.setSystemTime(Date.now() + 3 * DAY);
+  await capture(t, credential, "new");
+  await t.mutation(enroll, { cursor: null, dryRun: false });
+  expect(await signedIn.query(usage, {})).toMatchObject({ recordsUsed: 1, bytesUsed: 3 });
+
+  expect(await t.mutation(recount, { workspaceId })).toEqual({ records: 2, bytes: 13 });
+  expect(await signedIn.query(usage, {})).toMatchObject({ recordsUsed: 2, bytesUsed: 13 });
+
+  vi.setSystemTime(Date.now() + 5 * DAY);
+  expect(await t.mutation(sweep, {})).toBe(1);
+  expect(await signedIn.query(usage, {})).toMatchObject({ recordsUsed: 1, bytesUsed: 13 });
 });
 
 async function setStorageUsage(
