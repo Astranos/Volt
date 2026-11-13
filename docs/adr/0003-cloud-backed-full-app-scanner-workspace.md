@@ -2,7 +2,7 @@
 
 ## Monetization update
 
-The free workspace pilot supersedes this ADR's Pro-only cloud access assumption. Signed-in accounts can sync captures, enroll devices, and use the dashboard without a paid entitlement. See [the monetization rollout](../monetization-rollout.md) for planned seven-day free history and paid persistent storage. The retention defaults below are the original design, not a statement that automated cloud deletion is implemented. This milestone adds no expiration, quota enforcement, or retroactive deletion.
+Free workspace access supersedes this ADR's Pro-only cloud access assumption. Signed-in accounts can sync captures, enroll devices, and use the dashboard without a paid entitlement. See [workspace storage](../workspace-storage.md) for the current seven-day history, quotas, and cleanup. The retention defaults below describe the original design.
 
 ## Status
 
@@ -74,13 +74,13 @@ A result becomes `available` only after required metadata is committed and any r
 
 ## Entitlement and Quota
 
-Any signed-in account can use local scanning and history. Pro is a capability plan for cloud workspace and mobile capture sync. Pro comes from a verified StoreKit entitlement or a complimentary workplace or admin entitlement. Convex makes the authoritative Pro decision before cloud storage, synchronization, computer targeting, or result publication. Extension browser features remain free.
+Any signed-in account can use local scanning, cloud workspace, and mobile capture sync for free with seven days of rolling capture history. Legacy Pro comes only from a verified StoreKit subscription and provides unlimited monthly AI analyses. Convex authorizes cloud storage, synchronization, computer targeting, and result publication by account identity. Extension browser features remain free.
 
 StoreKit transactions remain verified server-side and tied to the account's stable `appAccountToken`. A client-supplied product id, receipt claim, or local StoreKit state cannot grant access by itself. Idempotent quota reservations prevent retries from consuming allowance more than once.
 
 The App Clip remains free and checkout-free. Guest-mirrored results are authorized against the workspace that minted the QR grant; the App Clip does not receive subscription management, a durable account credential, or an AI account capability.
 
-AI product scanning is available to every signed-in account. Free accounts receive 10 analyses per UTC calendar month by default. Set `AI_SCANNER_FREE_MONTHLY_LIMIT` on the server to adjust that quota. Pro and complimentary workplace or admin Pro have no monthly AI quota. Metered deployments still apply a safety rate limit. Development and preview deployments can set `AI_SCANNER_QUOTA_MODE=unlimited` on the server. An analysis counts only after OpenRouter processes the image, including a no-confident-match result. Pre-model validation and upstream or server failures do not consume quota. The app checks AI capability when the feature is used, not at launch.
+AI product scanning is available to every signed-in account. Free accounts receive 10 analyses per UTC calendar month by default. Set `AI_SCANNER_FREE_MONTHLY_LIMIT` on the server to adjust that quota. Accounts with active legacy StoreKit subscriptions have no monthly AI quota. Metered deployments still apply a safety rate limit. Development and preview deployments can set `AI_SCANNER_QUOTA_MODE=unlimited` on the server. An analysis counts only after OpenRouter processes the image, including a no-confident-match result. Pre-model validation and upstream or server failures do not consume quota. The app checks AI capability when the feature is used, not at launch.
 
 ## Privacy and Tenant Isolation
 

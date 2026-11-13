@@ -48,7 +48,7 @@ function catalogApi(): Plugin {
     }
   };
   return {
-    name: 'paymore-catalog-api',
+    name: 'kiosk-catalog-api',
     configureServer(server) { server.middlewares.use(middleware); },
     configurePreviewServer(server) { server.middlewares.use(middleware); },
   };

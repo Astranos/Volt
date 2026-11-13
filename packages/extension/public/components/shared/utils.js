@@ -1,5 +1,5 @@
 /**
- * @fileoverview PayMore Shared Utility Functions
+ * @fileoverview Volt Shared Utility Functions
  * @description Common utility functions shared across modal components
  * @version 1.0.0
  * @author Juan Quenga

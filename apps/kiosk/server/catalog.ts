@@ -136,15 +136,15 @@ export function createCatalogService({ fetchImpl = fetch, now = Date.now }: { fe
           if (product) products.push(product);
         }
         if (records.length < PAGE_SIZE) {
-          // Product-feed success is sufficient. Missing marketing-page metadata
-          // must not make a working franchise catalog unavailable.
+          // Product-feed success is sufficient. Missing shop metadata
+          // must not make a working store catalog unavailable.
           let displayStore = store;
           try {
-            const metadata = await fetchImpl(store.storefrontUrl + '/', {
+            const metadata = await fetchImpl(store.storefrontUrl + '/meta.json', {
               signal: AbortSignal.any([controller.signal, AbortSignal.timeout(2500)]),
-              redirect: 'error', headers: { Accept: 'text/html' },
+              redirect: 'error', headers: { Accept: 'application/json' },
             });
-            displayStore = readStoreMetadata(await readBody(metadata, 1024 * 1024), store);
+            displayStore = readStoreMetadata(JSON.parse(await readBody(metadata, 64 * 1024)), store);
           } catch { /* Keep the source hostname when its metadata is unavailable. */ }
           const result: CatalogResponse = { store: displayStore, products, checkedAt: new Date(now()).toISOString(), status: 'fresh' };
           cache.delete(store.slug);
@@ -165,9 +165,9 @@ export function createCatalogService({ fetchImpl = fetch, now = Date.now }: { fe
     async getCatalog(slug: string): Promise<CatalogResponse> {
       const store = getStore(slug);
       if (!store) throw storeNotFound();
-      const cached = cache.get(slug);
+      const cached = cache.get(store.slug);
       if (cached && now() - Date.parse(cached.checkedAt) < FRESH_MS) return cached;
-      const inFlight = pending.get(slug);
+      const inFlight = pending.get(store.slug);
       if (inFlight) return inFlight;
       if (pending.size >= MAX_CONCURRENT_STORES) throw unavailable();
       const request = load(store).catch((error: unknown): CatalogResponse => {
@@ -175,8 +175,8 @@ export function createCatalogService({ fetchImpl = fetch, now = Date.now }: { fe
           if (error instanceof Error && typeof error.cause === 'object' && error.cause !== null && 'code' in error.cause && error.cause.code === 'ENOTFOUND') throw storeNotFound();
           if (cached && now() - Date.parse(cached.checkedAt) < STALE_MS) return { ...cached, status: 'stale' };
           throw unavailable();
-        }).finally(() => { pending.delete(slug); });
-      pending.set(slug, request);
+        }).finally(() => { pending.delete(store.slug); });
+      pending.set(store.slug, request);
       return request;
     },
   };

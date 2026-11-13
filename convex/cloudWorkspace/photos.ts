@@ -13,7 +13,7 @@ import {
 import { ConvexError, v, type ObjectType } from "convex/values";
 import { makeFunctionReference } from "convex/server";
 import { type Doc } from "../_generated/dataModel";
-import { assertWorkspaceWritable, liveBatchResults, resultIsExpired } from "../workspaceStorage";
+import { liveBatchResults, resultIsExpired } from "../workspaceStorage";
 import { accountPolicy } from "../monetization";
 
 export const PRESIGN_TTL_SECONDS = 5 * 60;
@@ -24,7 +24,6 @@ async function photoManifestForPrincipal(
   batchId: string,
 ) {
     const { workspace, sourceDeviceId } = principal;
-    await assertWorkspaceWritable(ctx, workspace);
     const batch = await ctx.db
       .query("resultBatches")
       .withIndex("by_workspaceId_and_batchId", (q) =>
@@ -40,7 +39,7 @@ async function photoManifestForPrincipal(
         q.eq("workspaceId", workspace._id).eq("batchId", batchId),
       )
       .take(500);
-    const policy = (await accountPolicy(ctx, workspace.ownerClerkUserId)).workspace;
+    const policy = accountPolicy().workspace;
     return liveBatchResults(results, policy)
       .filter((item) => item.kind === "photo" && item.objectKey)
       .map((item) => ({ objectKey: item.objectKey as string, byteCount: item.byteCount }));
@@ -193,7 +192,6 @@ export const authorizePhotoAccessHandler = async (ctx: QueryCtx, args: ObjectTyp
       throw new ConvexError("Photo not found");
     }
     if (result.deletedAt !== undefined || await resultIsExpired(ctx, result, workspace)) throw new ConvexError("Photo was deleted or expired");
-    if (args.operation === "put") await assertWorkspaceWritable(ctx, workspace);
     if (args.operation === "put" && batch.status !== "uploading") {
       throw new ConvexError("Photo upload is no longer allowed");
     }

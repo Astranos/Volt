@@ -1,6 +1,5 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ConvexError } from "convex/values";
 import { describe, expect, test } from "vitest";
 import {
   WorkspaceAccessContent,
@@ -57,13 +56,8 @@ describe("workspace access gate", () => {
     expect(html).not.toContain("ConvexError");
   });
 
-  test("classifies entitlement expiry without displaying server exception details", () => {
-    expect(WorkspaceErrorBoundary.getDerivedStateFromError(
-      new ConvexError("Volt Pro subscription or complimentary access required"),
-    )).toEqual({ status: "locked" });
-    expect(WorkspaceErrorBoundary.getDerivedStateFromError(
-      new Error("private server stack"),
-    )).toEqual({ status: "error" });
+  test("does not display server exception details", () => {
+    expect(WorkspaceErrorBoundary.getDerivedStateFromError()).toEqual({ status: "error" });
     const html = renderToStaticMarkup(
       <WorkspaceAccessContent state={{ status: "error" }} retry={() => {}} />,
     );

@@ -15,11 +15,11 @@ test("does not trust lookalike hosts or non-admin Shopify pages", () => {
 });
 
 test("reads a typed store name, domain, or admin URL", () => {
-  for (const typed of ["paymore-taylor", " Paymore-Taylor ", "paymore-taylor.myshopify.com", "https://paymore-taylor.myshopify.com",
-    "admin.shopify.com/store/paymore-taylor", "https://admin.shopify.com/store/paymore-taylor/products/123"]) {
-    assert.equal(shopDomainFromTypedStore(typed), "paymore-taylor.myshopify.com", typed);
+  for (const typed of ["example-store", " Example-Store ", "example-store.myshopify.com", "https://example-store.myshopify.com",
+    "admin.shopify.com/store/example-store", "https://admin.shopify.com/store/example-store/products/123"]) {
+    assert.equal(shopDomainFromTypedStore(typed), "example-store.myshopify.com", typed);
   }
-  for (const typed of ["", "paymore taylor", "paymore.com", "https://evil.example/store/x", "-bad-"]) {
+  for (const typed of ["", "example store", "example.com", "https://evil.example/store/x", "-bad-"]) {
     assert.equal(shopDomainFromTypedStore(typed), null, typed);
   }
 });

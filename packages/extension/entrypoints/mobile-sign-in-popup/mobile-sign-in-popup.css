@@ -1,0 +1,40 @@
+@import "../mobile-scanner-popup/mobile-scanner-popup.css";
+
+/* This page opens in its own window, not the 340x430 action popup. */
+html,
+body {
+  height: 100%;
+  min-height: 100vh;
+  width: 100%;
+}
+
+.sign-in-title {
+  font-size: 16px;
+  font-weight: 800;
+  margin: 0;
+  text-align: center;
+}
+
+.sign-in-expiry {
+  color: var(--popup-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+.sign-in-dismiss {
+  background: transparent;
+  border: 0;
+  color: var(--popup-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  padding: 4px 8px;
+  text-decoration: underline;
+}
+
+.sign-in-dismiss:disabled {
+  cursor: default;
+  opacity: 0.5;
+}

@@ -21,7 +21,7 @@ struct StoreSetupView: View {
                         .foregroundStyle(.secondary)
                     VStack(alignment: .leading, spacing: 12) {
                         Text("PayMore store address").font(.headline)
-                        TextField("southfieldmi.paymore.com", text: $address)
+                        TextField("your-store.myshopify.com", text: $address)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .keyboardType(.URL)
@@ -30,7 +30,7 @@ struct StoreSetupView: View {
                             .submitLabel(.go)
                             .onSubmit(connect)
                             .accessibilityIdentifier("storeAddress")
-                        Text("Enter a store subdomain, such as southfieldmi, or its PayMore address.")
+                        Text("Enter the store’s .myshopify.com address, shop handle, or kiosk link.")
                             .foregroundStyle(.secondary)
                         if let error = session.setupError {
                             Label(error, systemImage: "exclamationmark.triangle")

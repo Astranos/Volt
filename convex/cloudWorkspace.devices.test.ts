@@ -11,7 +11,6 @@ import {
   ensureWorkspace,
   exchangeEnrollment,
   getAccessStatus,
-  grantFullAppAccess,
   listComputersForDevice,
   modules,
   pendingCursorDeliveries,
@@ -104,32 +103,32 @@ describe("cloud scanner workspace devices", () => {
     });
   });
 
-  test("grants full cloud access to complimentary email accounts", async () => {
+  test("allows free email accounts to sync more than 100 results", async () => {
     const t = convexTest(schema, modules);
-    const clerkUserId = "complimentary-paymore-user";
+    const clerkUserId = "free-email-user";
     const signedIn = t.withIdentity({
       subject: clerkUserId,
       tokenIdentifier: `clerk|${clerkUserId}`,
-      email: "scanner@paymore.com",
+      email: "scanner@example.com",
       email_verified: true,
     });
-    expect((await signedIn.mutation(getAccessStatus, {})).body.access).toBe("complimentary");
+    expect((await signedIn.mutation(getAccessStatus, {})).body.access).toBe("trial");
 
     const enrollment = await signedIn.mutation(createEnrollment, {
       kind: "ios",
-      label: "PayMore iPhone",
+      label: "Sample iPhone",
     });
     const credential = await t.mutation(exchangeEnrollment, {
       enrollmentCode: enrollment.enrollmentCode,
     });
     const results = Array.from({ length: 101 }, (_, index) =>
-      result(`complimentary-result-${index}`),
+      result(`free-result-${index}`),
     );
 
     await expect(t.mutation(putBatch, {
       deviceId: credential.deviceId,
       deviceSecret: credential.deviceSecret,
-      batchId: "complimentary-over-free-limit",
+      batchId: "free-large-batch",
       clientCreatedAt: 1,
       results,
     })).resolves.toMatchObject({ idempotent: false });
@@ -148,8 +147,6 @@ describe("cloud scanner workspace devices", () => {
 
   test("rebinds a signed-in Chrome installation across accounts without leaking pending deliveries", async () => {
     const t = convexTest(schema, modules);
-    await grantFullAppAccess(t, "computer-owner");
-    await grantFullAppAccess(t, "different-owner");
     const alice = t.withIdentity({ subject: "computer-owner" });
     const bob = t.withIdentity({ subject: "different-owner" });
     const phone = await alice.mutation(bootstrapMobileDevice, {
@@ -216,8 +213,6 @@ describe("cloud scanner workspace devices", () => {
 
   test("bootstraps only iOS credentials, rotates them, and rejects cross-workspace rotation", async () => {
     const t = convexTest(schema, modules);
-    await grantFullAppAccess(t, "bootstrap-alice");
-    await grantFullAppAccess(t, "bootstrap-bob");
     const alice = t.withIdentity({ subject: "bootstrap-alice", name: "Alice" });
     const bob = t.withIdentity({ subject: "bootstrap-bob", name: "Bob" });
     const issued = await alice.mutation(bootstrapMobileDevice, {
@@ -280,7 +275,6 @@ describe("cloud scanner workspace devices", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-23T12:00:00Z"));
     const t = convexTest(schema, modules);
-    await grantFullAppAccess(t, "computer-list-owner");
     const signedIn = t.withIdentity({ subject: "computer-list-owner" });
     const phone = await signedIn.mutation(bootstrapMobileDevice, {
       installationId: "phone-installation",
@@ -328,8 +322,6 @@ describe("cloud scanner workspace devices", () => {
 
   test("sets and clears only same-workspace cursor-capable Chrome targets", async () => {
     const t = convexTest(schema, modules);
-    await grantFullAppAccess(t, "cursor-target-alice");
-    await grantFullAppAccess(t, "cursor-target-bob");
     const alice = t.withIdentity({ subject: "cursor-target-alice" });
     const bob = t.withIdentity({ subject: "cursor-target-bob" });
     const phone = await alice.mutation(bootstrapMobileDevice, {
@@ -381,7 +373,6 @@ describe("cloud scanner workspace devices", () => {
 
   test("sweeps an expired online presence lease to offline", async () => {
     const t = convexTest(schema, modules);
-    await grantFullAppAccess(t, "sweep-owner");
     const signedIn = t.withIdentity({ subject: "sweep-owner" });
     await signedIn.mutation(registerComputer, {
       installationId: "sweep-expired-chrome",
@@ -410,7 +401,6 @@ describe("cloud scanner workspace devices", () => {
 
   test("leaves a non-expired online presence lease untouched", async () => {
     const t = convexTest(schema, modules);
-    await grantFullAppAccess(t, "sweep-owner-2");
     const signedIn = t.withIdentity({ subject: "sweep-owner-2" });
     await signedIn.mutation(registerComputer, {
       installationId: "sweep-live-chrome",

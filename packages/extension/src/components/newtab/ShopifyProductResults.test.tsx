@@ -104,7 +104,7 @@ test("a Compare button turns on compare mode before anything is picked", () => {
 });
 
 const kioskRequest = { id: "k1", productId: "12", variantId: "34", title: "PS5 Slim", variantTitle: "Default Title", sku: "MI01-1", imageUrl: null, priceCents: 45000, status: "waiting" as const, createdAt: Date.now() - 4 * 60_000, expiresAt: Date.now() + 3_000_000 };
-const kiosk = { store: "taylormi", shop: "paymore-taylor.myshopify.com", requests: [kioskRequest], clockOffset: 0, error: null, busy: new Set<string>(), onUpdate: vi.fn() };
+const kiosk = { store: "taylormi", shop: "example-store.myshopify.com", requests: [kioskRequest], clockOffset: 0, error: null, busy: new Set<string>(), onUpdate: vi.fn() };
 const renderKiosk = (query: string) => renderToStaticMarkup(<Command shouldFilter={false}><Command.List>
   <ShopifyProductResults
     query={query}

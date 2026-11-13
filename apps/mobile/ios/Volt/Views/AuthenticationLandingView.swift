@@ -5,10 +5,12 @@ import SwiftUI
 
 struct AuthenticationLandingView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(QRSignInStore.self) private var qrSignInStore
     @State private var isAuthPresented = false
     @State private var didAppear = false
 
     var body: some View {
+        @Bindable var qrSignInStore = qrSignInStore
         ZStack {
             background
 
@@ -36,6 +38,10 @@ struct AuthenticationLandingView: View {
                 .clerkAppIcon(maxHeight: 56)
                 .presentationDragIndicator(.visible)
                 .presentationBackground(VoltBrand.clerkTheme.colors.background)
+        }
+        .sheet(isPresented: $qrSignInStore.isPresented) {
+            QRSignInView()
+                .presentationDragIndicator(.visible)
         }
         .onAppear {
             guard !didAppear else { return }
@@ -108,6 +114,17 @@ struct AuthenticationLandingView: View {
             .buttonStyle(.glassProminent)
             .tint(VoltBrand.green)
             .accessibilityIdentifier("volt-sign-in-button")
+
+            Button {
+                qrSignInStore.present()
+            } label: {
+                Label("Sign in with QR from Chrome", systemImage: "qrcode.viewfinder")
+                    .frame(maxWidth: .infinity)
+            }
+            .font(.headline)
+            .controlSize(.large)
+            .buttonStyle(.glass)
+            .accessibilityIdentifier("volt-qr-sign-in-button")
 
             Text("Use the same account as Volt on Chrome.")
                 .font(.footnote)
@@ -184,4 +201,5 @@ private struct AuthenticationSheetView: View {
 
 #Preview {
     AuthenticationLandingView()
+        .environment(QRSignInStore(apiClient: MobileSignInAPIClient(baseURL: URL(string: "https://example.invalid")!)))
 }

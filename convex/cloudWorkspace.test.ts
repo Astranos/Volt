@@ -7,7 +7,6 @@ import {
   authorizeGuestPhotoAccess,
   bootstrapMobileDevice,
   clearDictationDraft,
-  grantFullAppAccess,
   guestGrant,
   listComputersForGuest,
   liveDictationDraftsForComputer,
@@ -63,7 +62,6 @@ describe("cloud scanner workspace guests", () => {
     const ownerId = "guest-target-owner";
     const grant = await guestGrant(t, ownerId);
     await startGuestUsageSession(t, ownerId);
-    await grantFullAppAccess(t, ownerId);
     const signedIn = t.withIdentity({ subject: ownerId });
     await signedIn.mutation(registerComputer, {
       installationId: "guest-target-chrome",
@@ -110,7 +108,6 @@ describe("cloud scanner workspace guests", () => {
   test("streams an authenticated iPhone dictation draft and delivers the final transcript as text", async () => {
     const t = convexTest(schema, modules);
     const ownerId = "iphone-dictation-owner";
-    await grantFullAppAccess(t, ownerId);
     const signedIn = t.withIdentity({ subject: ownerId });
     const phone = await signedIn.mutation(bootstrapMobileDevice, {
       installationId: "iphone-dictation",

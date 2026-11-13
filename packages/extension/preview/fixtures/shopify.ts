@@ -79,7 +79,7 @@ export const auditProducts = auditTitles.map(([title, status], index) => ({
 const details = (id: number, title: string, price: string, condition: string, images: string[], cosmetic: string) => ({
   id: `gid://shopify/Product/${id}`, title, status: "ACTIVE", totalInventory: 1,
   url: `https://admin.shopify.com/store/volt-demo/products/${id}`, images,
-  currencyCode: "USD", minPrice: price, maxPrice: price, condition, vendor: "PayMore", productType: "Cell Phones",
+  currencyCode: "USD", minPrice: price, maxPrice: price, condition, vendor: "Sample Vendor", productType: "Cell Phones",
   descriptionHtml: `<h3>Cosmetic condition:</h3><p>${cosmetic}</p><h3>Functionality condition:</h3><p>Tested and fully working. Battery health 88%. Factory reset and ready to activate.</p><h3>Items included in this sale:</h3><ul><li>${title}</li><li>USB-C cable</li></ul>`,
   variants: [{ id: `gid://shopify/ProductVariant/${id}`, title: "Default Title", sku: `IP-${id}`, price }],
 });
@@ -96,7 +96,7 @@ export const compareDetails = {
 const minutesAgo = (minutes: number) => Date.now() - minutes * 60_000;
 const kioskRequest = (id: string, title: string, sku: string, minutes: number, status: "waiting" | "found", imageUrl: string) => ({
   id, storeSlug: "taylormi", productId: String(900 + Number(id.slice(1))), variantId: "1", title, variantTitle: "Default Title",
-  sku, imageUrl, priceCents: 0, productUrl: "https://taylormi.paymore.com/products/sample", status,
+  sku, imageUrl, priceCents: 0, productUrl: "https://example-store.myshopify.com/products/sample", status,
   createdAt: minutesAgo(minutes), updatedAt: minutesAgo(minutes), expiresAt: minutesAgo(minutes - 60),
 });
 

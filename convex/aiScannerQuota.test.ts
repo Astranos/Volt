@@ -21,13 +21,13 @@ const getStatus = makeFunctionReference<"mutation", Record<string, never>, { bod
 const credentials = { deviceId: "ai-device", deviceSecret: "ai-secret" };
 const requestId = (index: number) => `00000000-0000-4000-8000-${index.toString().padStart(12, "0")}`;
 
-async function createDevice(t: ReturnType<typeof convexTest>, plan: "free" | "manual" | "future" = "free") {
+async function createDevice(t: ReturnType<typeof convexTest>, plan: "free" | "storekit" | "future" | "manual" = "free") {
   const now = Date.now();
   await t.run(async (ctx) => {
     const workspaceId = await ctx.db.insert("workspaces", { ownerClerkUserId: "ai-user", name: "AI", createdAt: now, updatedAt: now });
-    if (plan === "manual" || plan === "future") {
+    if (plan !== "free") {
       await ctx.db.insert("entitlements", {
-        clerkUserId: "ai-user", kind: "manual", sourceIdentifier: "manual-test", productId: "pro", status: "active", validFrom: plan === "future" ? now + 3_600_000 : now, updatedAt: now,
+        clerkUserId: "ai-user", kind: plan === "manual" ? "manual" : "storekit", sourceIdentifier: "legacy-test", productId: "pro", status: "active", validFrom: plan === "future" ? now + 3_600_000 : now, updatedAt: now,
       });
     }
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(credentials.deviceSecret));
@@ -75,9 +75,9 @@ describe("AI scanner quota", () => {
     expect(next).toMatchObject({ status: "reserved", quota: { used: 1, remaining: 9 } });
   });
 
-  test("gives manual Pro unlimited monthly quota but enforces the safety window", async () => {
+  test("gives legacy StoreKit Pro unlimited monthly quota but enforces the safety window", async () => {
     const t = convexTest(schema, modules);
-    await createDevice(t, "manual");
+    await createDevice(t, "storekit");
     for (let index = 1; index <= 10; index += 1) await t.mutation(reserve, { ...credentials, requestId: requestId(index), mode: "name" });
     const eleventh = await t.mutation(reserve, { ...credentials, requestId: requestId(11), mode: "name" });
     expect(eleventh).toMatchObject({ status: "rejected", errorCode: "rate-limited", quota: { kind: "unlimited" } });
@@ -123,7 +123,7 @@ describe("AI scanner quota", () => {
 
   test("rate-limits one Clerk account across its devices", async () => {
     const t = convexTest(schema, modules);
-    await createDevice(t, "manual");
+    await createDevice(t, "storekit");
     const secondDevice = await createSecondDevice(t);
     for (let index = 1; index <= 5; index += 1) {
       await t.mutation(reserve, { ...credentials, requestId: requestId(index), mode: "name" });
@@ -168,7 +168,7 @@ describe("AI scanner quota", () => {
 
   test("does not charge prior Pro scans against the free quota after Pro expires", async () => {
     const t = convexTest(schema, modules);
-    await createDevice(t, "manual");
+    await createDevice(t, "storekit");
     await t.mutation(reserve, { ...credentials, requestId: requestId(1), mode: "name" });
     await t.run(async (ctx) => {
       const entitlements = await ctx.db
@@ -190,13 +190,16 @@ describe("AI scanner quota", () => {
     });
   });
 
-  test("reports StoreKit status separately from manual Pro access", async () => {
-    vi.stubEnv("CLERK_COMPLIMENTARY_USER_IDS", "manual-user");
-    const t = convexTest(schema, modules).withIdentity({ subject: "manual-user", tokenIdentifier: "clerk|manual-user" });
+  test("ignores manual grants for status and AI quota", async () => {
+    const t = convexTest(schema, modules);
+    const signedIn = t.withIdentity({ subject: "manual-user", tokenIdentifier: "clerk|manual-user" });
     await t.run(async (ctx) => {
-      await ctx.db.insert("entitlements", { clerkUserId: "manual-user", kind: "manual", sourceIdentifier: "complimentary-user:manual-user", productId: "pro", status: "active", validFrom: Date.now(), updatedAt: Date.now() });
+      await ctx.db.insert("entitlements", { clerkUserId: "manual-user", kind: "manual", sourceIdentifier: "legacy-manual:manual-user", productId: "pro", status: "active", validFrom: Date.now(), updatedAt: Date.now() });
     });
-    const status = await t.mutation(getStatus, {});
-    expect(status.body).toMatchObject({ plan: "pro", subscriptionStatus: "none", capabilities: { cloudWorkspace: true } });
+    await createDevice(t, "manual");
+    expect(await t.mutation(reserve, { ...credentials, requestId: requestId(1), mode: "name" }))
+      .toMatchObject({ quota: { kind: "metered", used: 1, remaining: 9 } });
+    const status = await signedIn.mutation(getStatus, {});
+    expect(status.body).toMatchObject({ plan: "free", subscriptionStatus: "none", capabilities: { cloudWorkspace: true } });
   });
 });

@@ -249,25 +249,12 @@ export function restoreWorkspaceTestEnvironment() {
   vi.unstubAllEnvs();
 }
 
-export async function grantFullAppAccess(t: ReturnType<typeof convexTest>, userId: string) {
-  await t.run((ctx) => ctx.db.insert("entitlements", {
-    clerkUserId: userId,
-    kind: "manual",
-    sourceIdentifier: `test-complimentary:${userId}`,
-    productId: "com.volt.mobile.pro.monthly",
-    status: "active",
-    validFrom: Date.now(),
-    updatedAt: Date.now(),
-  }));
-}
-
 export async function enroll(
   t: ReturnType<typeof convexTest>,
   userId: string,
   kind: "ios" | "chrome" = "ios",
 ) {
   const signedIn = t.withIdentity({ subject: userId, name: userId });
-  await grantFullAppAccess(t, userId);
   const enrollment = await signedIn.mutation(createEnrollment, { kind, label: `${userId} device` });
   const exchanged = await t.mutation(exchangeEnrollment, {
     enrollmentCode: enrollment.enrollmentCode,

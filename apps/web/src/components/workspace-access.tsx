@@ -1,7 +1,6 @@
 import { Component, useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "@clerk/clerk-react";
 import { useConvexAuth, useMutation } from "convex/react";
-import { ConvexError } from "convex/values";
 import { Cloud, LoaderCircle } from "lucide-react";
 
 import { api } from "../../../../convex/_generated/api";
@@ -84,19 +83,14 @@ function AuthenticatedWorkspaceAccess({ children, userId }: {
 /** Also catches access changing while an existing query is subscribed. */
 export class WorkspaceErrorBoundary extends Component<
   { children: ReactNode; retry: () => void },
-  { status: "ready" | "locked" | "error" }
+  { status: "ready" | "error" }
 > {
-  state: { status: "ready" | "locked" | "error" } = { status: "ready" };
+  state: { status: "ready" | "error" } = { status: "ready" };
 
-  static getDerivedStateFromError(error: unknown): {
-    status: "locked" | "error";
+  static getDerivedStateFromError(): {
+    status: "error";
   } {
-    return {
-      status: error instanceof ConvexError
-        && error.data === "Volt Pro subscription or complimentary access required"
-        ? "locked"
-        : "error",
-    };
+    return { status: "error" };
   }
 
   render() {

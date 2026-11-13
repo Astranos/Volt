@@ -9,6 +9,7 @@ const readIOSSource = (relativePath) =>
 const projectSource = readIOSSource("Volt.xcodeproj/project.pbxproj");
 const appSource = readIOSSource("Volt/App/VoltApp.swift");
 const configurationSource = readIOSSource("Volt/App/AppConfiguration.swift");
+const accessKindSource = readIOSSource("Volt/Models/AccessKind.swift");
 const accessStatusSource = readIOSSource("Volt/Models/AccessStatus.swift");
 const accessStoreSource = readIOSSource("Volt/Services/AccessStore.swift");
 const apiClientSource = readIOSSource("Volt/Services/MobileAccessAPIClient.swift");
@@ -64,13 +65,19 @@ test("authenticated access calls use fresh Clerk Convex tokens and authoritative
   assert.match(accessStatusSource, /let access: AccessKind/);
   assert.match(accessStatusSource, /enum AccessPlan: String, Decodable, Sendable/);
   assert.match(accessStatusSource, /struct AccessCapabilities: Decodable, Sendable/);
-  assert.match(accessStatusSource, /let legacyProAccess = access == \.complimentary \|\| access == \.subscription/);
+  assert.match(accessStatusSource, /let legacyProAccess = access == \.subscription/);
   assert.match(accessStatusSource, /let hasFullAppAccess: Bool/);
   assert.match(accessStatusSource, /let freeSessionsRemaining: Int/);
   assert.match(accessStatusSource, /let subscriptionStatus: VoltSubscriptionStatus/);
   assert.match(accessStatusSource, /let organizationId: String\?/);
   assert.match(accessStatusSource, /let appAccountToken: UUID\?/);
   assert.doesNotMatch(accessStoreSource + apiClientSource, /UserDefaults|Keychain|SecItem/);
+});
+
+test("access decoding falls back to trial for retired or unknown values", () => {
+  assert.match(accessKindSource, /init\(from decoder: Decoder\) throws/);
+  assert.match(accessKindSource, /self = AccessKind\(rawValue: value\) \?\? \.trial/);
+  assert.match(accessStatusSource, /let legacyProAccess = access == \.subscription/);
 });
 
 test("StoreKit purchase associates the server UUID and synchronizes verified JWS", () => {

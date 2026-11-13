@@ -8,7 +8,6 @@ import {
   acknowledgeCursorDelivery,
   bootstrapMobileDevice,
   cursorDeliveryStatus,
-  grantFullAppAccess,
   modules,
   pendingCursorDeliveries,
   putBatch,
@@ -25,8 +24,6 @@ describe("cloud scanner workspace deliveries", () => {
 
   test("reports cursor delivery status only for the calling device's own workspace deliveries", async () => {
     const t = convexTest(schema, modules);
-    await grantFullAppAccess(t, "status-owner");
-    await grantFullAppAccess(t, "status-other-owner");
     const alice = t.withIdentity({ subject: "status-owner" });
     const bob = t.withIdentity({ subject: "status-other-owner" });
     const phone = await alice.mutation(bootstrapMobileDevice, {
@@ -147,7 +144,6 @@ describe("cloud scanner workspace deliveries", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-23T12:00:00Z"));
     const t = convexTest(schema, modules);
-    await grantFullAppAccess(t, "expiry-owner");
     const alice = t.withIdentity({ subject: "expiry-owner" });
     const phone = await alice.mutation(bootstrapMobileDevice, {
       installationId: "expiry-phone",
@@ -187,7 +183,6 @@ describe("cloud scanner workspace deliveries", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-23T12:00:00Z"));
     const t = convexTest(schema, modules);
-    await grantFullAppAccess(t, "ack-expiry-owner");
     const alice = t.withIdentity({ subject: "ack-expiry-owner" });
     const phone = await alice.mutation(bootstrapMobileDevice, {
       installationId: "ack-expiry-phone",
@@ -238,7 +233,6 @@ describe("cloud scanner workspace deliveries", () => {
 
   test("queues cursor deliveries idempotently by workspace and client delivery id", async () => {
     const t = convexTest(schema, modules);
-    await grantFullAppAccess(t, "delivery-queue-owner");
     const signedIn = t.withIdentity({ subject: "delivery-queue-owner" });
     const phone = await signedIn.mutation(bootstrapMobileDevice, {
       installationId: "delivery-phone",
@@ -289,7 +283,6 @@ describe("cloud scanner workspace deliveries", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-23T12:00:00Z"));
     const t = convexTest(schema, modules);
-    await grantFullAppAccess(t, "future-delivery-owner");
     const signedIn = t.withIdentity({ subject: "future-delivery-owner" });
     const phone = await signedIn.mutation(bootstrapMobileDevice, {
       installationId: "future-delivery-phone",
@@ -324,8 +317,6 @@ describe("cloud scanner workspace deliveries", () => {
 
   test("scopes pending cursor deliveries to the authenticated registered computer", async () => {
     const t = convexTest(schema, modules);
-    await grantFullAppAccess(t, "pending-alice");
-    await grantFullAppAccess(t, "pending-bob");
     const alice = t.withIdentity({ subject: "pending-alice" });
     const bob = t.withIdentity({ subject: "pending-bob" });
     const alicePhone = await alice.mutation(bootstrapMobileDevice, {
@@ -372,7 +363,6 @@ describe("cloud scanner workspace deliveries", () => {
 
   test("guards cursor delivery acknowledgement transitions and keeps terminal states immutable", async () => {
     const t = convexTest(schema, modules);
-    await grantFullAppAccess(t, "cursor-ack-owner");
     const signedIn = t.withIdentity({ subject: "cursor-ack-owner" });
     const phone = await signedIn.mutation(bootstrapMobileDevice, {
       installationId: "cursor-ack-phone",
@@ -443,7 +433,6 @@ describe("cloud scanner workspace deliveries", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-23T12:00:00Z"));
     const t = convexTest(schema, modules);
-    await grantFullAppAccess(t, "cursor-expiry-owner");
     const signedIn = t.withIdentity({ subject: "cursor-expiry-owner" });
     const phone = await signedIn.mutation(bootstrapMobileDevice, {
       installationId: "cursor-expiry-phone",
@@ -492,7 +481,6 @@ describe("cloud scanner workspace deliveries", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-23T12:00:00Z"));
     const t = convexTest(schema, modules);
-    await grantFullAppAccess(t, "sweep-delivery-owner");
     const alice = t.withIdentity({ subject: "sweep-delivery-owner" });
     const phone = await alice.mutation(bootstrapMobileDevice, {
       installationId: "sweep-delivery-phone",
@@ -546,7 +534,6 @@ describe("cloud scanner workspace deliveries", () => {
 
   test("leaves a non-expired pending cursor delivery untouched by the sweep", async () => {
     const t = convexTest(schema, modules);
-    await grantFullAppAccess(t, "sweep-delivery-owner-2");
     const alice = t.withIdentity({ subject: "sweep-delivery-owner-2" });
     const phone = await alice.mutation(bootstrapMobileDevice, {
       installationId: "sweep-delivery-live-phone",
@@ -587,7 +574,6 @@ describe("cloud scanner workspace deliveries", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-23T12:00:00Z"));
     const t = convexTest(schema, modules);
-    await grantFullAppAccess(t, "sweep-ack-race-owner");
     const alice = t.withIdentity({ subject: "sweep-ack-race-owner" });
     const phone = await alice.mutation(bootstrapMobileDevice, {
       installationId: "sweep-ack-race-phone",

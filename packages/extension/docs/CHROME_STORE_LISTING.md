@@ -67,4 +67,4 @@ PRIVACY
 
 Most functionality runs locally in the browser. Tabs, bookmarks, and history are read only to populate the command palette and new tab, and are not transmitted. Mobile captures sync only for the signed-in account. Full policy: https://voltresale.app/privacy
 
-Volt Pro is an optional capability plan that unlocks the cloud workspace and mobile capture sync. Pro can come from an auto-renewing App Store subscription or complimentary workplace or admin access. The extension's browser features work without Pro.
+Cloud workspace and mobile capture sync are free for every signed-in account, with seven days of rolling capture history. Existing App Store subscriptions remain supported for legacy AI allowances. The extension's browser features are free.

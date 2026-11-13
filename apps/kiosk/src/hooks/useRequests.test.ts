@@ -3,7 +3,7 @@ import { activeRequests, requestJson } from './useRequests';
 import type { ProductRequest } from '../requests';
 
 function request(patch: Partial<ProductRequest> = {}): ProductRequest {
-  return { id: 'request', storeSlug: 'taylormi', productId: '1', variantId: '2', title: 'Camera', variantTitle: '', sku: 'MI01-123', imageUrl: null, priceCents: 100, productUrl: 'https://taylormi.paymore.com/products/camera', status: 'waiting', createdAt: 100, updatedAt: 100, expiresAt: 3600100, ...patch };
+  return { id: 'request', storeSlug: 'paymore-taylor', productId: '1', variantId: '2', title: 'Camera', variantTitle: '', sku: 'MI01-123', imageUrl: null, priceCents: 100, productUrl: 'https://paymore-taylor.myshopify.com/products/camera', status: 'waiting', createdAt: 100, updatedAt: 100, expiresAt: 3600100, ...patch };
 }
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 describe('staff request list', () => {

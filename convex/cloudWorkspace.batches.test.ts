@@ -9,7 +9,6 @@ import {
   createPhotoUploadUrl,
   deleteWorkspaceResults,
   enroll,
-  grantFullAppAccess,
   listBatches,
   markBatchReady,
   modules,
@@ -242,7 +241,6 @@ describe("cloud scanner workspace batches", () => {
 
   test("reads an untouched account as an empty snapshot rather than an error", async () => {
     const t = convexTest(schema, modules);
-    await grantFullAppAccess(t, "never-captured-anything");
     // Only mutations create the workspace row, so signing in is not enough to
     // make one exist. Throwing here surfaced as "Cloud sync failed" on every
     // account's very first open.

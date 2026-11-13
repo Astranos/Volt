@@ -1,6 +1,6 @@
 Browse a store's resale inventory on iPad and ask an associate to bring an item to the counter.
 
-Volt Kiosk is a native customer catalog for independently operated PayMore franchise stores. Enter a participating store's PayMore address, then explore its available listings in portrait or landscape.
+Volt Kiosk is a native customer catalog for independently operated PayMore franchise stores. Enter a participating store's Shopify address (its .myshopify.com address), then explore its available listings in portrait or landscape.
 
 Find the item you want
 - Search product names, descriptions, categories, and exact SKUs.

@@ -2,17 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { cloudWorkspaceErrorMessage } from "./cloud-workspace-error.ts";
 
-test("cloud workspace entitlement failures are concise and account-specific", () => {
-  const error = new Error(
-    "[CONVEX Q(cloudWorkspace:workspaceSnapshot)] Server Error Uncaught ConvexError: Volt Pro subscription or complimentary access required at requireFullAppEntitlement (../convex/cloudWorkspace.ts:123:0)",
-  );
-
-  assert.equal(
-    cloudWorkspaceErrorMessage(error),
-    "Cloud scanner sync requires Volt Pro or complimentary access for this account.",
-  );
-});
-
 test("cloud workspace authentication and unknown failures do not expose internals", () => {
   assert.equal(
     cloudWorkspaceErrorMessage(

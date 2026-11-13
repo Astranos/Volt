@@ -16,7 +16,7 @@ Volt combines market search, offer calculation, and listing helpers in a Chrome 
 - Sync captures to your account workspace and insert text into a selected Chrome computer.
 - Open tabs, bookmarks, history, and tools from a keyboard-driven command menu.
 
-Volt is actively developed. Chrome's browser tools are free. Signed-in iPhone users can scan and keep local history without Pro; cloud workspace and mobile capture sync require Pro. The App Clip offers temporary, checkout-free capture through a workspace guest grant. See [authentication and billing](docs/authentication-and-billing.md) for the access model.
+Volt is actively developed. Chrome's browser tools are free. Every signed-in account can scan, sync captures, and use the cloud workspace for free, with a rolling seven-day capture history. Nothing is sold on the web. The App Clip offers temporary, checkout-free capture through a workspace guest grant. See [authentication and billing](docs/authentication-and-billing.md) for the access model.
 
 ## Start contributing
 
@@ -42,7 +42,7 @@ Start with an [open issue](https://github.com/juanquenga/Volt/issues), or report
 | [apps/kiosk](apps/kiosk/README.md) | Customer-facing web catalog for store tablets. |
 | [apps/kiosk-ios](apps/kiosk-ios/README.md) | Separate native iPad portal app for Guided Access. |
 | `apps/web` | TanStack Start web app, product pages, and account tools. |
-| [convex](convex/README.md) | Account authorization, scanner workspace, cursor delivery, catalog data, and legacy signaling. |
+| [convex](convex/README.md) | Account authorization, scanner workspace, cursor delivery, and legacy signaling. |
 
 Convex stores capture metadata; private photo bytes go directly to Cloudflare R2 through short-lived signed URLs. The installed app keeps a durable local outbox, so capture does not depend on an online computer.
 

@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Sign in to the Volt iPhone app with a QR code from Chrome." />
+    <meta name="robots" content="noindex" />
+    <meta name="apple-itunes-app" content="app-id=6771770148" />
+    <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/app-icon-192.png" />
+    <title>Sign in to Volt</title>
+    <style>
+      /* Shown when a sign-in QR from Chrome opens in a browser instead of the app.
+         Same iOS grouped-list look as clip.html. */
+      :root {
+        color-scheme: light dark;
+        --bg: #f2f2f7;
+        --group: #ffffff;
+        --label: #000000;
+        --secondary: rgb(60 60 67 / 60%);
+        --separator: rgb(60 60 67 / 29%);
+        /* Darker than system green so white text clears 4.5:1 contrast. */
+        --green: #1a7f37;
+        --tint: #248a3d;
+        font: 17px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+        color: var(--label);
+        background: var(--bg);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #000000;
+          --group: #1c1c1e;
+          --label: #ffffff;
+          --secondary: rgb(235 235 245 / 60%);
+          --separator: rgb(84 84 88 / 65%);
+          --tint: #30d158;
+        }
+      }
+
+      * { box-sizing: border-box; }
+      body { margin: 0; -webkit-font-smoothing: antialiased; }
+      a { color: inherit; text-decoration: none; -webkit-tap-highlight-color: transparent; }
+      a:focus-visible { outline: 2px solid var(--tint); outline-offset: 2px; border-radius: 10px; }
+
+      main {
+        width: min(100%, 480px);
+        margin-inline: auto;
+        padding: max(28px, env(safe-area-inset-top)) 16px max(32px, env(safe-area-inset-bottom));
+      }
+
+      .app { display: grid; grid-template-columns: 96px 1fr; gap: 16px; align-items: center; padding: 8px 4px 0; }
+      .app img { width: 96px; height: 96px; border-radius: 22px; box-shadow: 0 0 0 0.5px var(--separator); }
+      .app h1 { margin: 0; font-size: 22px; line-height: 1.15; font-weight: 700; letter-spacing: -0.01em; }
+      .app p { margin: 2px 0 10px; color: var(--secondary); font-size: 15px; }
+      .get {
+        display: inline-block; padding: 6px 18px; border-radius: 999px;
+        background: var(--green); color: #fff; font-size: 15px; font-weight: 700;
+      }
+
+      h2 { margin: 36px 4px 8px; font-size: 28px; line-height: 1.15; font-weight: 700; letter-spacing: -0.015em; }
+      .lede { margin: 0 4px; color: var(--secondary); }
+
+      .group-title { margin: 28px 20px 7px; color: var(--secondary); font-size: 13px; }
+      .group { margin: 0; padding: 0; list-style: none; background: var(--group); border-radius: 12px; overflow: hidden; }
+      .row { position: relative; display: flex; gap: 14px; align-items: center; min-height: 52px; padding: 11px 16px; }
+      /* Inset separators, like UITableView: they start where the row text starts. */
+      .row + .row::before {
+        content: ""; position: absolute; top: 0; right: 0; left: 56px;
+        border-top: 0.5px solid var(--separator);
+      }
+      .row .n {
+        flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+        background: var(--green); color: #fff; font-size: 14px; font-weight: 700;
+      }
+      .row .text { flex: 1; min-width: 0; }
+      .row .icon { flex: none; width: 29px; height: 29px; border-radius: 7px; display: grid; place-items: center; color: #fff; }
+      .row .icon svg, .row .icon img { width: 17px; height: 17px; }
+      .row .chev { flex: none; width: 8px; height: 13px; color: var(--secondary); }
+      a.row:active { background: var(--separator); }
+
+      .note { margin: 8px 20px 0; color: var(--secondary); font-size: 13px; }
+
+      footer { margin: 36px 20px 0; font-size: 13px; display: flex; gap: 20px; }
+      footer a { color: var(--tint); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="app" aria-label="Volt">
+        <img src="/app-icon-512.png" alt="" />
+        <div>
+          <h1>Volt</h1>
+          <p>Scan text and barcodes into Chrome</p>
+          <a class="get" href="https://apps.apple.com/us/app/volt-scanner/id6771770148">Get the app</a>
+        </div>
+      </section>
+
+      <h2>Scan this from the Volt app</h2>
+      <p class="lede">
+        This QR code signs in the Volt iPhone app. It only works in the app, on the iPhone that asked to sign in.
+      </p>
+
+      <p class="group-title" id="steps">On your iPhone</p>
+      <ol class="group" aria-labelledby="steps">
+        <li class="row"><span class="n">1</span><span class="text">Open Volt and tap Sign in with Chrome</span></li>
+        <li class="row"><span class="n">2</span><span class="text">Enter your email, then click the Volt notification in Chrome</span></li>
+        <li class="row"><span class="n">3</span><span class="text">Scan the QR code Chrome shows</span></li>
+      </ol>
+      <p class="note">The sign-in code in this link is never sent to this website.</p>
+
+      <footer>
+        <a href="/privacy">Privacy</a>
+        <a href="https://github.com/JuanQuenga/Volt/issues">Support</a>
+      </footer>
+    </main>
+  </body>
+</html>

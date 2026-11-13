@@ -108,7 +108,6 @@ export type BackgroundActionMessage =
   | { action: "getActiveTab" }
   | { action: "FETCH_CSV_LINKS"; url?: string }
   | { action: "toggleDebug"; value?: boolean }
-  | { action: "generateQr"; text?: string; size?: number }
   | { action: "ping" }
   | { action: "toggleSidepanelTool"; tool?: string }
   | { action: "previousTab" }
@@ -118,7 +117,6 @@ export type BackgroundActionMessage =
   | { action: "copyToClipboard"; text?: string }
   | { action: "readFromClipboard" }
   | { action: "openDevTools" }
-  | { action: "goBackToPOS" }
   | { action: "checkSiteStatus"; domain?: string }
   | { action: "updateDisabledSites"; sites?: unknown[] }
   | { action: "toggleCurrentSite"; enabled?: boolean; domain?: string };
@@ -157,7 +155,6 @@ const ACTIONS_WITH_NO_FIELDS = new Set([
   "closeTab",
   "readFromClipboard",
   "openDevTools",
-  "goBackToPOS",
 ]);
 
 export function isMessageRecord(value: unknown): value is MessageRecord {
@@ -367,12 +364,6 @@ function parseActionMessage(action: string, message: MessageRecord): RuntimeMess
       return { action, section: optionalString(message.section) };
     case "toggleDebug":
       return { action, value: optionalBoolean(message.value) };
-    case "generateQr":
-      return {
-        action,
-        text: optionalString(message.text),
-        size: optionalNumber(message.size),
-      };
     case "copyToClipboard":
       return { action, text: optionalString(message.text) };
     case "checkSiteStatus":

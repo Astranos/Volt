@@ -3,7 +3,6 @@ import { describe, expect, test, vi } from "vitest";
 import {
   buildOpenRouterCatalogRequest,
   buildOpenRouterRequest,
-  catalogIdentityMatchScore,
   isValidUPCA,
   normalizeItemName,
   normalizeUPCA,
@@ -25,80 +24,6 @@ describe("AI scanner parsing", () => {
     expect(normalizeItemName("  Super   Mario\n64  ")).toBe("Super Mario 64");
     expect(normalizeItemName("unknown")).toBeNull();
     expect(normalizeItemName("x".repeat(201))).toBeNull();
-  });
-
-  test("matches catalog identities by title and rejects a conflicting platform", () => {
-    const identity = {
-      name: "Grand Theft Auto: San Andreas",
-      platform: "PS2",
-      edition: null,
-      region: "US",
-      brand: null,
-      model: null,
-      mpn: null,
-      color: null,
-      storage: null,
-      carrier: null,
-    };
-    expect(catalogIdentityMatchScore(identity, {
-      title: "Grand Theft Auto San Andreas",
-      platform: "Sony PlayStation 2",
-      edition: null,
-      brand: null,
-      model: null,
-      mpn: null,
-      color: null,
-      storage: null,
-      carrier: null,
-    })).toBeGreaterThan(0);
-    expect(catalogIdentityMatchScore(identity, {
-      title: "Grand Theft Auto San Andreas",
-      platform: "Xbox One",
-      edition: null,
-      brand: null,
-      model: null,
-      mpn: null,
-      color: null,
-      storage: null,
-      carrier: null,
-    })).toBeNull();
-  });
-
-  test("matches a concise visual identity to a production-shaped catalog listing", () => {
-    const identity = {
-      name: "Apple iPhone 17",
-      platform: null,
-      edition: null,
-      region: null,
-      brand: "Apple",
-      model: "iPhone 17",
-      mpn: "MG494LL/A",
-      color: "Lavender",
-      storage: "256GB",
-      carrier: "T-Mobile",
-    };
-    expect(catalogIdentityMatchScore(identity, {
-      title: "New T-Mobile Apple iPhone 17 256GB Lavender MG494LL/A",
-      platform: null,
-      edition: null,
-      brand: "Apple",
-      model: "iPhone 17",
-      mpn: "MG494LL/A",
-      color: "Lavender",
-      storage: "256GB",
-      carrier: "T-Mobile",
-    })).toBeGreaterThan(0);
-    expect(catalogIdentityMatchScore(identity, {
-      title: "New T-Mobile Apple iPhone 17 512GB Lavender MG495LL/A",
-      platform: null,
-      edition: null,
-      brand: "Apple",
-      model: "iPhone 17",
-      mpn: "MG495LL/A",
-      color: "Lavender",
-      storage: "512GB",
-      carrier: "T-Mobile",
-    })).toBeNull();
   });
 
   test("parses strict mode-specific JSON and returns null for invalid values", () => {
@@ -153,7 +78,7 @@ describe("AI scanner parsing", () => {
     expect(buildOpenRouterRequest("name", new ArrayBuffer(0))).toContain("image/jpeg");
   });
 
-  test("identifies from the image before a bounded catalog search and PriceCharting verification", async () => {
+  test("identifies from the image before a bounded web search and PriceCharting verification", async () => {
     let openRouterCallCount = 0;
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
@@ -170,11 +95,18 @@ describe("AI scanner parsing", () => {
         headers: { location: "https://www.pricecharting.com/game/playstation-2/grand-theft-auto-san-andreas?q=710425274107" },
       });
     });
+    const trace: unknown[] = [];
     const result = await requestOpenRouterAnalysis("upc", Uint8Array.from([1, 2, 3]).buffer, {
       apiKey: "server-only-key",
       fetchImpl,
+      onTrace: (event) => trace.push(event),
     });
     expect(result.value).toBe("710425274107");
+    expect(trace).toEqual([
+      expect.objectContaining({ stage: "identity", outcome: "resolved" }),
+      expect.objectContaining({ stage: "catalog", source: "web-search", outcome: "candidate" }),
+      expect.objectContaining({ stage: "verification", outcome: "verified" }),
+    ]);
     expect(fetchImpl).toHaveBeenCalledTimes(3);
     const visionBody = JSON.parse(String(fetchImpl.mock.calls[0][1]?.body)) as {
       tools?: unknown;
@@ -205,41 +137,6 @@ describe("AI scanner parsing", () => {
       storage: null,
       carrier: null,
     })).not.toContain("image_url");
-  });
-
-  test("returns a production catalog UPC without running the web-search fallback", async () => {
-    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(JSON.stringify({
-        choices: [{ message: { content: '{"name":"Galaxian","platform":"Atari 5200","edition":null,"region":"US"}' } }],
-      }), { status: 200 }),
-    );
-    const trace: unknown[] = [];
-    const result = await requestOpenRouterAnalysis("upc", Uint8Array.from([1, 2, 3]).buffer, {
-      apiKey: "server-only-key",
-      fetchImpl,
-      catalogLookup: async () => ({
-        upc: "077000052063",
-        title: "Galaxian",
-        platform: "Atari 5200",
-        edition: null,
-        brand: null,
-        model: null,
-        mpn: null,
-        color: null,
-        storage: null,
-        carrier: null,
-      }),
-      onTrace: (event) => trace.push(event),
-    });
-
-    expect(result).toMatchObject({ value: "077000052063", identifiedName: "Galaxian" });
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
-    expect(trace).toContainEqual(expect.objectContaining({
-      stage: "catalog",
-      outcome: "candidate",
-      source: "product-catalog",
-      upc: "077000052063",
-    }));
   });
 
   test("stops after image identification when no game can be identified", async () => {

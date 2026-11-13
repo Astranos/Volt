@@ -1,5 +1,5 @@
 import { chromeProfileAuth } from "./http/chromeProfileAuth";
-import { stripeWebhook } from "./http/billing";
+import { mobileSignInRedeemHandler, mobileSignInRequestHandler } from "./http/mobileSignIn";
 import { shopifyCallback } from "./http/shopify";
 import { appUninstalled, customerDataRequest, customerRedact, shopRedact } from "./http/shopifyCompliance";
 import { options as shopifyAdminOptions, search as shopifyAdminSearch, status as shopifyAdminStatus, yesterday as shopifyAdminYesterday } from "./http/shopifyEmbeddedAdmin";
@@ -19,15 +19,12 @@ import { runAndRespond } from "./http/signalLogging";
 import { signalBodyFromRequest, stringFrom } from "./scannerSignal/httpAdapter";
 import {
   type AIScannerMode,
-  type ProductIdentity,
-  type AIScannerCatalogMatch,
   type AIScannerTraceEvent,
   AI_SCANNER_MAX_IMAGE_BYTES,
   requestOpenRouterAnalysis,
   AIScannerError,
 } from "./aiScanner";
 import { type AIScannerReservation } from "./aiScannerQuota";
-import { productApiCollectionHandler, productApiItemHandler } from "./http/products";
 import { signalHandler } from "./http/signal";
 import { mobileComputerListHandler, appClipComputerListHandler } from "./http/computers";
 import { mobileOcrFlagCreateHandler, mobileOcrFlagFinalizeHandler } from "./http/ocrFlags";
@@ -434,12 +431,6 @@ const refundAIScannerRequestRef = makeFunctionReference<
   { status: "refunded" | "succeeded"; quota: AIScannerReservation["quota"]; value?: string | null; format?: string }
 >("aiScannerQuota:refundAIScannerRequest");
 
-const findProductForAIScannerRef = makeFunctionReference<
-  "query",
-  ProductIdentity,
-  AIScannerCatalogMatch | null
->("productData:findProductForAIScanner");
-
 function logAIScannerEvent(
   requestId: string,
   mode: AIScannerMode,
@@ -489,7 +480,6 @@ const mobileAIScannerHandler = httpAction(async (ctx, request) => {
   try {
     logAIScannerEvent(requestId, mode, { stage: "request", outcome: "started", imageBytes: imageBytes.byteLength });
     const analysis = await requestOpenRouterAnalysis(mode, imageBytes, {
-      catalogLookup: async (identity) => await ctx.runQuery(findProductForAIScannerRef, identity),
       onTrace: (event) => logAIScannerEvent(requestId, mode, event),
     });
     const completed = await ctx.runMutation(completeAIScannerRequestRef, { deviceId, deviceSecret, requestId, mode, value: analysis.value, format: analysis.format });
@@ -836,6 +826,14 @@ const appClipGuestPhotoUploadHandler = appClipGuestBatchActionHandler("upload");
 
 const appClipGuestBatchFinalizeHandler = appClipGuestBatchActionHandler("finalize");
 
+http.route({ path: "/api/mobile/sign-in/request", method: "POST", handler: mobileSignInRequestHandler });
+
+http.route({ path: "/api/mobile/sign-in/request", method: "OPTIONS", handler: mobileSignInRequestHandler });
+
+http.route({ path: "/api/mobile/sign-in/redeem", method: "POST", handler: mobileSignInRedeemHandler });
+
+http.route({ path: "/api/mobile/sign-in/redeem", method: "OPTIONS", handler: mobileSignInRedeemHandler });
+
 http.route({ path: "/api/mobile/enrollment/exchange", method: "POST", handler: mobileEnrollmentExchangeHandler });
 
 http.route({ path: "/api/mobile/enrollment/exchange", method: "OPTIONS", handler: mobileEnrollmentExchangeHandler });
@@ -936,14 +934,6 @@ http.route({ path: "/api/workspace/results/restore", method: "POST", handler: wo
 
 http.route({ path: "/api/workspace/results/restore", method: "OPTIONS", handler: workspaceResultRestoreHandler });
 
-http.route({ path: "/v1/products", method: "GET", handler: productApiCollectionHandler });
-
-http.route({ path: "/v1/products", method: "OPTIONS", handler: productApiCollectionHandler });
-
-http.route({ pathPrefix: "/v1/products/", method: "GET", handler: productApiItemHandler });
-
-http.route({ pathPrefix: "/v1/products/", method: "OPTIONS", handler: productApiItemHandler });
-
 http.route({ path: "/api/signal", method: "GET", handler: signalHandler });
 
 http.route({ path: "/api/signal", method: "POST", handler: signalHandler });
@@ -969,7 +959,5 @@ http.route({ path: "/api/shopify/admin/search", method: "POST", handler: shopify
 http.route({ path: "/api/shopify/admin/status", method: "OPTIONS", handler: shopifyAdminOptions });
 http.route({ path: "/api/shopify/admin/yesterday", method: "OPTIONS", handler: shopifyAdminOptions });
 http.route({ path: "/api/shopify/admin/search", method: "OPTIONS", handler: shopifyAdminOptions });
-
-http.route({ path: "/api/billing/stripe/webhook", method: "POST", handler: stripeWebhook });
 
 export default http;

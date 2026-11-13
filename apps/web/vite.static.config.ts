@@ -12,7 +12,6 @@ export default defineConfig({
         main: path.resolve(__dirname, "index.html"),
         app: path.resolve(__dirname, "app.html"),
         shopify: path.resolve(__dirname, "shopify.html"),
-        upcSearch: path.resolve(__dirname, "upc-search.html"),
       },
     },
   },

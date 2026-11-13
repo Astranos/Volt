@@ -202,6 +202,7 @@ export class CloudWorkspaceSubscriptions {
   private workspaceSnapshotUnsubscribe: (() => void) | null = null;
   private cursorDeliveriesUnsubscribe: (() => void) | null = null;
   private dictationDraftsUnsubscribe: (() => void) | null = null;
+  private signInRequestsUnsubscribe: (() => void) | null = null;
   private computerRegistrationHeartbeat: ReturnType<
     typeof createComputerRegistrationHeartbeat
   > | null = null;
@@ -298,9 +299,11 @@ export class CloudWorkspaceSubscriptions {
     this.workspaceSnapshotUnsubscribe?.();
     this.cursorDeliveriesUnsubscribe?.();
     this.dictationDraftsUnsubscribe?.();
+    this.signInRequestsUnsubscribe?.();
     this.workspaceSnapshotUnsubscribe = null;
     this.cursorDeliveriesUnsubscribe = null;
     this.dictationDraftsUnsubscribe = null;
+    this.signInRequestsUnsubscribe = null;
     this.computerRegistrationHeartbeat?.stop();
     this.computerRegistrationHeartbeat = null;
     this.installationId = null;
@@ -343,7 +346,8 @@ export class CloudWorkspaceSubscriptions {
     const subscriptionsActive =
       this.workspaceSnapshotUnsubscribe !== null
       && this.cursorDeliveriesUnsubscribe !== null
-      && this.dictationDraftsUnsubscribe !== null;
+      && this.dictationDraftsUnsubscribe !== null
+      && this.signInRequestsUnsubscribe !== null;
     const clientAuthenticated = subject !== null && this.clientAuthSubject() === subject;
     if (
       this.hasReconciledSubject
@@ -434,6 +438,21 @@ export class CloudWorkspaceSubscriptions {
       },
       (error) => console.warn("[Volt Cloud Workspace] dictation subscription failed", error),
     );
+    // iPhone QR sign-in requests for this account; the background turns each
+    // one into a notification.
+    this.signInRequestsUnsubscribe = this.client.onUpdate(
+      api.mobileSignIn.pendingForComputer,
+      {},
+      (requests) => {
+        void chrome.runtime.sendMessage({
+          action: "workspaceOffscreenSignInRequestsChanged",
+          subject: snapshotSubject,
+          accountEpoch: epoch,
+          requests,
+        }).catch(() => undefined);
+      },
+      (error) => console.warn("[Volt Cloud Workspace] sign-in request subscription failed", error),
+    );
     this.startComputerRegistration();
   }
 
@@ -485,6 +504,20 @@ export class CloudWorkspaceSubscriptions {
     return this.client.mutation(api.cloudWorkspace.createEnrollment, {
       kind: "ios",
       label,
+    });
+  }
+
+  async issueMobileSignInQr(requestId: string) {
+    await this.requireSignedIn("Sign in to Volt in Chrome to show this QR code.");
+    return this.client.mutation(api.mobileSignIn.issueQr, {
+      requestId: requestId as Id<"mobileSignInRequests">,
+    });
+  }
+
+  async dismissMobileSignIn(requestId: string) {
+    await this.requireSignedIn("Sign in to Volt in Chrome first.");
+    return this.client.mutation(api.mobileSignIn.dismiss, {
+      requestId: requestId as Id<"mobileSignInRequests">,
     });
   }
 

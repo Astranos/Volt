@@ -4,6 +4,7 @@ import { makeFunctionReference } from 'convex/server';
 import { ConvexError } from 'convex/values';
 import { z } from 'zod';
 import { createCatalogService } from './catalog.js';
+import { canonicalStoreSlug } from '../src/store-address.js';
 import { isStoreSlug } from './stores.js';
 import { createRequestInputSchema, updateRequestInputSchema, queueResponseSchema, requestReceiptSchema, productRequestSchema } from '../src/requests.js';
 import type { ProductRequest, RequestReceipt, QueueResponse, UpdateRequestInput } from '../src/requests.js';
@@ -110,19 +111,21 @@ export function createRequestHandlers({ getCatalog = catalogService.getCatalog, 
           const params = new URL(request.url).searchParams;
           const storeSlug = params.get('store');
           if (!storeSlug || params.getAll('store').length !== 1 || !isStoreSlug(storeSlug)) throw failure(400, 'A valid store is required.');
-          return Response.json(parseBackend(queueResponseSchema, await db.list({ secret: configuration.secret, storeSlug })), { headers });
+          const queue = parseBackend(queueResponseSchema, await db.list({ secret: configuration.secret, storeSlug: canonicalStoreSlug(storeSlug) }));
+          // Older native clients also compare queue and status response slugs.
+          return Response.json({ ...queue, requests: queue.requests.map(row => ({ ...row, storeSlug })) }, { headers });
         }
         const raw = await readJson(request);
         if (request.method === 'PATCH') {
           const input = updateRequestInputSchema.parse(raw);
           if (!isStoreSlug(input.storeSlug)) throw failure(400, 'A valid store is required.');
-          const result = await db.setStatus({ ...input, secret: configuration.secret });
+          const result = await db.setStatus({ ...input, storeSlug: canonicalStoreSlug(input.storeSlug), secret: configuration.secret });
           if (!result) throw failure(404, 'Request not found or expired.');
-          return Response.json(parseBackend(productRequestSchema, result), { headers });
+          return Response.json({ ...parseBackend(productRequestSchema, result), storeSlug: input.storeSlug }, { headers });
         }
         const input = createRequestInputSchema.parse(raw);
         if (!isStoreSlug(input.storeSlug) || input.requestKey.split(':')[1] !== input.variantId) throw failure(400, 'Invalid request.');
-        const catalog = await getCatalog(input.storeSlug);
+        const catalog = await getCatalog(canonicalStoreSlug(input.storeSlug));
         if (catalog.status !== 'fresh' || now() - Date.parse(catalog.checkedAt) >= 60_000) throw failure(503, 'Inventory needs to refresh before requesting this item.');
         const product = catalog.products.find(item => item.id === input.productId);
         if (!product) throw failure(404, 'This item is no longer available.');
@@ -130,7 +133,7 @@ export function createRequestHandlers({ getCatalog = catalogService.getCatalog, 
         if (!variant) throw failure(409, 'This item is no longer available.');
         if (controller.signal.aborted) throw failure(503, 'Item requests timed out. Please try again.');
         const result = await db.enqueue({
-          secret: configuration.secret, storeSlug: input.storeSlug, requestKey: input.requestKey,
+          secret: configuration.secret, storeSlug: canonicalStoreSlug(input.storeSlug), requestKey: input.requestKey,
           clientHash: createHmac('sha256', configuration.secret).update(input.requestKey.slice(0, input.requestKey.indexOf(':')).toLowerCase()).digest('hex'),
           product: { productId: product.id, variantId: variant.id, title: product.title.slice(0, 500), variantTitle: variant.title.slice(0, 300), sku: variant.sku, imageUrl: product.images[0] ?? null, priceCents: variant.priceCents, productUrl: product.url },
         });

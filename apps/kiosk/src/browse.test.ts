@@ -20,7 +20,7 @@ const phone: Product = {
   details: [{ kind: 'paragraph', text: 'Unlocked blue phone' }],
   publishedAt: "2026-09-01T00:00:00Z",
   images: [],
-  url: "https://taylormi.paymore.com/products/phone",
+  url: "https://paymore-taylor.myshopify.com/products/phone",
   variants: [{ id: "v1", title: "Blue", priceCents: 19900, sku: 'MI01-8773A-E9' }],
 };
 const tablet: Product = {
@@ -34,11 +34,15 @@ const tablet: Product = {
   publishedAt: "2026-09-02T00:00:00Z",
 };
 describe("kiosk browsing", () => {
-  it('turns a PayMore address into a local store route only', () => {
-    expect(storeSlugFromInput('https://southfieldmi.paymore.com/')).toBe('southfieldmi');
-    expect(storeSlugFromInput('SOUTHFIELDMI.paymore.com')).toBe('southfieldmi');
-    expect(storeSlugFromInput('taylormi')).toBe('taylormi');
-    for (const input of ['https://evil.example/', 'https://a.b.paymore.com/', 'https://user@taylormi.paymore.com/', 'https://taylormi.paymore.com:8443/', 'https://taylormi.paymore.com/products/item', 'javascript:alert(1)', 'https://taylormi.paymore.com/?next=evil']) {
+  it('turns a Shopify address into a local store route only', () => {
+    expect(storeSlugFromInput('https://paymore-southfield.myshopify.com/')).toBe('paymore-southfield');
+    expect(storeSlugFromInput('PAYMORE-SOUTHFIELD.MYSHOPIFY.COM')).toBe('paymore-southfield');
+    expect(storeSlugFromInput('paymore-taylor')).toBe('paymore-taylor');
+    expect(storeSlugFromInput('taylormi')).toBe('paymore-taylor');
+    expect(storeSlugFromInput('southfieldmi')).toBe('paymore-southfield');
+    expect(storeSlugFromInput('pm.voltresale.app/taylormi')).toBe('paymore-taylor');
+    expect(storeSlugFromInput('https://pm.voltresale.app/paymore-southfield/requests')).toBe('paymore-southfield');
+    for (const input of ['https://taylormi.paymore.com/', 'https://a.b.myshopify.com/', 'http://shop.myshopify.com/', 'https://pm.voltresale.app/abc/other', 'https://pm.voltresale.app/abc?x=1', 'https://evil.example/', 'https://a.b.paymore.com/', 'https://user@paymore-taylor.myshopify.com/', 'https://paymore-taylor.myshopify.com:8443/', 'https://paymore-taylor.myshopify.com/products/item', 'javascript:alert(1)', 'https://paymore-taylor.myshopify.com/?next=evil']) {
       expect(storeSlugFromInput(input)).toBeNull();
     }
   });
@@ -78,9 +82,11 @@ describe("kiosk browsing", () => {
     expect(money(9999)).toBe("$99.99");
   });
   it("allows a single public slug only", () => {
-    expect(routeSlug("/taylormi/")).toBe("taylormi");
+    expect(routeSlug("/paymore-taylor/")).toBe("paymore-taylor");
+    expect(routeSlug("/taylormi/")).toBe("paymore-taylor");
+    expect(routeSlug("/southfieldmi")).toBe("paymore-southfield");
     expect(routeSlug("/")).toBeNull();
-    expect(routeSlug("/taylormi/products")).toBeNull();
+    expect(routeSlug("/paymore-taylor/products")).toBeNull();
     expect(routeSlug("/https://example.com")).toBeNull();
   });
 });

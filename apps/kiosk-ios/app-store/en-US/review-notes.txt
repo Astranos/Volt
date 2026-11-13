@@ -1,7 +1,7 @@
 Volt Kiosk is a free native SwiftUI iPad catalog for independently operated PayMore franchise stores. It supports iPadOS 17+, landscape, and portrait. No login, subscription, payment account, scanner app, or hardware is required. Internet access is required for inventory, photos, and requests.
 
 Start and browse
-1. Launch the app. Enter taylormi or taylormi.paymore.com and tap Open store for Taylor, Michigan's live inventory. Setup verifies and saves the store. The saved store reopens on later launches.
+1. Launch the app. Enter the Taylor store's .myshopify.com address or its legacy shortcut taylormi and tap Open store for Taylor, Michigan's live inventory. Setup verifies and saves the store. The saved store reopens on later launches.
 2. Search for a visible product name or SKU. Tap a category, choose a Budget limit, and change Sort. Clear search and Clear filters restore the full catalog. Show more items loads additional visible cards. Inventory and item names can change because this is live stock.
 3. Tap an item card. Inspect the price, exact SKU, available variants, condition notes, specifications, and included-item information. Scroll to see the full listing. The photo gallery sits above the summary; thumbnails are beside the active square photo. Use the side Previous item and Next item arrows to browse neighboring items. Close returns to the catalog.
 4. Tap a photo thumbnail to change the main photo. Tap the main photo to open the full-screen viewer. Swipe between photos, tap a visible neighboring photo peek, or use Previous and Next. Pinch to zoom up to 4x, pan the enlarged photo, and use Reset zoom. Done closes the viewer. Items with one photo naturally have no additional photo to select.

@@ -26,7 +26,7 @@ describe('catalog response contract', () => {
       now: () => Date.parse('2026-09-17T16:00:00Z'),
     });
 
-    const response = await service.getCatalog('taylormi');
+    const response = await service.getCatalog('paymore-taylor');
     expect(() => catalogResponseSchema.parse(response)).not.toThrow();
     expect(response.products[0]?.publishedAt).toBe('2026-09-17T16:00:00.000Z');
     expect(response.checkedAt).toBe('2026-09-17T16:00:00.000Z');

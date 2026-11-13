@@ -17,7 +17,7 @@ function response(products: unknown[]) { return Response.json({ products }); }
 describe('approved Shopify catalog', () => {
   it('preserves exact staff lookup SKUs and structured specifications', async () => {
     const item = { ...product(), variants: product().variants.map(variant => ({ ...variant, sku: 'MI01-8773A-E9' })) };
-    const data = await createCatalogService({ fetchImpl: vi.fn<typeof fetch>().mockResolvedValue(response([item])) }).getCatalog('taylormi');
+    const data = await createCatalogService({ fetchImpl: vi.fn<typeof fetch>().mockResolvedValue(response([item])) }).getCatalog('paymore-taylor');
     expect(data.products[0]?.variants[0]?.sku).toBe('MI01-8773A-E9');
     expect(data.store).not.toHaveProperty('internalCode');
     expect(data.products[0]?.details).toContainEqual({ kind: 'specifications', rows: [{ label: 'Condition', value: 'Good' }] });
@@ -27,31 +27,31 @@ describe('approved Shopify catalog', () => {
     const tablet = { ...product(2), title: 'Gaming tablet', body_html: '' };
     const accessory = { ...product(3), title: 'Nintendo camera accessory', product_type: 'Video Games' };
     const phone = { ...product(4), title: 'Apple iPhone Air', body_html: '<table><tr><td>Collection</td><td>Tablets</td></tr></table>' };
-    const data = await createCatalogService({ fetchImpl: vi.fn<typeof fetch>().mockResolvedValue(response([laptop, tablet, accessory, phone])) }).getCatalog('taylormi');
+    const data = await createCatalogService({ fetchImpl: vi.fn<typeof fetch>().mockResolvedValue(response([laptop, tablet, accessory, phone])) }).getCatalog('paymore-taylor');
     expect(data.products.map(item => item.category)).toEqual(['Computers', 'Tablets', 'Gaming', 'Phones']);
   });
 
   it('prominently labels explicitly broken devices even when cosmetic condition says Good', async () => {
     const item = { ...product(), title: 'Broken Unlocked Apple iPhone 12 Pro Max READ' };
-    const data = await createCatalogService({ fetchImpl: vi.fn<typeof fetch>().mockResolvedValue(response([item])) }).getCatalog('taylormi');
+    const data = await createCatalogService({ fetchImpl: vi.fn<typeof fetch>().mockResolvedValue(response([item])) }).getCatalog('paymore-taylor');
     expect(data.products[0]?.condition).toBe('For parts / repair');
   });
   it('maps listings and available variant ranges without exposing internal identifiers', async () => {
     const item = product();
     item.variants.push({ id: 11, title: 'Another', price: '299.99', available: true }, { id: 12, title: 'Sold', price: '1.00', available: false });
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(response([item]));
-    const data = await createCatalogService({ fetchImpl }).getCatalog('taylormi');
+    const data = await createCatalogService({ fetchImpl }).getCatalog('paymore-taylor');
     expect(data.products[0]).toMatchObject({ id: '1', category: 'Phones', condition: 'Good', priceCents: 19999, priceMaxCents: 29999 });
     expect(data.products[0]?.variants).toHaveLength(2);
     expect(JSON.stringify(data.store)).not.toMatch(/MI01|internalCode/);
-    expect(fetchImpl.mock.calls[0]?.[0]).toBe('https://taylormi.paymore.com/products.json?limit=250&page=1');
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe('https://paymore-taylor.myshopify.com/products.json?limit=250&page=1');
     expect(fetchImpl.mock.calls[0]?.[1]?.redirect).toBe('error');
   });
 
   it('omits sold items, preserves separate identities, and never guesses condition', async () => {
     const sold = product(2); sold.variants[0] = { id: 20, title: 'Sold', price: '2.00', available: false };
     const item = product(); item.body_html = '<p>Great phone</p>';
-    const data = await createCatalogService({ fetchImpl: vi.fn<typeof fetch>().mockResolvedValue(response([item, sold, product(3)])) }).getCatalog('taylormi');
+    const data = await createCatalogService({ fetchImpl: vi.fn<typeof fetch>().mockResolvedValue(response([item, sold, product(3)])) }).getCatalog('paymore-taylor');
     expect(data.products.map((p) => p.id)).toEqual(['1', '3']);
     expect(data.products[0]?.condition).toBe('See item details');
   });
@@ -60,7 +60,7 @@ describe('approved Shopify catalog', () => {
     const fetchImpl = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(response(Array.from({ length: 250 }, (_, i) => product(i + 1))))
       .mockResolvedValueOnce(response([product(251)]));
-    const data = await createCatalogService({ fetchImpl }).getCatalog('taylormi');
+    const data = await createCatalogService({ fetchImpl }).getCatalog('paymore-taylor');
     expect(data.products).toHaveLength(251);
     expect(fetchImpl.mock.calls[1]?.[0]).toContain('page=2');
   });
@@ -71,27 +71,27 @@ describe('approved Shopify catalog', () => {
     { ...product(), published_at: 'bad' },
   ])('rejects malformed records without publishing a partial catalog', async (bad) => {
     const service = createCatalogService({ fetchImpl: vi.fn<typeof fetch>().mockResolvedValue(response([product(), bad])) });
-    await expect(service.getCatalog('taylormi')).rejects.toMatchObject({ statusCode: 503 });
+    await expect(service.getCatalog('paymore-taylor')).rejects.toMatchObject({ statusCode: 503 });
   });
 
   it('keeps successful timestamp on stale fallback, then fails closed at five minutes', async () => {
     let time = 1000000;
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(response([product()])).mockRejectedValue(new Error('secret upstream detail'));
     const service = createCatalogService({ fetchImpl, now: () => time });
-    const first = await service.getCatalog('taylormi');
+    const first = await service.getCatalog('paymore-taylor');
     time += 59999;
-    expect(await service.getCatalog('taylormi')).toEqual(first);
+    expect(await service.getCatalog('paymore-taylor')).toEqual(first);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     time += 1;
-    expect(await service.getCatalog('taylormi')).toEqual({ ...first, status: 'stale' });
+    expect(await service.getCatalog('paymore-taylor')).toEqual({ ...first, status: 'stale' });
     time += 240000;
-    await expect(service.getCatalog('taylormi')).rejects.toMatchObject({ statusCode: 503 });
+    await expect(service.getCatalog('paymore-taylor')).rejects.toMatchObject({ statusCode: 503 });
   });
 
   it('deduplicates concurrent fetches', async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => response([product()]));
     const service = createCatalogService({ fetchImpl });
-    const results = await Promise.all([service.getCatalog('taylormi'), service.getCatalog('taylormi')]);
+    const results = await Promise.all([service.getCatalog('taylormi'), service.getCatalog('paymore-taylor')]);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     expect(results[0]).toEqual(results[1]);
   });
@@ -102,26 +102,26 @@ describe('approved Shopify catalog', () => {
     await expect(service.getCatalog('mi01')).rejects.toMatchObject({ statusCode: 404 });
     await expect(service.getCatalog('evil.example')).rejects.toMatchObject({ statusCode: 404 });
     expect(fetchImpl).not.toHaveBeenCalled();
-    const store = getStore('taylormi');
+    const store = getStore('paymore-taylor');
     if (store) store.name = 'Changed';
-    expect(getStore('taylormi')?.name).toBe('taylormi');
+    expect(getStore('paymore-taylor')?.name).toBe('paymore-taylor');
   });
 
   it('loads an unregistered franchise and keeps concurrent store caches isolated', async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async input => {
       const url = new URL(String(input));
-      const southfield = url.hostname === 'southfieldmi.paymore.com';
-      if (url.pathname === '/') return new Response(`<script type="application/ld+json">${JSON.stringify({ '@type': 'ElectronicsStore', url: url.origin, address: { addressLocality: southfield ? 'Southfield' : 'Taylor', addressRegion: 'MI', streetAddress: southfield ? '29139 Southfield Rd' : '9058 Telegraph Road' } })}</script>`);
+      const southfield = url.hostname === 'paymore-southfield.myshopify.com';
+      if (url.pathname === '/meta.json') return Response.json({ name: southfield ? 'Southfield' : 'Taylor', city: southfield ? 'Southfield' : 'Taylor', province: 'Michigan', country: 'US', domain: 'ignored.example' });
       return response([product(southfield ? 200 : 100)]);
     });
     const service = createCatalogService({ fetchImpl });
-    const [taylor, southfield] = await Promise.all([service.getCatalog('taylormi'), service.getCatalog('southfieldmi')]);
+    const [taylor, southfield] = await Promise.all([service.getCatalog('paymore-taylor'), service.getCatalog('paymore-southfield')]);
     expect(taylor.store.name).toBe('Taylor');
-    expect(southfield.store).toMatchObject({ slug: 'southfieldmi', name: 'Southfield', address: '29139 Southfield Rd', storefrontUrl: 'https://southfieldmi.paymore.com' });
+    expect(southfield.store).toMatchObject({ slug: 'paymore-southfield', name: 'Southfield', region: 'Southfield, Michigan, US', address: '', storefrontUrl: 'https://paymore-southfield.myshopify.com' });
     expect(taylor.products[0]?.id).toBe('100');
     expect(southfield.products[0]?.id).toBe('200');
-    expect(southfield.products[0]?.url).toMatch(/^https:\/\/southfieldmi\.paymore\.com\//);
-    expect((await service.getCatalog('taylormi')).products[0]?.id).toBe('100');
+    expect(southfield.products[0]?.url).toMatch(/^https:\/\/paymore-southfield\.myshopify\.com\//);
+    expect((await service.getCatalog('paymore-taylor')).products[0]?.id).toBe('100');
     expect(fetchImpl).toHaveBeenCalledTimes(4);
   });
 
@@ -134,16 +134,16 @@ describe('approved Shopify catalog', () => {
   });
 
   it('keeps working products when optional store metadata cannot be fetched', async () => {
-    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(response([product()])).mockRejectedValue(new Error('Homepage unavailable'));
-    const catalog = await createCatalogService({ fetchImpl }).getCatalog('southfieldmi');
-    expect(catalog.store).toMatchObject({ name: 'southfieldmi', region: '', address: '' });
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(response([product()])).mockRejectedValue(new Error('Metadata unavailable'));
+    const catalog = await createCatalogService({ fetchImpl }).getCatalog('paymore-southfield');
+    expect(catalog.store).toMatchObject({ name: 'paymore-southfield', region: '', address: '' });
     expect(catalog.products).toHaveLength(1);
   });
 
   it('rejects incomplete pages and duplicate identities', async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(response(Array.from({ length: 250 }, (_, i) => product(i + 1)))).mockRejectedValue(new Error('offline'));
-    await expect(createCatalogService({ fetchImpl }).getCatalog('taylormi')).rejects.toMatchObject({ statusCode: 503 });
-    await expect(createCatalogService({ fetchImpl: vi.fn<typeof fetch>().mockResolvedValue(response([product(), product()])) }).getCatalog('taylormi')).rejects.toMatchObject({ statusCode: 503 });
+    await expect(createCatalogService({ fetchImpl }).getCatalog('paymore-taylor')).rejects.toMatchObject({ statusCode: 503 });
+    await expect(createCatalogService({ fetchImpl: vi.fn<typeof fetch>().mockResolvedValue(response([product(), product()])) }).getCatalog('paymore-taylor')).rejects.toMatchObject({ statusCode: 503 });
   });
 
   it('validates API requests without touching Shopify', async () => {
@@ -152,18 +152,37 @@ describe('approved Shopify catalog', () => {
     expect((await GET(new Request('https://kiosk.test/api/catalog?store=mi01'))).status).toBe(404);
   });
 
+  it('echoes a legacy API slug while fetching and linking only Shopify', async () => {
+    const upstream = vi.fn<typeof fetch>().mockImplementation(async input => {
+      const url = new URL(String(input));
+      expect(url.hostname).toBe('paymore-taylor.myshopify.com');
+      return url.pathname === '/meta.json' ? Response.json({ name: 'Taylor' }) : response([product()]);
+    });
+    vi.stubGlobal('fetch', upstream);
+    try {
+      vi.resetModules();
+      const { GET: legacyGET } = await import('../api/catalog');
+      const legacy = await legacyGET(new Request('https://kiosk.test/api/catalog?store=taylormi'));
+      expect(legacy.status).toBe(200);
+      expect(await legacy.json()).toMatchObject({ store: { slug: 'taylormi', storefrontUrl: 'https://paymore-taylor.myshopify.com' }, products: [{ url: 'https://paymore-taylor.myshopify.com/products/iphone-1' }] });
+      const canonical = await legacyGET(new Request('https://kiosk.test/api/catalog?store=paymore-taylor'));
+      expect(await canonical.json()).toMatchObject({ store: { slug: 'paymore-taylor' } });
+      expect(upstream).toHaveBeenCalledTimes(2);
+    } finally { vi.unstubAllGlobals(); }
+  });
+
   it('bounds pagination, response size, and upstream status', async () => {
     let page = 0;
     const endless = vi.fn<typeof fetch>().mockImplementation(async () => {
       const offset = page++ * 250;
       return response(Array.from({ length: 250 }, (_, i) => product(offset + i + 1)));
     });
-    await expect(createCatalogService({ fetchImpl: endless }).getCatalog('taylormi')).rejects.toMatchObject({ statusCode: 503 });
+    await expect(createCatalogService({ fetchImpl: endless }).getCatalog('paymore-taylor')).rejects.toMatchObject({ statusCode: 503 });
     expect(endless).toHaveBeenCalledTimes(20);
     const huge = vi.fn<typeof fetch>().mockResolvedValue(new Response('x'.repeat(8 * 1024 * 1024 + 1)));
-    await expect(createCatalogService({ fetchImpl: huge }).getCatalog('taylormi')).rejects.toMatchObject({ statusCode: 503 });
+    await expect(createCatalogService({ fetchImpl: huge }).getCatalog('paymore-taylor')).rejects.toMatchObject({ statusCode: 503 });
     const denied = vi.fn<typeof fetch>().mockResolvedValue(new Response('private upstream error', { status: 403 }));
-    await expect(createCatalogService({ fetchImpl: denied }).getCatalog('taylormi')).rejects.toMatchObject({ statusCode: 503 });
+    await expect(createCatalogService({ fetchImpl: denied }).getCatalog('paymore-taylor')).rejects.toMatchObject({ statusCode: 503 });
   });
 
   it('aborts the complete upstream operation after twenty seconds', async () => {
@@ -172,7 +191,7 @@ describe('approved Shopify catalog', () => {
       const fetchImpl = vi.fn<typeof fetch>().mockImplementation((_url, init) => new Promise((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
       }));
-      const promise = createCatalogService({ fetchImpl }).getCatalog('taylormi');
+      const promise = createCatalogService({ fetchImpl }).getCatalog('paymore-taylor');
       const assertion = expect(promise).rejects.toMatchObject({ statusCode: 503 });
       await vi.advanceTimersByTimeAsync(20000);
       await assertion;
