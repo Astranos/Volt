@@ -41,16 +41,15 @@ function snapshotBatch(row: Doc<"resultBatches">) {
   return { id: row.batchId, createdAt: new Date(row.clientCreatedAt).toISOString(), updatedAt: new Date(row.updatedAt).toISOString(),
     deliveryState: row.status === "ready" ? "available" as const : row.status };
 }
-type Retention = { policy: Awaited<ReturnType<typeof accountPolicy>>["workspace"]; now: number } | null;
+type Retention = { policy: ReturnType<typeof accountPolicy>["workspace"]; now: number } | null;
 /**
- * Only storage-managed rows can expire, so pages without them skip the clock
- * and the billing reads. Reading the clock shortens query-cache reuse, so each
- * client auth refresh re-read every page instead of hitting the cache.
+ * Only storage-managed rows can expire, so pages without them skip the clock read.
+ * Reading the clock shortens query-cache reuse, making auth refreshes re-read each page.
  */
-async function retentionFor(ctx: QueryCtx, ownerClerkUserId: string, rows: Array<Doc<"scanResults">>): Promise<Retention> {
+function retentionFor(rows: Array<Doc<"scanResults">>): Retention {
   if (!rows.some(row => row.storageManaged)) return null;
   const now = Date.now();
-  return { policy: (await accountPolicy(ctx, ownerClerkUserId, now)).workspace, now };
+  return { policy: accountPolicy().workspace, now };
 }
 function snapshotResult(row: Doc<"scanResults">, retention: Retention) {
   const deadline = retention ? retentionDeadline(row, retention.policy) : null;
@@ -93,7 +92,7 @@ export async function workspaceSnapshotPageHandler(ctx: QueryCtx, args: ObjectTy
     response = { ...withBoundary(page), kind: "batches", items: page.page.map(snapshotBatch) };
   } else if (args.kind === "results") {
     const page = await ctx.db.query("scanResults").withIndex("by_workspaceId", q => q.eq("workspaceId", workspace._id)).order("desc").paginate(options);
-    const retention = await retentionFor(ctx, workspace.ownerClerkUserId, page.page);
+    const retention = retentionFor(page.page);
     response = { ...withBoundary(page), kind: "results", items: page.page.map(row => snapshotResult(row, retention)) };
   } else {
     const page = await ctx.db.query("resultDeliveries").withIndex("by_workspaceId", q => q.eq("workspaceId", workspace._id)).order("desc").paginate(options);
@@ -126,7 +125,7 @@ export async function workspaceSnapshotHandler(ctx: QueryCtx) {
   const results = await bounded(ctx.db.query("scanResults").withIndex("by_workspaceId", q => q.eq("workspaceId", workspace._id)).order("desc"));
   const deliveries = await bounded(ctx.db.query("resultDeliveries").withIndex("by_workspaceId", q => q.eq("workspaceId", workspace._id)).order("desc"));
   const meta = { workspaceId: workspace._id, revision: workspace.updatedAt, continueCursor: "", isDone: true };
-  const retention = await retentionFor(ctx, workspace.ownerClerkUserId, results);
+  const retention = retentionFor(results);
   return mergeWorkspaceSnapshotPages([
     { ...meta, kind: "batches", items: batches.map(snapshotBatch) },
     { ...meta, kind: "results", items: results.map(row => snapshotResult(row, retention)) },

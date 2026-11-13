@@ -455,22 +455,6 @@ export default defineSchema({
   productApiAccess: defineTable(v.any()),
   productApiRateLimits: defineTable(v.any()),
 
-  webBillingCustomers: defineTable({
-    ownerClerkUserId: v.string(), ownerTokenIdentifier: v.string(), stripeCustomerId: v.string(), createdAt: v.number(),
-    workspaceCheckout: v.optional(v.object({ requestKey: v.string(), expiresAt: v.number(), sessionId: v.optional(v.string()), url: v.optional(v.string()) })),
-    // Accept existing checkout reservations until historical billing rows are migrated.
-    apiCheckout: v.optional(v.object({ requestKey: v.string(), expiresAt: v.number(), sessionId: v.optional(v.string()), url: v.optional(v.string()) })),
-  }).index("by_ownerClerkUserId", ["ownerClerkUserId"]).index("by_stripeCustomerId", ["stripeCustomerId"]),
-  // Historical billing ledger values remain valid; new billing operations accept workspace only.
-  webSubscriptions: defineTable({
-    ownerClerkUserId: v.string(), ownerTokenIdentifier: v.string(), product: v.union(v.literal("workspace"), v.literal("api")),
-    stripeCustomerId: v.string(), stripeSubscriptionId: v.string(),
-    status: v.union(v.literal("active"), v.literal("past_due"), v.literal("canceled"), v.literal("unpaid"), v.literal("incomplete"), v.literal("incomplete_expired"), v.literal("trialing"), v.literal("paused")),
-    currentPeriodEnd: v.number(), paidThrough: v.optional(v.number()), cancelAtPeriodEnd: v.boolean(), endedAt: v.optional(v.number()), updatedAt: v.number(), lastEventCreated: v.number(),
-  }).index("by_ownerClerkUserId_and_product", ["ownerClerkUserId", "product"])
-    .index("by_ownerTokenIdentifier_and_product", ["ownerTokenIdentifier", "product"])
-    .index("by_stripeSubscriptionId", ["stripeSubscriptionId"]),
-  webBillingEvents: defineTable({ eventId: v.string(), eventCreated: v.number(), processedAt: v.number() }).index("by_eventId", ["eventId"]),
   scannerReconnectRequests: defineTable({
     pairingId: v.string(),
     requestId: v.string(),

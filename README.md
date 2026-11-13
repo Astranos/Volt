@@ -16,7 +16,7 @@ Volt combines market search, offer calculation, and listing helpers in a Chrome 
 - Sync captures to your account workspace and insert text into a selected Chrome computer.
 - Open tabs, bookmarks, history, and tools from a keyboard-driven command menu.
 
-Volt is actively developed. Chrome's browser tools are free. Signed-in iPhone users can scan and keep local history without Pro; cloud workspace and mobile capture sync require Pro. The App Clip offers temporary, checkout-free capture through a workspace guest grant. See [authentication and billing](docs/authentication-and-billing.md) for the access model.
+Volt is actively developed. Chrome's browser tools are free. Every signed-in account can scan, sync captures, and use the cloud workspace for free, with a rolling seven-day capture history. Nothing is sold on the web. The App Clip offers temporary, checkout-free capture through a workspace guest grant. See [authentication and billing](docs/authentication-and-billing.md) for the access model.
 
 ## Start contributing
 

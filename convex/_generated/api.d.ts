@@ -11,7 +11,6 @@
 import type * as access from "../access.js";
 import type * as aiScanner from "../aiScanner.js";
 import type * as aiScannerQuota from "../aiScannerQuota.js";
-import type * as billingConfiguration from "../billingConfiguration.js";
 import type * as catalogPurge from "../catalogPurge.js";
 import type * as cloudWorkspace from "../cloudWorkspace.js";
 import type * as cloudWorkspace_batches from "../cloudWorkspace/batches.js";
@@ -26,7 +25,6 @@ import type * as extensionSettings from "../extensionSettings.js";
 import type * as handbook from "../handbook.js";
 import type * as handbookValidators from "../handbookValidators.js";
 import type * as http from "../http.js";
-import type * as http_billing from "../http/billing.js";
 import type * as http_chromeProfileAuth from "../http/chromeProfileAuth.js";
 import type * as http_clerkBackend from "../http/clerkBackend.js";
 import type * as http_computers from "../http/computers.js";
@@ -65,8 +63,6 @@ import type * as shopifyHelpers from "../shopifyHelpers.js";
 import type * as shopifyStore from "../shopifyStore.js";
 import type * as storeKit from "../storeKit.js";
 import type * as storeKitData from "../storeKitData.js";
-import type * as stripeBilling from "../stripeBilling.js";
-import type * as webBilling from "../webBilling.js";
 import type * as workspaceMaintenance from "../workspaceMaintenance.js";
 import type * as workspaceStorage from "../workspaceStorage.js";
 
@@ -80,7 +76,6 @@ declare const fullApi: ApiFromModules<{
   access: typeof access;
   aiScanner: typeof aiScanner;
   aiScannerQuota: typeof aiScannerQuota;
-  billingConfiguration: typeof billingConfiguration;
   catalogPurge: typeof catalogPurge;
   cloudWorkspace: typeof cloudWorkspace;
   "cloudWorkspace/batches": typeof cloudWorkspace_batches;
@@ -95,7 +90,6 @@ declare const fullApi: ApiFromModules<{
   handbook: typeof handbook;
   handbookValidators: typeof handbookValidators;
   http: typeof http;
-  "http/billing": typeof http_billing;
   "http/chromeProfileAuth": typeof http_chromeProfileAuth;
   "http/clerkBackend": typeof http_clerkBackend;
   "http/computers": typeof http_computers;
@@ -134,8 +128,6 @@ declare const fullApi: ApiFromModules<{
   shopifyStore: typeof shopifyStore;
   storeKit: typeof storeKit;
   storeKitData: typeof storeKitData;
-  stripeBilling: typeof stripeBilling;
-  webBilling: typeof webBilling;
   workspaceMaintenance: typeof workspaceMaintenance;
   workspaceStorage: typeof workspaceStorage;
 }>;

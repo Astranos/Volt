@@ -1,6 +1,6 @@
 # Authentication and billing setup
 
-Volt uses Clerk for identity, Convex for authorization, usage, cloud-workspace metadata, cursor delivery, and live dictation drafts; Cloudflare R2 stores private photo bytes; StoreKit supports legacy iOS subscriptions, and Stripe supports the new web workspace plan behind disabled-by-default configuration. Any signed-in account can use local iPhone scanning, history, cloud workspace, and mobile capture sync for free during the pilot. The app does not offer new subscriptions or show upgrade prompts. Existing StoreKit subscriptions remain available for legacy subscription support and AI allowances. See [the monetization rollout](monetization-rollout.md) for paid storage setup, allowances, and staged activation. The App Clip uses a short-lived workspace guest grant created by signed-in Chrome.
+Volt uses Clerk for identity, Convex for authorization, usage, cloud-workspace metadata, cursor delivery, and live dictation drafts, and Cloudflare R2 for private photo bytes. Every signed-in account can use local iPhone scanning, history, cloud workspace, and mobile capture sync for free, with a rolling seven-day capture history. Nothing is sold on the web. Existing StoreKit subscriptions remain available for legacy subscription support and AI allowances. See [workspace storage](workspace-storage.md) for retention, quotas, and cleanup. The App Clip uses a short-lived workspace guest grant created by signed-in Chrome.
 
 ## Clerk and Convex
 

@@ -28,7 +28,7 @@ An **environment** is a compatible set of client configuration, identity service
 | **Clerk JWT** | A short-lived token issued from Volt's `convex` template. Convex checks its issuer against `CLERK_JWT_ISSUER_DOMAIN`. The extension's cookie mirror helps Clerk sign-in reach the side panel; it is not a workspace record. |
 | **Convex deployment** | One backend instance with its own functions, data, and environment variables. A `.convex.cloud` URL is for Convex clients; the matching `.convex.site` URL serves HTTP actions. |
 | **Cloudflare R2 bucket** | Private storage for photo bytes. Convex holds photo metadata and grants short-lived upload or download URLs. |
-| **Pro entitlement** | An active, server-verified legacy StoreKit subscription. It provides unlimited monthly AI analyses. Cloud workspace and mobile capture sync are free for every signed-in account. |
+| **Pro entitlement** | An active, server-verified legacy StoreKit subscription. It provides unlimited monthly AI analyses. Cloud workspace and mobile capture sync are free for every signed-in account, with a rolling seven-day capture history. No web subscription is required. |
 
 ## Product and repository terms
 

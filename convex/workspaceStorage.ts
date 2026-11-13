@@ -18,30 +18,20 @@ const PURGE_DELAY_MS = 10 * 60 * 1000;
 const PURGE_RETRY_MS = 15 * 60 * 1000;
 export const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 type ReaderCtx = Pick<QueryCtx, "db">;
-type WorkspacePolicy = Awaited<ReturnType<typeof accountPolicy>>["workspace"];
+type WorkspacePolicy = ReturnType<typeof accountPolicy>["workspace"];
 
 export function retentionDeadline(
   result: Pick<
     Doc<"scanResults">,
-    "storageManaged" | "retentionTier" | "createdAt" | "deletedAt" | "expiresAt"
+    "storageManaged" | "createdAt" | "deletedAt" | "expiresAt"
   >,
   policy: WorkspacePolicy,
 ): number | null {
   if (!result.storageManaged) return null;
-  // A retention tombstone is irreversible, including after a later upgrade.
+  // A retention tombstone is irreversible.
   if (result.deletedAt !== undefined && result.expiresAt !== undefined)
     return result.expiresAt;
-  if (policy.tier === "workspace" && policy.access === "write") return null;
-  const freeDeadline = result.createdAt + 7 * DAY;
-  if (result.retentionTier === "workspace") {
-    return (
-      policy.graceEndsAt ??
-      (policy.paidThrough === null
-        ? freeDeadline
-        : policy.paidThrough + 7 * DAY)
-    );
-  }
-  return Math.max(freeDeadline, policy.graceEndsAt ?? 0);
+  return result.createdAt + policy.retentionDays * DAY;
 }
 
 export function resultExpiredForPolicy(
@@ -78,8 +68,7 @@ export async function resultIsExpired(
   if (!result.storageManaged) return false;
   const owner = workspace ?? (await ctx.db.get(result.workspaceId));
   if (!owner) return true;
-  const policy = (await accountPolicy(ctx, owner.ownerClerkUserId, now))
-    .workspace;
+  const policy = accountPolicy().workspace;
   return resultExpiredForPolicy(result, policy, now);
 }
 
@@ -106,32 +95,14 @@ export function managedResultByteCount(result: {
   return new TextEncoder().encode(result.text ?? "").byteLength;
 }
 
-export async function assertWorkspaceWritable(
-  ctx: ReaderCtx,
-  workspace: Doc<"workspaces">,
-  now = Date.now(),
-) {
-  if (
-    workspaceLifecycleEnabled() &&
-    (await accountPolicy(ctx, workspace.ownerClerkUserId, now)).workspace
-      .access !== "write"
-  ) {
-    throw new ConvexError("Workspace is read-only during billing grace");
-  }
-}
-
 export async function reserveWorkspaceStorage(
   ctx: MutationCtx,
   workspace: Doc<"workspaces">,
   records: number,
   bytes: number,
-  now = Date.now(),
 ) {
-  if (!workspaceLifecycleEnabled()) return null;
-  const policy = (await accountPolicy(ctx, workspace.ownerClerkUserId, now))
-    .workspace;
-  if (policy.access !== "write")
-    throw new ConvexError("Workspace is read-only during billing grace");
+  if (!workspaceLifecycleEnabled()) return false;
+  const policy = accountPolicy().workspace;
   // Read the row again so a caller performing multiple adjustments cannot use stale counters.
   const current = await ctx.db.get(workspace._id);
   if (!current) throw new ConvexError("Workspace no longer exists");
@@ -143,7 +114,7 @@ export async function reserveWorkspaceStorage(
   if (bytesUsed > policy.bytesLimit)
     throw new ConvexError("Workspace storage quota exceeded");
   await writeStorageUsage(ctx, current._id, usage.row, recordsUsed, bytesUsed);
-  return policy;
+  return true;
 }
 
 export async function adjustWorkspaceStorage(
@@ -196,21 +167,17 @@ export const getUsage = query({
   args: {},
   returns: v.object({
     enabled: v.boolean(),
-    tier: v.union(v.literal("free"), v.literal("workspace")),
-    access: v.union(v.literal("write"), v.literal("read_only")),
-    retentionDays: v.union(v.number(), v.null()),
+    retentionDays: v.number(),
     recordsUsed: v.number(),
     recordsLimit: v.number(),
     bytesUsed: v.number(),
     bytesLimit: v.number(),
-    paidThrough: v.union(v.number(), v.null()),
-    graceEndsAt: v.union(v.number(), v.null()),
   }),
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Authentication required");
     const workspace = await workspaceForUser(ctx, identity.subject);
-    const policy = (await accountPolicy(ctx, identity.subject)).workspace;
+    const policy = accountPolicy().workspace;
     const usage = workspace ? await storageUsage(ctx, workspace) : null;
     return {
       enabled: workspaceLifecycleEnabled(),
@@ -233,7 +200,7 @@ export const sweepRetention = internalMutation({
         q.gt("retentionCheckAt", 0).lte("retentionCheckAt", now),
       )
       .take(100);
-    const policies = new Map<string, WorkspacePolicy>();
+    const policy = accountPolicy().workspace;
     let expired = 0;
     for (const result of results) {
       if (!result.storageManaged || result.deletedAt !== undefined) {
@@ -250,12 +217,6 @@ export const sweepRetention = internalMutation({
         });
         expired++;
         continue;
-      }
-      let policy = policies.get(workspace.ownerClerkUserId);
-      if (!policy) {
-        policy = (await accountPolicy(ctx, workspace.ownerClerkUserId, now))
-          .workspace;
-        policies.set(workspace.ownerClerkUserId, policy);
       }
       const deadline = retentionDeadline(result, policy);
       if (deadline === null || deadline > now) {

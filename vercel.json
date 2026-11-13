@@ -33,6 +33,7 @@
     { "source": "/upc-search/:path*", "destination": "/", "permanent": true },
     { "source": "/catalog", "destination": "/dashboard", "permanent": true },
     { "source": "/api-keys", "destination": "/dashboard", "permanent": true },
+    { "source": "/billing", "destination": "/dashboard", "permanent": true },
     { "source": "/admin", "destination": "/dashboard", "permanent": true }
   ],
   "rewrites": [

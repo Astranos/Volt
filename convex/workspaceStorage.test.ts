@@ -35,8 +35,6 @@ const usage = makeFunctionReference<
   Record<string, never>,
   {
     enabled: boolean;
-    tier: string;
-    access: string;
     recordsUsed: number;
     bytesUsed: number;
     recordsLimit: number;
@@ -115,7 +113,6 @@ test("free writes use server UTF-8 bytes and retries do not reserve twice", asyn
   });
   expect(await signedIn.query(usage, {})).toMatchObject({
     enabled: true,
-    tier: "free",
     recordsUsed: 1,
     bytesUsed: 6,
   });
@@ -179,8 +176,6 @@ test("legacy subscriptions do not exempt captures from the 7-day window", async 
   vi.setSystemTime(Date.now() + 2 * DAY);
   expect(await t.mutation(sweep, {})).toBe(2);
   expect(await signedIn.query(usage, {})).toMatchObject({
-    tier: "free",
-    access: "write",
     recordsUsed: 0,
   });
 });
@@ -434,69 +429,34 @@ test("quotas and restore never cross account boundaries", async () => {
   });
 });
 
-test("cancellation preserves read-only access for thirty days and then expires paid rows", async () => {
+test("historical workspace-tier captures use seven-day retention without restricting writes", async () => {
   const t = convexTest(schema, modules);
   const { signedIn, credential } = await owner(t);
-  const startedAt = Date.now();
-  const subscriptionId = await t.run((ctx) =>
-    ctx.db.insert("webSubscriptions", {
-      ownerClerkUserId: "owner",
-      ownerTokenIdentifier: "test|owner",
-      product: "workspace",
-      stripeCustomerId: "customer",
-      stripeSubscriptionId: "subscription",
-      status: "active",
-      currentPeriodEnd: startedAt + 60 * DAY,
-      paidThrough: startedAt + 60 * DAY,
-      cancelAtPeriodEnd: false,
-      updatedAt: startedAt,
-      lastEventCreated: startedAt,
-    }),
-  );
-  await capture(t, credential, "paid-photo", "photo");
-  await t.mutation(markBatchReady, { ...credential, batchId: "paid-photo" });
-  await t.run((ctx) =>
-    ctx.db.patch(subscriptionId, {
-      status: "canceled",
-      endedAt: startedAt + DAY,
-    }),
-  );
-  vi.setSystemTime(startedAt + 2 * DAY);
-  expect(await signedIn.query(usage, {})).toMatchObject({
-    tier: "free",
-    access: "read_only",
-    recordsUsed: 1,
+  await capture(t, credential, "historical-photo", "photo");
+  await t.mutation(markBatchReady, { ...credential, batchId: "historical-photo" });
+  await t.run(async (ctx) => {
+    const photo = await ctx.db.query("scanResults").unique();
+    if (!photo) throw new Error("Expected the captured photo");
+    await ctx.db.patch(photo._id, { retentionTier: "workspace", expiresAt: undefined });
   });
-  await expect(capture(t, credential, "during-grace")).rejects.toThrow(
-    /read-only/,
-  );
-  // Retrying a batch finished before the workspace became read-only stays idempotent.
-  expect(
-    await t.mutation(markBatchReady, { ...credential, batchId: "paid-photo" }),
-  ).toEqual({ idempotent: true });
-  expect(
-    await t.query(authorizePhotoAccess, {
-      ...credential,
-      batchId: "paid-photo",
-      resultId: "paid-photo",
-      operation: "get",
-    }),
-  ).toHaveProperty("objectKey");
+
+  vi.setSystemTime(Date.now() + 6 * DAY);
   expect(await t.mutation(sweep, {})).toBe(0);
-  vi.setSystemTime(startedAt + 31 * DAY);
+  await capture(t, credential, "new-capture");
+  expect(await signedIn.query(usage, {})).toMatchObject({ recordsUsed: 2 });
+  vi.setSystemTime(Date.now() + DAY);
   await expect(
     t.query(authorizePhotoAccess, {
       ...credential,
-      batchId: "paid-photo",
-      resultId: "paid-photo",
+      batchId: "historical-photo",
+      resultId: "historical-photo",
       operation: "get",
     }),
   ).rejects.toThrow(/expired/);
   expect(await t.mutation(sweep, {})).toBe(1);
   expect(await signedIn.query(usage, {})).toMatchObject({
-    access: "write",
-    recordsUsed: 0,
-    bytesUsed: 10,
+    recordsUsed: 1,
+    bytesUsed: 21,
   });
 });
 

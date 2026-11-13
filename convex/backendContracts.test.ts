@@ -140,7 +140,6 @@ describe("backend compatibility contracts", () => {
       "POST /api/app-clip/grants/create",
       "POST /api/app-clip/outbox/sync",
       "POST /api/app-clip/photos/upload-url",
-      "POST /api/billing/stripe/webhook",
       "POST /api/mobile/ai/analyze",
       "POST /api/mobile/batches/finalize",
       "POST /api/mobile/computers/list",

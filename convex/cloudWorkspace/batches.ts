@@ -10,8 +10,8 @@ import {
   requireAuthenticatedWorkspace,
   requireOrCreateAuthenticatedWorkspace,
 } from "./identity";
-import { assertWorkspaceWritable, adjustWorkspaceStorage, liveBatchResults, managedResultByteCount, reserveWorkspaceStorage, resultExpiredForPolicy, WORKSPACE_UNDO_MS } from "../workspaceStorage";
-import { accountPolicy, workspaceLifecycleEnabled } from "../monetization";
+import { adjustWorkspaceStorage, liveBatchResults, managedResultByteCount, reserveWorkspaceStorage, resultExpiredForPolicy, WORKSPACE_UNDO_MS } from "../workspaceStorage";
+import { accountPolicy, workspaceLifecycleEnabled, WORKSPACE_RETENTION_DAYS } from "../monetization";
 
 const resultInput = v.object({
   resultId: v.string(),
@@ -48,7 +48,7 @@ async function insertBatchResults(
   batchId: string,
   results: CloudBatchInput["results"],
   now: number,
-  tier: "free" | "workspace" | null,
+  storageManaged: boolean,
 ) {
   for (const result of results) {
     const objectKey = result.kind === "photo"
@@ -68,7 +68,7 @@ async function insertBatchResults(
       ...(result.checksum ? { checksum: result.checksum } : {}),
       clientCreatedAt: result.clientCreatedAt,
       createdAt: now,
-      ...(tier ? { storageManaged: true, retentionTier: tier, retentionCheckAt: now + 24 * 60 * 60 * 1000, ...(tier === "free" ? { expiresAt: now + 7 * 24 * 60 * 60 * 1000 } : {}) } : {}),
+      ...(storageManaged ? { storageManaged: true, retentionTier: "free", retentionCheckAt: now + 24 * 60 * 60 * 1000, expiresAt: now + WORKSPACE_RETENTION_DAYS * 24 * 60 * 60 * 1000 } : {}),
     });
   }
 }
@@ -128,7 +128,7 @@ async function putBatchForPrincipal(
       if (appendedResults.length === 0) {
         return { batchId: existing.batchId, idempotent: true, status: existing.status };
       }
-      const policyForExisting = (await accountPolicy(ctx, workspace.ownerClerkUserId)).workspace;
+      const policyForExisting = accountPolicy().workspace;
       for (const result of existingResults) {
         // Rolling retention expires older captures in a session the phone can still continue, so
         // only a capture the user deleted blocks the batch. Otherwise new captures could never upload.
@@ -141,7 +141,7 @@ async function putBatchForPrincipal(
       await assertResultsAreBatchCompatible(ctx, workspace._id, appendedResults);
       const addedBytes = appendedResults.reduce((sum, result) => sum + result.byteCount, 0);
       const now = Date.now();
-      const policy = await reserveWorkspaceStorage(ctx, workspace, appendedResults.length, addedBytes, now);
+      const storageManaged = await reserveWorkspaceStorage(ctx, workspace, appendedResults.length, addedBytes);
       await insertBatchResults(
         ctx,
         workspace._id,
@@ -149,7 +149,7 @@ async function putBatchForPrincipal(
         args.batchId,
         appendedResults,
         now,
-        policy?.tier ?? null,
+        storageManaged,
       );
       await ctx.db.patch(existing._id, {
         status: "uploading",
@@ -163,7 +163,7 @@ async function putBatchForPrincipal(
     await assertResultsAreBatchCompatible(ctx, workspace._id, normalizedResults);
     const byteCount = normalizedResults.reduce((sum, result) => sum + result.byteCount, 0);
     const now = Date.now();
-    const policy = await reserveWorkspaceStorage(ctx, workspace, normalizedResults.length, byteCount, now);
+    const storageManaged = await reserveWorkspaceStorage(ctx, workspace, normalizedResults.length, byteCount);
     await ctx.db.insert("resultBatches", {
       workspaceId: workspace._id,
       batchId: args.batchId,
@@ -182,7 +182,7 @@ async function putBatchForPrincipal(
       args.batchId,
       normalizedResults,
       now,
-      policy?.tier ?? null,
+      storageManaged,
     );
     return { batchId: args.batchId, idempotent: false, status: "uploading" as const };
 }
@@ -227,11 +227,10 @@ async function markBatchReadyForPrincipal(
     throw new ConvexError("Batch not found");
   }
   if (batch.status === "deleted") throw new ConvexError("Batch was deleted");
-  // A retry of a finished batch succeeds even after the workspace became read-only.
+  // Retrying a finished batch stays idempotent.
   if (batch.status === "ready") return { idempotent: true };
-  await assertWorkspaceWritable(ctx, principal.workspace);
   const results = await ctx.db.query("scanResults").withIndex("by_workspaceId_and_batchId", q => q.eq("workspaceId", principal.workspace._id).eq("batchId", batchId)).take(500);
-  const policy = (await accountPolicy(ctx, principal.workspace.ownerClerkUserId)).workspace;
+  const policy = accountPolicy().workspace;
   liveBatchResults(results, policy);
   await ctx.db.patch(batch._id, { status: "ready", updatedAt: Date.now() });
   return { idempotent: false };
@@ -267,7 +266,7 @@ export const listBatchResultsHandler = async (ctx: QueryCtx, args: ObjectType<ty
       )
       .take(500);
     const visible = [];
-    const policy = (await accountPolicy(ctx, workspace.ownerClerkUserId)).workspace;
+    const policy = accountPolicy().workspace;
     for (const result of results) {
       if (result.deletedAt !== undefined || resultExpiredForPolicy(result, policy)) {
         const { text: _text, objectKey: _objectKey, ...tombstone } = result;
@@ -282,7 +281,7 @@ export const deleteWorkspaceResultsHandler = async (ctx: MutationCtx, args: Obje
     const workspace = await requireOrCreateAuthenticatedWorkspace(ctx);
     const requestedIds = [...new Set(args.resultIds)].slice(0, 500);
     const now = Date.now();
-    const policy = (await accountPolicy(ctx, workspace.ownerClerkUserId, now)).workspace;
+    const policy = accountPolicy().workspace;
     const affectedBatches = new Map<string, { resultCount: number; byteCount: number }>();
     const deletedIds: string[] = [];
     const newlyDeletedIds: string[] = [];
@@ -340,7 +339,7 @@ export const restoreWorkspaceResultsHandler = async (ctx: MutationCtx, args: Obj
     const requestedIds = [...new Set(args.resultIds)].slice(0, 500);
     const matches: Array<Doc<"scanResults">> = [];
     const now = Date.now();
-    const policy = (await accountPolicy(ctx, workspace.ownerClerkUserId, now)).workspace;
+    const policy = accountPolicy().workspace;
     const restoredIds: string[] = [];
     const newlyRestoredIds: string[] = [];
     for (const resultId of requestedIds) {
@@ -357,10 +356,9 @@ export const restoreWorkspaceResultsHandler = async (ctx: MutationCtx, args: Obj
       restoredIds.push(resultId);
       if (result.deletedAt !== undefined) matches.push(result);
     }
-    if (matches.length) await assertWorkspaceWritable(ctx, workspace, now);
     const managedCount = matches.filter(result => result.storageManaged).length;
     if (managedCount) {
-      if (workspaceLifecycleEnabled()) await reserveWorkspaceStorage(ctx, workspace, managedCount, 0, now);
+      if (workspaceLifecycleEnabled()) await reserveWorkspaceStorage(ctx, workspace, managedCount, 0);
       else await adjustWorkspaceStorage(ctx, workspace._id, managedCount, 0);
     }
     const affectedBatches = new Map<string, { resultCount: number; byteCount: number }>();

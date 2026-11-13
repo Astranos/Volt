@@ -9,7 +9,6 @@ import {
 import {
   ArrowUpRight,
   Chrome,
-  KeyRound,
   LayoutDashboard,
   Menu,
   ScanLine,
@@ -25,8 +24,7 @@ import { authConfigured } from "./app-providers";
 import { AuthUnavailable } from "./auth-page";
 import { WorkspaceProvider } from "./workspace-provider";
 
-type AuthenticatedDestination =
-  "workspace" | "scanner-results" | "billing";
+type AuthenticatedDestination = "workspace" | "scanner-results";
 type AppLayoutProps = {
   current: AuthenticatedDestination;
   children: ReactNode;
@@ -34,7 +32,6 @@ type AppLayoutProps = {
 };
 
 const destinations = {
-  billing: { href: "/billing", label: "Plans and usage", icon: KeyRound },
   workspace: {
     href: "/dashboard",
     label: "Dashboard / Activity",
@@ -52,7 +49,6 @@ const destinations = {
 const destinationOrder: readonly AuthenticatedDestination[] = [
   "workspace",
   "scanner-results",
-  "billing",
 ];
 
 export function AppShell({

@@ -1,6 +1,5 @@
 import { chromeProfileAuth } from "./http/chromeProfileAuth";
 import { mobileSignInRedeemHandler, mobileSignInRequestHandler } from "./http/mobileSignIn";
-import { stripeWebhook } from "./http/billing";
 import { shopifyCallback } from "./http/shopify";
 import { appUninstalled, customerDataRequest, customerRedact, shopRedact } from "./http/shopifyCompliance";
 import { options as shopifyAdminOptions, search as shopifyAdminSearch, status as shopifyAdminStatus, yesterday as shopifyAdminYesterday } from "./http/shopifyEmbeddedAdmin";
@@ -960,7 +959,5 @@ http.route({ path: "/api/shopify/admin/search", method: "POST", handler: shopify
 http.route({ path: "/api/shopify/admin/status", method: "OPTIONS", handler: shopifyAdminOptions });
 http.route({ path: "/api/shopify/admin/yesterday", method: "OPTIONS", handler: shopifyAdminOptions });
 http.route({ path: "/api/shopify/admin/search", method: "OPTIONS", handler: shopifyAdminOptions });
-
-http.route({ path: "/api/billing/stripe/webhook", method: "POST", handler: stripeWebhook });
 
 export default http;
