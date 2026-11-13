@@ -439,24 +439,6 @@ export default defineSchema({
     .index("by_browserSessionId_and_status", ["browserSessionId", "status"])
     .index("by_expiresAt", ["expiresAt"]),
 
-  // Retired tables are kept only so the one-time purge can run.
-  // Drop these permissive definitions in a follow-up after verifying the purge.
-  catalogActivityDays: defineTable(v.any()),
-  catalogImportControl: defineTable(v.any()),
-  catalogImportRuns: defineTable(v.any()),
-  catalogImportProgress: defineTable(v.any()),
-  catalogImportCursors: defineTable(v.any()),
-  paymoreCatalogProducts: defineTable(v.any()),
-  paymoreCatalogSources: defineTable(v.any()),
-  productApiUsage: defineTable(v.any()),
-  productApiRequests: defineTable(v.any()),
-  catalogObservations: defineTable(v.any()),
-  productApiKeys: defineTable(v.any()),
-  productApiAccess: defineTable(v.any()),
-  productApiRateLimits: defineTable(v.any()),
-  // Retired admin grant records (complimentary access was removed).
-  compedGrants: defineTable(v.any()),
-
   scannerReconnectRequests: defineTable({
     pairingId: v.string(),
     requestId: v.string(),

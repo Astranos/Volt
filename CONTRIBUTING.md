@@ -39,12 +39,12 @@ Use your own development Clerk instance and Convex deployment. Checked-in URL de
 
 ### Backend
 
-1. Follow [Clerk and Convex setup](docs/authentication-and-billing.md#clerk-and-convex) for the Clerk `convex` JWT template.
+1. Follow [Clerk and Convex setup](docs/authentication.md#clerk-and-convex) for the Clerk `convex` JWT template.
 2. From the repository root, run `pnpm exec convex dev` and select your own development project. The CLI records its deployment configuration in root `.env.local`.
 3. Set `CLERK_JWT_ISSUER_DOMAIN` on that development deployment to match your Clerk instance. If the first deployment stops because this value is missing, set it in the Convex dashboard and let the development command retry.
 4. Use the deployment's `.convex.cloud` URL for the web client and `.convex.site` URL for HTTP actions.
 
-For photo transfer, configure your own private R2 bucket and the four `R2_*` variables listed in [authentication and billing](docs/authentication-and-billing.md). Cloud workspace tests use ordinary signed-in accounts on your own development deployment. See [workspace storage](docs/workspace-storage.md) for the seven-day history policy and free quota overrides. StoreKit configuration is needed for purchase verification, not ordinary contribution checks. Never use `--prod` for contributor setup.
+For photo transfer, configure your own private R2 bucket and the four `R2_*` variables listed in [authentication and access](docs/authentication.md). Cloud workspace tests use ordinary signed-in accounts on your own development deployment. See [workspace storage](docs/workspace-storage.md) for the seven-day history policy and free quota overrides. StoreKit configuration is needed for purchase verification, not ordinary contribution checks. Never use `--prod` for contributor setup.
 
 ### Web app
 
@@ -87,7 +87,7 @@ cd ../../..
 
 Use a writable Ruby installation if the system Ruby requires administrator privileges. Do not commit the generated `Pods` directory.
 
-Open `apps/mobile/ios/Volt.xcworkspace` and configure your own development signing team and the `VOLT_*` build settings described in [authentication and billing](docs/authentication-and-billing.md#clerk-and-convex). Do not commit personal signing changes.
+Open `apps/mobile/ios/Volt.xcworkspace` and configure your own development signing team and the `VOLT_*` build settings described in [authentication and access](docs/authentication.md#clerk-and-convex). Do not commit personal signing changes.
 
 Run `pnpm dev:mobile` for the default iPhone 17 Pro Max simulator. To use another installed simulator, list them with `xcrun simctl list devices available` and run `pnpm dev:mobile -- --id=YOUR_SIMULATOR_ID`.
 
