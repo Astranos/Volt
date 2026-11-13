@@ -11,6 +11,10 @@ import { randomOpaqueSecret, sha256Hex } from "./cloudWorkspace/identity";
 export const MOBILE_SIGN_IN_REQUEST_TTL_MS = 5 * 60 * 1000;
 export const MOBILE_SIGN_IN_RATE_WINDOW_MS = 10 * 60 * 1000;
 export const MOBILE_SIGN_IN_MAX_REQUESTS_PER_WINDOW = 3;
+// A global ceiling so rotating emails can't flood Clerk lookups or outpace the
+// sweep. Convex HTTP actions don't expose a trustworthy client IP to limit on.
+export const MOBILE_SIGN_IN_GLOBAL_WINDOW_MS = 60 * 1000;
+export const MOBILE_SIGN_IN_GLOBAL_MAX_PER_WINDOW = 30;
 const RETAIN_CLOSED_REQUESTS_MS = 24 * 60 * 60 * 1000;
 export const MOBILE_SIGN_IN_QR_BASE_URL = "https://voltresale.app/app-sign-in";
 
@@ -43,17 +47,26 @@ export const createRequest = internalMutation({
   args: { emailHash: v.string(), requestSecretHash: v.string() },
   returns: v.union(
     v.object({ limited: v.literal(false), requestId: v.id("mobileSignInRequests"), expiresAt: v.number() }),
-    v.object({ limited: v.literal(true) }),
+    v.object({ limited: v.literal(true), retryAfterSeconds: v.number() }),
   ),
   handler: async (ctx, args) => {
     const now = Date.now();
+    const globalRecent = await ctx.db
+      .query("mobileSignInRequests")
+      .withIndex("by_createdAt", (q) => q.gt("createdAt", now - MOBILE_SIGN_IN_GLOBAL_WINDOW_MS))
+      .take(MOBILE_SIGN_IN_GLOBAL_MAX_PER_WINDOW);
+    if (globalRecent.length >= MOBILE_SIGN_IN_GLOBAL_MAX_PER_WINDOW) {
+      return { limited: true as const, retryAfterSeconds: MOBILE_SIGN_IN_GLOBAL_WINDOW_MS / 1000 };
+    }
     const recent = await ctx.db
       .query("mobileSignInRequests")
       .withIndex("by_emailHash_and_createdAt", (q) =>
         q.eq("emailHash", args.emailHash).gt("createdAt", now - MOBILE_SIGN_IN_RATE_WINDOW_MS),
       )
       .take(MOBILE_SIGN_IN_MAX_REQUESTS_PER_WINDOW);
-    if (recent.length >= MOBILE_SIGN_IN_MAX_REQUESTS_PER_WINDOW) return { limited: true as const };
+    if (recent.length >= MOBILE_SIGN_IN_MAX_REQUESTS_PER_WINDOW) {
+      return { limited: true as const, retryAfterSeconds: MOBILE_SIGN_IN_RATE_WINDOW_MS / 1000 };
+    }
     const expiresAt = now + MOBILE_SIGN_IN_REQUEST_TTL_MS;
     const requestId = await ctx.db.insert("mobileSignInRequests", {
       requestSecretHash: args.requestSecretHash,

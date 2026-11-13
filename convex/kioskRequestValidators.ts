@@ -1,5 +1,7 @@
 import { ConvexError, v } from "convex/values";
-import { canonicalStoreSlug, isStoreSlug } from "../apps/kiosk/src/store-address";
+import { canonicalStoreSlug, isStoreSlug, storeSlugAliases } from "../apps/kiosk/src/store-address";
+
+export { canonicalStoreSlug, storeSlugAliases };
 
 export function requestStoreSlug(value: string): string {
   if (!isStoreSlug(value)) throw new ConvexError({ code: "INVALID_INPUT" });

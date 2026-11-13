@@ -8,6 +8,11 @@ export function canonicalStoreSlug(slug: string): string {
   return Object.hasOwn(legacyStores, slug) ? legacyStores[slug] : slug;
 }
 
+/** The canonical handle plus any legacy IDs that rows may still be stored under. */
+export function storeSlugAliases(canonical: string): string[] {
+  return [canonical, ...Object.keys(legacyStores).filter((legacy) => legacyStores[legacy] === canonical)];
+}
+
 const reservedSlugs = new Set(['www', 'api', 'admin', 'mail', 'shop', 'localhost']);
 
 export function isStoreSlug(value: string): boolean {

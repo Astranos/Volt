@@ -147,6 +147,21 @@ test.each([['taylormi', 'paymore-taylor'], ['southfieldmi', 'paymore-southfield'
   expect((await t.query(list, { secret, storeSlug: handle, now: Date.now() })).requests[0]?.status).toBe("found");
 });
 
+test("requests stored under a legacy store ID stay visible and updatable", async () => {
+  const t = convexTest(schema, modules);
+  const now = Date.now();
+  const { product } = input();
+  const id = await t.run(ctx => ctx.db.insert("kioskRequests", {
+    ...product, storeSlug: "taylormi", requestKey: input(1, 1).requestKey, clientHash: "a".repeat(64),
+    status: "waiting", createdAt: now, updatedAt: now, expiresAt: now + 3_600_000,
+  }));
+  for (const storeSlug of ["taylormi", "paymore-taylor"]) {
+    expect((await t.query(list, { secret, storeSlug, now })).requests).toMatchObject([{ id, storeSlug: "paymore-taylor" }]);
+  }
+  expect(await t.mutation(setStatus, { secret, storeSlug: "paymore-taylor", id, status: "found" })).toMatchObject({ id, status: "found" });
+  expect(await t.mutation(enqueue, { ...input(1, 1, "paymore-taylor"), clientHash: "a".repeat(64) })).toMatchObject({ id });
+});
+
 test.each(['https://taylormi.paymore.com/products/camera', 'https://evil.example/products/camera', 'https://paymore-taylor.myshopify.com.evil.example/products/camera', 'https://user@paymore-taylor.myshopify.com/products/camera'])('rejects non-Shopify or credentialed product URL %s', async productUrl => {
   const t = convexTest(schema, modules);
   await expect(t.mutation(enqueue, { ...input(), product: { ...input().product, productUrl } })).rejects.toThrow('INVALID_INPUT');

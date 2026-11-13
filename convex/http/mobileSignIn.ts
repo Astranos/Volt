@@ -15,7 +15,7 @@ import {
 const createRequest = makeFunctionReference<
   "mutation",
   { emailHash: string; requestSecretHash: string },
-  { limited: false; requestId: Id<"mobileSignInRequests">; expiresAt: number } | { limited: true }
+  { limited: false; requestId: Id<"mobileSignInRequests">; expiresAt: number } | { limited: true; retryAfterSeconds: number }
 >("mobileSignIn:createRequest");
 const attachAccount = makeFunctionReference<
   "mutation",
@@ -58,7 +58,9 @@ export const mobileSignInRequestHandler = httpAction(async (ctx, request) => {
     emailHash: await sha256Hex(email),
     requestSecretHash: await sha256Hex(requestSecret),
   });
-  if (created.limited) return jsonResponse({ error: "too_many_requests" }, 429, { "Retry-After": "600" });
+  if (created.limited) {
+    return jsonResponse({ error: "too_many_requests" }, 429, { "Retry-After": String(created.retryAfterSeconds) });
+  }
 
   try {
     const account = await findClerkUserByVerifiedEmail(email, secret);

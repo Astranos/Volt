@@ -154,6 +154,17 @@ test("requests per email are rate limited", async () => {
   expect(await limited.json()).toEqual({ error: "too_many_requests" });
 });
 
+test("a global budget stops rotating emails before Clerk is called", async () => {
+  const t = convexTest(schema, modules);
+  for (let index = 0; index < 30; index += 1) await requestSignIn(t, `person${index}@example.com`);
+  const clerkCalls = fetchMock.mock.calls.length;
+  const limited = await post(t, "/api/mobile/sign-in/request", { email: "another@example.com" });
+  expect(limited.status).toBe(429);
+  expect(limited.headers.get("Retry-After")).toBe("60");
+  expect(fetchMock.mock.calls.length).toBe(clerkCalls);
+  expect(await t.run(async (ctx) => (await ctx.db.query("mobileSignInRequests").collect()).length)).toBe(30);
+});
+
 test("invalid emails are rejected before touching Clerk", async () => {
   const t = convexTest(schema, modules);
   const response = await post(t, "/api/mobile/sign-in/request", { email: "not-an-email" });

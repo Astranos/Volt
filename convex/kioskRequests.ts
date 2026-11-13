@@ -2,7 +2,7 @@ import { ConvexError, v, type Infer } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, mutation, query, type QueryCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
-import { productFields, publicRequest, receipt, staffStatus, requestStoreSlug } from "./kioskRequestValidators";
+import { canonicalStoreSlug, productFields, publicRequest, receipt, staffStatus, requestStoreSlug, storeSlugAliases } from "./kioskRequestValidators";
 
 const productValidator = v.object(productFields);
 const HOUR = 3_600_000;
@@ -33,13 +33,23 @@ function validateProduct(product: Infer<typeof productValidator>, storeSlug: str
 
 function toPublic(row: Doc<"kioskRequests">) {
   const { _id, _creationTime, requestKey, clientHash, ...fields } = row;
-  return { id: _id, ...fields };
+  return { id: _id, ...fields, storeSlug: canonicalStoreSlug(row.storeSlug) };
 }
 
+// Requests made before stores moved to Shopify handles keep their legacy ID
+// until they expire (one hour), so reads also match those aliases.
 async function activeRows(ctx: QueryCtx, storeSlug: string, now: number) {
-  const rows = await Promise.all((["waiting", "found"] as const).map(status => ctx.db.query("kioskRequests")
-    .withIndex("by_storeSlug_and_status_and_expiresAt", q => q.eq("storeSlug", storeSlug).eq("status", status).gt("expiresAt", now)).take(100)));
+  const rows = await Promise.all(storeSlugAliases(storeSlug).flatMap(alias => (["waiting", "found"] as const).map(status => ctx.db.query("kioskRequests")
+    .withIndex("by_storeSlug_and_status_and_expiresAt", q => q.eq("storeSlug", alias).eq("status", status).gt("expiresAt", now)).take(100))));
   return rows.flat().sort((a, b) => a.createdAt - b.createdAt).slice(0, 100);
+}
+
+async function rowByRequestKey(ctx: QueryCtx, storeSlug: string, requestKey: string) {
+  for (const alias of storeSlugAliases(storeSlug)) {
+    const row = await ctx.db.query("kioskRequests").withIndex("by_storeSlug_and_requestKey", q => q.eq("storeSlug", alias).eq("requestKey", requestKey)).unique();
+    if (row) return row;
+  }
+  return null;
 }
 
 export const enqueue = mutation({
@@ -51,7 +61,7 @@ export const enqueue = mutation({
     if (!/^[0-9a-f-]{36}:\d{1,30}$/i.test(args.requestKey) || !/^[0-9a-f]{64}$/.test(args.clientHash)
       || args.requestKey.split(":")[1] !== args.product.variantId) throw new ConvexError({ code: "INVALID_INPUT" });
     const now = Date.now();
-    const existing = await ctx.db.query("kioskRequests").withIndex("by_storeSlug_and_requestKey", q => q.eq("storeSlug", storeSlug).eq("requestKey", args.requestKey)).unique();
+    const existing = await rowByRequestKey(ctx, storeSlug, args.requestKey);
     if (existing) {
       if (existing.expiresAt <= now) throw new ConvexError({ code: "CONFLICT" });
       if (existing.productId !== args.product.productId || existing.variantId !== args.product.variantId || existing.clientHash !== args.clientHash) throw new ConvexError({ code: "CONFLICT" });
@@ -86,7 +96,7 @@ export const setStatus = mutation({
     const storeSlug = authorize(args.secret, args.storeSlug);
     const row = await ctx.db.get(args.id);
     const now = Date.now();
-    if (!row || row.storeSlug !== storeSlug || row.expiresAt <= now) return null;
+    if (!row || canonicalStoreSlug(row.storeSlug) !== storeSlug || row.expiresAt <= now) return null;
     if (row.status === args.status) return toPublic(row);
     if (row.status !== "waiting" && row.status !== "found") throw new ConvexError({ code: "CONFLICT" });
     await ctx.db.patch(args.id, { status: args.status, updatedAt: now });
