@@ -1,4 +1,5 @@
 import { httpAction } from "../_generated/server";
+import { readBoundedJson as readJson } from "./clerkBackend";
 
 type ErrorCode = "not_configured" | "invalid_request" | "invalid_google_token" | "profile_mismatch" | "account_not_linked" | "account_not_allowed" | "mfa_required" | "upstream_unavailable";
 class ProfileAuthError extends Error {
@@ -10,30 +11,7 @@ function object(value: unknown): Record<string, unknown> {
 function text(value: unknown): string { return typeof value === "string" ? value : ""; }
 function verified(value: unknown): boolean { return value === true || value === "true"; }
 
-// Bound bodies before parsing, including upstream responses. Never log credentials.
-async function readJson(body: ReadableStream<Uint8Array> | null, limit: number): Promise<unknown> {
-  if (!body) throw new Error("missing_body");
-  const reader = body.getReader();
-  const chunks: Uint8Array[] = [];
-  let length = 0;
-  try {
-    for (;;) {
-      const result = await reader.read();
-      if (result.done) break;
-      length += result.value.byteLength;
-      if (length > limit) throw new Error("body_too_large");
-      chunks.push(result.value);
-    }
-  } finally {
-    await reader.cancel().catch(() => undefined);
-    reader.releaseLock();
-  }
-  const bytes = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
-  return JSON.parse(new TextDecoder().decode(bytes)) as unknown;
-}
-
+// Never log credentials.
 async function upstream(url: string, init: RequestInit, google = false): Promise<unknown> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);

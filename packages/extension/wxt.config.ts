@@ -88,7 +88,8 @@ export default defineConfig({
       "sessions",
       // Needed to wake the service worker so saved mobile sessions can reconnect without opening extension UI
       "alarms",
-      // Needed by Chrome Push API so Convex signaling can wake the service worker for saved mobile scanner reconnects
+      // Needed by Chrome Push API so Convex signaling can wake the service worker for saved mobile scanner reconnects,
+      // and to show iPhone QR sign-in requests
       "notifications",
       "favicon",
     ],

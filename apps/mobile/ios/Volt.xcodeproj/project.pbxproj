@@ -101,6 +101,8 @@
 		B60000000000000000000003 /* CloudTargetPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C60000000000000000000003 /* CloudTargetPickerSheet.swift */; };
 		B60000000000000000000004 /* AuthenticationLandingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C60000000000000000000004 /* AuthenticationLandingView.swift */; };
 		B60000000000000000000005 /* VoltBrand.swift in Sources */ = {isa = PBXBuildFile; fileRef = C60000000000000000000005 /* VoltBrand.swift */; };
+		B80000000000000000000001 /* QRSignInStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C80000000000000000000001 /* QRSignInStore.swift */; };
+		B80000000000000000000002 /* QRSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C80000000000000000000002 /* QRSignInView.swift */; };
 		B70000000000000000000001 /* SpeechDictationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C70000000000000000000001 /* SpeechDictationService.swift */; };
 		B70000000000000000000002 /* ScannerStoreDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C70000000000000000000002 /* ScannerStoreDictation.swift */; };
 		B70000000000000000000003 /* DictationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C70000000000000000000003 /* DictationView.swift */; };
@@ -232,6 +234,8 @@
 		C60000000000000000000003 /* CloudTargetPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudTargetPickerSheet.swift; sourceTree = "<group>"; };
 		C60000000000000000000004 /* AuthenticationLandingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationLandingView.swift; sourceTree = "<group>"; };
 		C60000000000000000000005 /* VoltBrand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoltBrand.swift; sourceTree = "<group>"; };
+		C80000000000000000000001 /* QRSignInStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRSignInStore.swift; sourceTree = "<group>"; };
+		C80000000000000000000002 /* QRSignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRSignInView.swift; sourceTree = "<group>"; };
 		C70000000000000000000001 /* SpeechDictationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechDictationService.swift; sourceTree = "<group>"; };
 		C70000000000000000000002 /* ScannerStoreDictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerStoreDictation.swift; sourceTree = "<group>"; };
 		C70000000000000000000003 /* DictationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationView.swift; sourceTree = "<group>"; };
@@ -373,6 +377,7 @@
 				C50000000000000000000007 /* MobileCloudAPIClient.swift */,
 				C40000000000000000000006 /* AccessStore.swift */,
 				C40000000000000000000007 /* MobileAccessAPIClient.swift */,
+				C80000000000000000000001 /* QRSignInStore.swift */,
 				C40000000000000000000008 /* MobileAccessError.swift */,
 				C40000000000000000000009 /* StoreKitSubscriptionError.swift */,
 				C4000000000000000000000A /* StoreKitSubscriptionStore.swift */,
@@ -402,6 +407,7 @@
 				C4000000000000000000000F /* SubscriptionActionsView.swift */,
 				C40000000000000000000010 /* VoltRootScene.swift */,
 				C60000000000000000000004 /* AuthenticationLandingView.swift */,
+				C80000000000000000000002 /* QRSignInView.swift */,
 				C60000000000000000000005 /* VoltBrand.swift */,
 				C0000000000000000000000A /* CameraPreview.swift */,
 				C0000000000000000000000B /* RootView.swift */,
@@ -703,6 +709,8 @@
 				B60000000000000000000001 /* CaptureModeCards.swift in Sources */,
 				B60000000000000000000003 /* CloudTargetPickerSheet.swift in Sources */,
 				B60000000000000000000004 /* AuthenticationLandingView.swift in Sources */,
+				B80000000000000000000001 /* QRSignInStore.swift in Sources */,
+				B80000000000000000000002 /* QRSignInView.swift in Sources */,
 				B60000000000000000000005 /* VoltBrand.swift in Sources */,
 				B0000000000000000000000E /* ResultsView.swift in Sources */,
 				B0000000000000000000001C /* ScannerRecognitionModels.swift in Sources */,

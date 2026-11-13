@@ -6,6 +6,9 @@ struct VoltApp: App {
     @State private var scannerStore = ScannerStore()
     @State private var accessStore: AccessStore
     @State private var subscriptionStore: StoreKitSubscriptionStore
+    @State private var qrSignInStore = QRSignInStore(
+        apiClient: MobileSignInAPIClient(baseURL: AppConfiguration.convexSiteURL)
+    )
     private let clerk: Clerk
 
     init() {
@@ -34,6 +37,7 @@ struct VoltApp: App {
                         .environment(scannerStore)
                         .environment(accessStore)
                         .environment(subscriptionStore)
+                        .environment(qrSignInStore)
                         .environment(clerk)
                 }
             }
@@ -50,6 +54,8 @@ struct VoltApp: App {
     }
 
     private func handleIncomingURL(_ url: URL) {
+        // Sign-in QR from Chrome scanned with the Camera app.
+        if qrSignInStore.handleIncomingURL(url, clerk: clerk) { return }
         Task { @MainActor in
             do {
                 try await clerk.handle(url)

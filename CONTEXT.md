@@ -27,6 +27,7 @@ For development, preview, staging, production, and service names, use the [envir
 - Enrolled Mobile Device: a full-app installation authorized for one Cloud Scanner Workspace by a revocable Device Credential.
 - Enrolled Computer: a signed-in Chrome installation registered in a Cloud Scanner Workspace and eligible to receive synchronized Result Batches.
 - Enrollment Grant: a single-use, short-lived QR payload created by signed-in Chrome that lets the full app obtain a Device Credential. It contains no Clerk JWT. Retained for compatibility; the installed full app now bootstraps its Device Credential automatically from its Clerk session instead of scanning one.
+- QR Sign-in Request: a 5-minute request from a signed-out full app, made by entering an email. Signed-in Chrome for that account shows a notification, then a one-time QR. The QR only signs in the phone that made the request, and it returns a short-lived Clerk sign-in ticket. Accounts with two-step verification are excluded.
 - Device Credential: a high-entropy opaque credential held in the iOS Keychain and represented in Convex only by a one-way hash; revoking it removes that device's workspace access without affecting the account session in Chrome.
 - Local Capture Outbox: the full app's durable, local queue. A capture is accepted only after its result metadata and any photo rendition have been written here.
 - Result Batch: an account-owned grouping of Capture Results. It synchronizes to every Enrolled Computer and is not owned by a selected live target.

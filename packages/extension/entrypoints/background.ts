@@ -17,6 +17,7 @@ import { createContextMenuController } from "../src/background/context-menu-cont
 import { registerDisabledSiteActions } from "../src/background/disabled-site-controller";
 import { createMobileCaptureTargetController } from "../src/background/mobile-capture-targets";
 import { createMobilePhotoDownloadCleanup } from "../src/background/mobile-photo-download-cleanup";
+import { createMobileSignInController } from "../src/background/mobile-sign-in-controller";
 import { registerNavigationActions } from "../src/background/navigation-controller";
 import { createOffscreenDocumentController } from "../src/background/offscreen-document-controller";
 import { createPreviewPopupController } from "../src/background/preview-popup-controller";
@@ -169,11 +170,17 @@ export default defineBackground({
       },
       log,
     });
+    const mobileSignIn = createMobileSignInController({
+      chromeApi: chrome,
+      sendOffscreenMessage: scannerOffscreen.sendScannerOffscreenMessage,
+      log,
+    });
     const cloudWorkspace = createCloudWorkspaceController({
       chromeApi: chrome,
       ensureOffscreenDocument: scannerOffscreen.ensureScannerOffscreenDocument,
       handleCursorDeliveries: cloudCursorDeliveries.handleDeliveries,
       handleLiveDictationDrafts: cloudLiveDictation.handleDrafts,
+      handleSignInRequests: mobileSignIn.handleRequests,
       sendOffscreenMessage: scannerOffscreen.sendScannerOffscreenMessage,
       log,
     });
@@ -452,6 +459,12 @@ export default defineBackground({
         );
       });
 
+      chrome.notifications?.onClicked?.addListener((notificationId) => {
+        void mobileSignIn.handleNotificationClicked(notificationId).catch((error: unknown) => {
+          log("Failed to open sign-in QR", error instanceof Error ? error.message : error);
+        });
+      });
+
       chrome.runtime.onSuspend?.addListener(() => {
         log("Extension suspended, cleaning up resources");
       });
@@ -469,6 +482,7 @@ export default defineBackground({
       if (access.handleMessage(rawMessage, sender, sendResponse)) return true;
       if (cloudSettings.handleMessage(rawMessage, sender, sendResponse)) return true;
       if (cloudWorkspace.handleMessage(rawMessage, sender, sendResponse)) return true;
+      if (mobileSignIn.handleMessage(rawMessage, sender, sendResponse)) return true;
       if (shopifyAudit.handleMessage(rawMessage, sender, sendResponse)) return true;
       if (isShopifyAuditOffscreenRuntimeMessage(rawMessage)) return false;
       if (handbook.handleMessage(rawMessage, sender, sendResponse)) return true;

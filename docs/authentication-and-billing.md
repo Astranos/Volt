@@ -52,6 +52,17 @@ VOLT_APP_STORE_ID=<numeric App Store app ID>
 
 `VOLT_CLERK_FRONTEND_API_DOMAIN` feeds the iPhone app's `webcredentials:` associated-domain entitlement. The App Clip does not link ClerkKit or ClerkKitUI and must remain checkout-free.
 
+## QR sign-in for the iPhone app
+
+The full app's sign-in screen offers **Sign in with QR from Chrome**, so people don't need to remember their Clerk password on the phone.
+
+1. The app sends the typed email to `POST /api/mobile/sign-in/request`. Convex stores a hashed request secret and returns the secret to the phone. The response is identical whether or not the email belongs to an account, and each email is limited to 3 requests per 10 minutes.
+2. If the email matches exactly one Clerk user with that verified address (looked up with `CLERK_SECRET_KEY`), every signed-in Chrome for that account receives the request through its Convex subscription (`mobileSignIn:pendingForComputer`) and shows a Chrome notification. Clicking one opens a QR window on that computer only. The others clear once the request closes.
+3. The QR is `https://voltresale.app/app-sign-in#code=…`. The code sits in the fragment, so it never reaches a web server. Opening the QR window again replaces the code.
+4. The app posts the request secret and the scanned code to `POST /api/mobile/sign-in/redeem`. Both must match, so a photo of the QR is useless on any other phone. Convex closes the request, checks the Clerk user again, and returns a 60-second Clerk sign-in ticket that the app redeems with ClerkKit's `signInWithTicket`.
+
+Requests expire after 5 minutes. "I didn't ask for this" in the QR window declines the request. Sign-in tickets skip MFA, so accounts with two-step verification are told to use regular sign-in, and the redeem endpoint refuses them. The App Clip never takes part in this flow.
+
 ## Existing StoreKit subscriptions
 
 Keep transaction verification, notification handling, restore, and cancellation support for existing customers. The legacy subscription was priced at USD $9.00 per month and is no longer offered in the app. This code change does not modify App Store Connect products or cancel existing renewals. The product identifier is configurable and defaults to:

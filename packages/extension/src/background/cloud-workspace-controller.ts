@@ -15,6 +15,7 @@ type ControllerOptions = {
   ensureOffscreenDocument: () => Promise<boolean>;
   handleCursorDeliveries: (deliveries: unknown) => Promise<void>;
   handleLiveDictationDrafts: (drafts: unknown) => Promise<void>;
+  handleSignInRequests?: (requests: unknown) => Promise<void>;
   sendOffscreenMessage: (message: unknown) => Promise<unknown>;
   log?: (...args: unknown[]) => void;
 };
@@ -199,6 +200,7 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
       rawRecord?.action === "workspaceOffscreenSnapshotChanged"
       || rawRecord?.action === "workspaceOffscreenCursorDeliveriesChanged"
       || rawRecord?.action === "workspaceOffscreenDictationDraftsChanged"
+      || rawRecord?.action === "workspaceOffscreenSignInRequestsChanged"
       || rawRecord?.action === "workspaceOffscreenAccountChanged"
       || rawRecord?.action === "workspaceOffscreenStorage";
     if (isOffscreenMessage) {
@@ -221,6 +223,9 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
           case "workspaceOffscreenDictationDraftsChanged":
             if (!acceptsAccountPayload(rawRecord)) return Promise.resolve(null);
             return options.handleLiveDictationDrafts(rawRecord.drafts);
+          case "workspaceOffscreenSignInRequestsChanged":
+            if (!acceptsAccountPayload(rawRecord)) return Promise.resolve(null);
+            return options.handleSignInRequests?.(rawRecord.requests) ?? Promise.resolve();
           case "workspaceOffscreenStorage":
             return offscreenStorage(rawRecord);
           default:

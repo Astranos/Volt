@@ -1,4 +1,5 @@
 import { chromeProfileAuth } from "./http/chromeProfileAuth";
+import { mobileSignInRedeemHandler, mobileSignInRequestHandler } from "./http/mobileSignIn";
 import { stripeWebhook } from "./http/billing";
 import { shopifyCallback } from "./http/shopify";
 import { appUninstalled, customerDataRequest, customerRedact, shopRedact } from "./http/shopifyCompliance";
@@ -835,6 +836,14 @@ const mobileBatchFinalizeHandler = mobileBatchActionHandler("finalize");
 const appClipGuestPhotoUploadHandler = appClipGuestBatchActionHandler("upload");
 
 const appClipGuestBatchFinalizeHandler = appClipGuestBatchActionHandler("finalize");
+
+http.route({ path: "/api/mobile/sign-in/request", method: "POST", handler: mobileSignInRequestHandler });
+
+http.route({ path: "/api/mobile/sign-in/request", method: "OPTIONS", handler: mobileSignInRequestHandler });
+
+http.route({ path: "/api/mobile/sign-in/redeem", method: "POST", handler: mobileSignInRedeemHandler });
+
+http.route({ path: "/api/mobile/sign-in/redeem", method: "OPTIONS", handler: mobileSignInRedeemHandler });
 
 http.route({ path: "/api/mobile/enrollment/exchange", method: "POST", handler: mobileEnrollmentExchangeHandler });
 

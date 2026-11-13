@@ -51,6 +51,8 @@
       "source": "/apple-app-site-association",
       "destination": "/apple-app-site-association"
     },
+    { "source": "/app-sign-in", "destination": "/app-sign-in.html" },
+    { "source": "/app-sign-in/", "destination": "/app-sign-in.html" },
     {
       "source": "/clip",
       "destination": "/clip.html"

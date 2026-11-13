@@ -703,4 +703,30 @@ export default defineSchema({
     .index("by_flagId", ["flagId"])
     .index("by_sourceDeviceId_and_createdAt", ["sourceDeviceId", "createdAt"])
     .index("by_createdAt", ["createdAt"]),
+
+  // A signed-out iPhone asks signed-in Chrome for a one-time sign-in QR.
+  // Secrets are stored only as SHA-256 hashes.
+  mobileSignInRequests: defineTable({
+    requestSecretHash: v.string(),
+    emailHash: v.string(),
+    // Unset when the email matched no eligible account; such a request can
+    // never be redeemed, but looks the same to the phone.
+    clerkUserId: v.optional(v.string()),
+    mfaRequired: v.optional(v.boolean()),
+    qrCodeHash: v.optional(v.string()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("completed"),
+      v.literal("cancelled"),
+      v.literal("expired"),
+    ),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    closedAt: v.optional(v.number()),
+  })
+    .index("by_requestSecretHash", ["requestSecretHash"])
+    .index("by_emailHash_and_createdAt", ["emailHash", "createdAt"])
+    .index("by_clerkUserId_and_status", ["clerkUserId", "status"])
+    .index("by_status_and_expiresAt", ["status", "expiresAt"])
+    .index("by_createdAt", ["createdAt"]),
 });

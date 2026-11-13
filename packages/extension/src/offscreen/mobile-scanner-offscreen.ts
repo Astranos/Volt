@@ -302,6 +302,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     message.action === "workspaceOffscreenStartSubscriptions"
     || message.action === "workspaceOffscreenReconcile"
     || message.action === "workspaceOffscreenCreateEnrollment"
+    || message.action === "workspaceOffscreenIssueMobileSignInQr"
+    || message.action === "workspaceOffscreenDismissMobileSignIn"
     || message.action === "workspaceOffscreenCreatePhotoDownloadUrl"
     || message.action === "workspaceOffscreenDeleteResults"
     || message.action === "workspaceOffscreenRestoreResults"
@@ -438,6 +440,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return sendWorkspaceOperation(
         sendResponse,
         cloudWorkspaceSubscriptions.createEnrollment(label),
+      );
+    }
+    if (
+      message.action === "workspaceOffscreenIssueMobileSignInQr"
+      || message.action === "workspaceOffscreenDismissMobileSignIn"
+    ) {
+      const requestId = typeof message.requestId === "string" ? message.requestId.slice(0, 64) : "";
+      if (!requestId) {
+        sendResponse({ success: false, error: "invalid_sign_in_request" });
+        return false;
+      }
+      return sendWorkspaceOperation(
+        sendResponse,
+        message.action === "workspaceOffscreenIssueMobileSignInQr"
+          ? cloudWorkspaceSubscriptions.issueMobileSignInQr(requestId)
+          : cloudWorkspaceSubscriptions.dismissMobileSignIn(requestId),
       );
     }
     if (message.action === "workspaceOffscreenCreatePhotoDownloadUrl") {
