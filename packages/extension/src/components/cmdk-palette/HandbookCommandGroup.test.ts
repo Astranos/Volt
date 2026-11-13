@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import type { HandbookEntry } from "../../domain/handbook";
+import type { HandbookEntry } from "@volt/handbook";
 import { handbookCommandMatches, wantsHandbookAction } from "./HandbookCommandGroup";
 
 const entry = (index: number, title: string): HandbookEntry => ({

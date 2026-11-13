@@ -1,8 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, expect, test, vi } from "vitest";
-import type { HandbookEntry } from "../../domain/handbook";
+import { draftFor, type HandbookEntry } from "@volt/handbook";
 import HandbookPage from "./HandbookPage";
-import { draftFor, HandbookEditor } from "./HandbookEditor";
+import { HandbookEditor } from "./HandbookEditor";
 
 const state = vi.hoisted(() => ({ entries: [] as HandbookEntry[] }));
 vi.mock("convex/react", () => ({ useMutation: () => vi.fn() }));

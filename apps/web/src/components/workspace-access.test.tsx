@@ -34,15 +34,14 @@ describe("workspace access gate", () => {
     expect(html).not.toContain("Workspace queries mounted too early");
   });
 
-  test("mounts the workspace after cloud access is allowed and shows the pilot terms", () => {
+  test("mounts the workspace after cloud access is allowed, without a plan banner", () => {
     const html = renderToStaticMarkup(
       <WorkspaceAccessContent state={{ status: "allowed" }} retry={() => {}}>
         <p>My captures</p>
       </WorkspaceAccessContent>,
     );
     expect(html).toContain("My captures");
-    expect(html).toContain("Free cloud workspace");
-    expect(html).toContain("Scanning and device sync are free");
+    expect(html).not.toContain("Free cloud workspace");
   });
 
   test("unavailable page explains access and offers retry without a purchase pitch", () => {

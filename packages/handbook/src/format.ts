@@ -1,4 +1,4 @@
-import type { HandbookEntry } from "./handbook";
+import type { HandbookEntry } from "./entries";
 
 export type HandbookValueFormat = NonNullable<HandbookEntry["valueFormat"]>;
 export type AddressParts = { street: string; city: string; state: string; zip: string };

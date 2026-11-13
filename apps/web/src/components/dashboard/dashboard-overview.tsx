@@ -18,14 +18,11 @@ export function ScannerResultsHeading({
   return (
     <header className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
-          Your workspace
-        </p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-950 sm:text-4xl">
-          Scanner results
+        <h1 className="text-2xl font-semibold tracking-tight text-zinc-950">
+          Capture history
         </h1>
-        <p className="mt-2 text-sm leading-6 text-zinc-500">
-          Search, copy, and manage captures from your connected devices.
+        <p className="mt-1 text-sm leading-6 text-zinc-500">
+          Search, copy, and export the barcodes, text, and photos sent from your phone.
         </p>
       </div>
       <button

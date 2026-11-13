@@ -1,4 +1,5 @@
-import { HANDBOOK_OPEN_ENTRY_KEY, type HandbookEntry, type HandbookEntryId } from "../domain/handbook";
+import type { HandbookEntry, HandbookEntryId } from "@volt/handbook";
+import { HANDBOOK_OPEN_ENTRY_KEY } from "../domain/handbook";
 
 async function send(action: string, extra: Record<string, unknown> = {}): Promise<unknown> {
   const response: unknown = await chrome.runtime.sendMessage({ action, ...extra });

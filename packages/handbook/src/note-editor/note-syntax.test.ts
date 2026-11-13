@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { parseHandbookMarkdown, parseInline } from "../../../domain/handbook-markdown";
+import { parseHandbookMarkdown, parseInline } from "../markdown";
 import { inlineSpans, inlineText, parseNoteLine } from "./note-syntax";
 
 const spans = (text: string) => inlineSpans(text).map((span) => ({

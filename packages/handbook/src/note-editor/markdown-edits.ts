@@ -1,6 +1,6 @@
 // Text edits behind the note editor's menus. They work on plain strings (a line, or a
 // line plus offsets) so they can be tested without an editor.
-import { isSafeHandbookLink } from "../../../domain/handbook-markdown";
+import { isSafeHandbookLink } from "../markdown";
 import { inlineSpans, inlineText, parseNoteLine, type InlineSpan } from "./note-syntax";
 
 // A heading, bullet, checklist, or numbered-list prefix, with its indentation.

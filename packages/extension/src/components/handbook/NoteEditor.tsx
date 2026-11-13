@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { Bold, Code, Heading1, Heading2, Heading3, Italic, Link2, List, ListChecks, ListOrdered, Pilcrow, type LucideIcon } from "lucide-react";
-import { externalChange, noteEditorExtensions } from "./note-editor/extensions";
+import { externalChange, noteEditorExtensions } from "@volt/handbook/note-editor";
 
 // Rendered hidden once; the editor's menus clone these SVGs by name.
 const ICONS: Record<string, LucideIcon> = {

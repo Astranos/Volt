@@ -31,7 +31,7 @@ describe("dashboard presentation", () => {
         isEmpty
       />,
     );
-    expect(html).toContain("Scanner results");
+    expect(html).toContain("Capture history");
     expect(html).not.toContain(">Dashboard<");
     expect(html).toContain("Nothing captured yet");
     expect(html).toContain("0 captures over the last 7 days");

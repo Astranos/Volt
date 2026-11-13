@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { markdownPlainText, parseHandbookMarkdown } from "./handbook-markdown";
+import { markdownPlainText, parseHandbookMarkdown } from "./markdown";
 
 describe("parseHandbookMarkdown", () => {
   test("an empty checklist item is a task, not literal text", () => {

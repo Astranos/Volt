@@ -16,9 +16,19 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { api } from "../../../../../convex/_generated/api";
-import type { HandbookEntry, HandbookEntryId, HandbookStep } from "../../domain/handbook";
-import { addressLines, entryFields, fieldDisplayValue, mapsUrl, valueFormatOf, type HandbookField } from "../../domain/handbook-format";
-import { parseHandbookMarkdown, type Inline } from "../../domain/handbook-markdown";
+import {
+  addressLines,
+  entryFields,
+  fieldDisplayValue,
+  mapsUrl,
+  parseHandbookMarkdown,
+  valueFormatOf,
+  type HandbookEntry,
+  type HandbookEntryId,
+  type HandbookField,
+  type HandbookStep,
+  type Inline,
+} from "@volt/handbook";
 import { cn } from "../../lib/utils";
 import "./handbook.css";
 

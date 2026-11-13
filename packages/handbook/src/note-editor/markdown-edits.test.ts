@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { parseHandbookMarkdown } from "../../../domain/handbook-markdown";
+import { parseHandbookMarkdown } from "../markdown";
 import {
   canLinkText,
   inlineFormat,

@@ -1,0 +1,29 @@
+{
+  "name": "@volt/handbook",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Handbook logic shared by the Chrome extension and the web dashboard: entry search and grouping, value formatting, the note Markdown subset and editor, and the editor's save model.",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./note-editor": "./src/note-editor/index.ts"
+  },
+  "dependencies": {
+    "@codemirror/autocomplete": "^6.20.4",
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/language": "^6.13.1",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15",
+    "@lezer/markdown": "^1.8.1",
+    "convex": "^1.41.0"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

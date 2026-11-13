@@ -7,7 +7,7 @@ import {
   matchesHandbookQuery,
   parseKeyCombo,
   type HandbookEntry,
-} from "./handbook";
+} from "./entries";
 
 let nextId = 0;
 function entry(fields: Partial<HandbookEntry> & Pick<HandbookEntry, "kind" | "title" | "category">): HandbookEntry {

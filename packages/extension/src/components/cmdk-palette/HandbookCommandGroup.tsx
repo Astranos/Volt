@@ -1,8 +1,16 @@
 import { useEffect, useState } from "react";
 import { Command } from "cmdk";
 import { BookOpen, Check, FileText, KeyRound, ListChecks, StickyNote } from "lucide-react";
-import { guideSummary, matchesHandbookQuery, opensAsDocument, noteSummary, type HandbookEntry } from "../../domain/handbook";
-import { entryFields, fieldDisplayValue, hasFieldRows } from "../../domain/handbook-format";
+import {
+  entryFields,
+  fieldDisplayValue,
+  guideSummary,
+  hasFieldRows,
+  matchesHandbookQuery,
+  noteSummary,
+  opensAsDocument,
+  type HandbookEntry,
+} from "@volt/handbook";
 import { listHandbook, openHandbookInSidepanel, revealHandbookSecret } from "../../handbook/client";
 import { PROFILE_AUTH_EVENT_KEY } from "../../access/chrome-profile-auth";
 import { CLERK_CLIENT_JWT_CACHE_KEY } from "../../access/clerk-client-jwt";
