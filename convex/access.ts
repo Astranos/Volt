@@ -317,7 +317,9 @@ async function buildAccessStatus(
         : {}),
     };
   }
-  if (freeSessionsRemaining > 0) {
+  // Volt is free for signed-in accounts; the session limit only applies to
+  // anonymous trials, which must sign in to continue.
+  if (principal.user || freeSessionsRemaining > 0) {
     return {
       ...withCapabilities,
       access: "trial",
@@ -332,8 +334,8 @@ async function buildAccessStatus(
     access: "exhausted",
     isAuthorized: false,
     hasFullAppAccess: false,
-    requiresSignIn: !principal.user,
-    requiresSubscription: Boolean(principal.user),
+    requiresSignIn: true,
+    requiresSubscription: false,
   };
 }
 

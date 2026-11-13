@@ -40,9 +40,6 @@ function accessErrorMessage(response: unknown) {
   if (status?.requiresSignIn === true) {
     return "Your five free sessions are used. Sign in to continue.";
   }
-  if (status?.requiresSubscription === true) {
-    return "A Volt Pro subscription is required. Subscribe in the full iPhone app.";
-  }
   return typeof record?.error === "string"
     ? record.error
     : "Scanner access could not be verified.";

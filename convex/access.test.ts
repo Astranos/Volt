@@ -163,9 +163,10 @@ describe("anonymous scanner trial", () => {
     const signedIn = t.withIdentity({ subject: "user_after_trial" });
     const claimed = await signedIn.mutation(getStatus, credentials);
     expect(claimed.body).toMatchObject({
-      access: "exhausted",
+      access: "trial",
+      isAuthorized: true,
       requiresSignIn: false,
-      requiresSubscription: true,
+      requiresSubscription: false,
       freeSessionsRemaining: 0,
     });
   });

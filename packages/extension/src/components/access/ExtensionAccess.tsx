@@ -216,10 +216,11 @@ function objectFrom(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function statusCopy(status: ExtensionAccessStatus | null) {
+function statusCopy(status: ExtensionAccessStatus | null, isSignedIn: boolean) {
   if (!status) return "Checking scanner access";
   switch (status.access) {
     case "trial":
+      if (isSignedIn) return "Free account";
       return `${status.freeSessionsRemaining} free session${
         status.freeSessionsRemaining === 1 ? "" : "s"
       } remaining`;
@@ -682,7 +683,7 @@ function ClerkAccessPanel({ surface }: { surface: AccessSurface }) {
         />
         <div className="min-w-0 flex-1">
           <div className="truncate text-[11px] font-bold text-foreground">
-            {statusCopy(status)}
+            {statusCopy(status, Boolean(isSignedIn))}
           </div>
           <div className="flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground">
             <span className="truncate">{accountName}</span>
