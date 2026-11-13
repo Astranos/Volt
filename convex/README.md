@@ -53,7 +53,3 @@ All loaded pages need subscriptions for live presence updates. A subscription to
 Legacy list queries preserve complete lists beyond the new transport page size. They read up to 100 active Chrome registrations, then look up presence sequentially within a combined 2 MiB read budget. Over-budget requests throw `Computer listing requires pagination`; they never return a partial list as complete. Deploy the new index and page endpoints before releasing the updated native subscription. Existing installed native clients require an update for over-budget computer lists; no workspace device-count limit is imposed.
 
 The presence sweep marks a bounded page of expired leases offline and schedules another transaction when more leases remain. It does not wait for the next cron interval to drain a backlog.
-
-## Retired data cleanup
-
-`catalogPurge.purge` is an internal, one-time cleanup mutation. After deployment, an operator can invoke it with `{}` to delete retired catalog and API rows. Each transaction reads at most 100 rows with a 2 MiB read threshold and schedules the next batch until every retired table is empty. Restarting the mutation is safe. It leaves billing ledgers and workspace data intact. The permissive table definitions in `schema.ts` remain only for this cleanup and must be removed in a follow-up after confirming all retired tables are empty. The mutation is not registered in a cron and does not run on deployment.

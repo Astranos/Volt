@@ -11,7 +11,6 @@
 import type * as access from "../access.js";
 import type * as aiScanner from "../aiScanner.js";
 import type * as aiScannerQuota from "../aiScannerQuota.js";
-import type * as catalogPurge from "../catalogPurge.js";
 import type * as cloudWorkspace from "../cloudWorkspace.js";
 import type * as cloudWorkspace_batches from "../cloudWorkspace/batches.js";
 import type * as cloudWorkspace_deliveries from "../cloudWorkspace/deliveries.js";
@@ -76,7 +75,6 @@ declare const fullApi: ApiFromModules<{
   access: typeof access;
   aiScanner: typeof aiScanner;
   aiScannerQuota: typeof aiScannerQuota;
-  catalogPurge: typeof catalogPurge;
   cloudWorkspace: typeof cloudWorkspace;
   "cloudWorkspace/batches": typeof cloudWorkspace_batches;
   "cloudWorkspace/deliveries": typeof cloudWorkspace_deliveries;
