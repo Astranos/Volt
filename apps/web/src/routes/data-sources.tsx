@@ -1,6 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
-import type { ReactNode } from "react";
-import { SiteFooter, SiteHeader, supportUrl } from "../site-chrome";
+import type { LucideIcon } from "lucide-react";
+import {
+  BookOpen,
+  Chrome,
+  Highlighter,
+  Link2,
+  MessageSquareMore,
+  RefreshCw,
+  Search,
+  ShoppingBag,
+  Smartphone,
+  Store,
+  TriangleAlert,
+  Zap,
+} from "lucide-react";
+import { SiteFooter, SiteHeader } from "../site-chrome";
 
 export const Route = createFileRoute("/data-sources")({
   head: () => ({
@@ -8,7 +22,7 @@ export const Route = createFileRoute("/data-sources")({
       {
         name: "description",
         content:
-          "Every Volt feature and the services it talks to. Volt runs on Chrome, Shopify, and its own backend, and does not use paymore.com services.",
+          "Every Volt feature and the services it talks to. Volt runs on Chrome, Shopify, and Volt’s own backend.",
       },
     ],
     title: "Where Volt Gets Its Data - Volt",
@@ -16,172 +30,178 @@ export const Route = createFileRoute("/data-sources")({
   component: DataSourcesPage,
 });
 
-type Feature = { name: string; talksTo: ReactNode; detail: ReactNode };
+type Feature = {
+  icon: LucideIcon;
+  name: string;
+  talksTo: string[];
+  detail: string;
+};
 
-const extensionFeatures: Feature[] = [
-  {
-    name: "Shopify admin buttons, inventory search, and Shopify Audit",
-    talksTo: <>admin.shopify.com and your store’s *.myshopify.com admin pages, plus the Shopify Admin API through Volt’s backend</>,
-    detail:
-      "The buttons run inside your own Shopify admin. Inventory search (also on the new tab and side panel) and audits use the Shopify Admin API with the access your store granted when it connected to Volt.",
-  },
-  {
-    name: "Mobile capture sync and QR sign-in",
-    talksTo: <>Volt’s backend (Convex, Cloudflare R2) and Clerk for sign-in</>,
-    detail:
-      "Barcodes, text, and photos from the Volt iPhone app arrive through your own Volt account. Chrome profile sign-in checks your Google account with Google’s sign-in service. The older direct phone-to-computer pairing uses Google’s public STUN servers and Cloudflare’s TURN relay to connect the two devices.",
-  },
-  {
-    name: "Search shortcuts, context menu, and new tab search",
-    talksTo: <>Nothing until you click; then the site you chose (eBay, PriceCharting, Google, BarcodeLookup, and others)</>,
-    detail:
-      "These build a search link and open it in a new tab. Volt does not download or store results from those sites.",
-  },
-  {
-    name: "eBay sold-listing warning",
-    talksTo: <>www.ebay.com search pages, in your browser only</>,
-    detail: "Adds a notice to eBay search pages you open. It reads that page and sends nothing anywhere.",
-  },
-  {
-    name: "UPC highlighter, link preview, and field insertion",
-    talksTo: <>The page you are viewing, in your browser only</>,
-    detail:
-      "These run on whatever page you have open so they can highlight barcodes, preview a link on Shift+click, or type a mobile capture into the field you picked. They do not send page contents to Volt or anyone else.",
-  },
-  {
-    name: "Quick links, bookmarks, and new tab",
-    talksTo: <>A published Google Sheet (CSV) that you can replace in Settings, and Google’s favicon service for link icons</>,
-    detail:
-      "The sheet is a list of bookmarks. Icons come from Chrome’s own favicon cache, falling back to Google’s favicon service for the link’s domain. Volt opens a link only when you choose it.",
-  },
-  {
-    name: "Handbook",
-    talksTo: <>Volt’s backend</>,
-    detail: "Notes, guides, and saved values you keep in Volt are stored in your own Volt account. Saved secrets are encrypted.",
-  },
-];
+type Group = {
+  icon: LucideIcon;
+  title: string;
+  summary: string;
+  features: Feature[];
+};
 
-const appFeatures: Feature[] = [
+const groups: Group[] = [
   {
-    name: "Capture, 7-day history, and workspace sync",
-    talksTo: <>Volt’s backend (Convex, Cloudflare R2) and Clerk for sign-in</>,
-    detail:
-      "Barcode and text recognition run on the iPhone. Synced captures go to your own Volt workspace and roll off after 7 days.",
+    icon: Chrome,
+    title: "Chrome extension",
+    summary: "Tools that run in your browser and sync with your Volt account.",
+    features: [
+      {
+        icon: RefreshCw,
+        name: "Mobile capture sync and QR sign-in",
+        talksTo: ["Volt account", "Clerk sign-in", "Google sign-in"],
+        detail:
+          "Barcodes, text, and photos from the iPhone app arrive through your own Volt account. The older direct pairing connects phone and computer through Google STUN and Cloudflare TURN.",
+      },
+      {
+        icon: Search,
+        name: "Search shortcuts and context menu",
+        talksTo: ["Only the site you pick"],
+        detail:
+          "Builds a search link for eBay, PriceCharting, Google, and others, and opens it when you click. Results are never downloaded or stored.",
+      },
+      {
+        icon: TriangleAlert,
+        name: "eBay sold-listing warning",
+        talksTo: ["ebay.com, in your browser"],
+        detail: "Adds a notice to eBay search pages you open. Nothing is sent anywhere.",
+      },
+      {
+        icon: Highlighter,
+        name: "UPC highlighter, link preview, and field insertion",
+        talksTo: ["The page you’re on"],
+        detail:
+          "Highlights barcodes, previews links on Shift+click, and types mobile captures into the field you pick. Page contents stay in your browser.",
+      },
+      {
+        icon: Link2,
+        name: "Quick links and bookmarks",
+        talksTo: ["Google Sheets (CSV)", "Google favicons"],
+        detail:
+          "Quick links come from a published sheet you can replace in Settings. Link icons fall back to Google’s favicon service.",
+      },
+      {
+        icon: BookOpen,
+        name: "Handbook",
+        talksTo: ["Volt account"],
+        detail: "Notes, guides, and saved values live in your own Volt account. Saved secrets are encrypted.",
+      },
+    ],
   },
   {
-    name: "App Clip",
-    talksTo: <>Volt’s backend, with a short-lived pass from your signed-in Chrome</>,
-    detail: "Sends captures to your workspace without an account on the phone.",
+    icon: Smartphone,
+    title: "iPhone app",
+    summary: "Capture on the phone, pick up on any screen.",
+    features: [
+      {
+        icon: Zap,
+        name: "Capture, 7-day history, and sync",
+        talksTo: ["Volt account", "Clerk sign-in"],
+        detail:
+          "Barcode and text recognition run on the iPhone. Synced captures go to your Volt workspace and clear after 7 days.",
+      },
+      {
+        icon: Smartphone,
+        name: "App Clip",
+        talksTo: ["Volt account"],
+        detail: "Sends captures to your workspace with a short-lived pass from your signed-in Chrome. No account needed on the phone.",
+      },
+    ],
   },
-];
-
-const kioskFeatures: Feature[] = [
   {
-    name: "In-store catalog",
-    talksTo: <>Volt’s kiosk server, which reads the store’s own *.myshopify.com storefront (products.json, meta.json). Photos load from cdn.shopify.com.</>,
-    detail:
-      "The kiosk shows a store’s public Shopify listings, read directly from Shopify. A store is identified by its Shopify shop address. The PayMore name and logo are built into the kiosk for participating franchise stores. They are not loaded from any paymore.com service.",
+    icon: Store,
+    title: "In-store kiosk",
+    summary: "A customer catalog for store iPads and tablets.",
+    features: [
+      {
+        icon: ShoppingBag,
+        name: "In-store catalog",
+        talksTo: ["Volt kiosk server", "*.myshopify.com", "cdn.shopify.com"],
+        detail:
+          "Shows a store’s public Shopify listings, read straight from its Shopify store address. Branding is built into the kiosk.",
+      },
+      {
+        icon: MessageSquareMore,
+        name: "Ask to see an item",
+        talksTo: ["Volt account"],
+        detail: "Customer requests go to a short-lived staff queue and expire after one hour.",
+      },
+    ],
   },
-  {
-    name: "Ask to see an item",
-    talksTo: <>Volt’s backend</>,
-    detail: "Customer requests go to a short-lived queue that store staff see. Requests expire after one hour.",
-  },
-];
-
-const notUsed = [
-  "paymore.com websites, storefront domains, or APIs",
-  "The paymore.com point-of-sale system",
-  "Product, price, or UPC data collected from paymore.com. Volt deleted that data and the features built on it, including UPC search and the product API.",
-  "Account access tied to a paymore.com email. Every signed-in account gets the same free access.",
 ];
 
 function DataSourcesPage() {
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-950">
       <SiteHeader />
-      <main className="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:py-24">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-green-700">
-          Volt
-        </p>
-        <h1 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
-          Where Volt gets its data
-        </h1>
-        <p className="mt-4 text-sm text-zinc-500">Updated November 13, 2026</p>
-
-        <div className="mt-12 space-y-12 text-base leading-7 text-zinc-700">
-          <p>
-            Volt runs on Chrome, Shopify, and Volt’s own backend. It does not depend on any
-            franchise’s or retailer’s private systems, so the extension, iPhone app, and kiosk work
-            for any resale business. This page lists every feature in use and what it talks to.
-          </p>
-
-          <Section title="Chrome extension">
-            <FeatureList features={extensionFeatures} />
-          </Section>
-
-          <Section title="Volt iPhone app">
-            <FeatureList features={appFeatures} />
-          </Section>
-
-          <Section title="In-store kiosk">
-            <FeatureList features={kioskFeatures} />
-          </Section>
-
-          <Section title="What Volt does not use">
-            <ul className="list-disc space-y-2 pl-5">
-              {notUsed.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </Section>
-
-          <Section title="Volt’s backend">
-            <p>
-              “Volt’s backend” means services Volt runs for its own users: Convex for accounts and
-              sync, Cloudflare R2 for photos, and Clerk for sign-in. Volt’s server also talks to
-              Shopify for connected stores, Apple for legacy App Store subscriptions, and OpenRouter
-              and PriceCharting search for product lookups requested by older app versions.
+      <main>
+        <section className="relative overflow-hidden border-b border-zinc-200 bg-white">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_80%_at_50%_0%,rgba(16,185,129,0.10),transparent)]" />
+          <div className="relative mx-auto max-w-4xl px-4 py-16 sm:px-6 lg:py-20">
+            <p className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
+              <span className="size-1.5 rounded-full bg-emerald-500" />
+              Updated November 13, 2026
             </p>
-          </Section>
-
-          <Section title="Check it yourself">
-            <p>
-              The extension’s permissions are listed on its page in{" "}
-              <code className="rounded bg-zinc-200 px-1 text-sm">chrome://extensions</code>. Volt’s
-              source code is public, so you can search it for any domain. Questions go to{" "}
-              <a className="font-semibold text-green-700 underline" href={supportUrl}>
-                Volt support
-              </a>
-              .
+            <h1 className="mt-5 text-4xl font-semibold tracking-tight sm:text-5xl">
+              Where Volt gets its data
+            </h1>
+            <p className="mt-5 max-w-2xl text-lg leading-8 text-zinc-600">
+              Volt runs on Chrome, Shopify, and Volt’s own backend. It doesn’t depend on any
+              franchise’s or retailer’s private systems, so it works for any resale business.
             </p>
-          </Section>
+          </div>
+        </section>
+
+        <div className="mx-auto max-w-4xl space-y-16 px-4 py-16 sm:px-6 lg:py-20">
+          {groups.map((group) => (
+            <section key={group.title} aria-labelledby={`group-${group.title}`}>
+              <div className="flex items-center gap-3">
+                <div className="grid size-10 place-items-center rounded-xl bg-zinc-950 text-white">
+                  <group.icon size={19} />
+                </div>
+                <div>
+                  <h2 id={`group-${group.title}`} className="text-xl font-semibold">
+                    {group.title}
+                  </h2>
+                  <p className="text-sm text-zinc-500">{group.summary}</p>
+                </div>
+              </div>
+
+              <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                {group.features.map((feature) => (
+                  <article
+                    key={feature.name}
+                    className="flex flex-col rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-700">
+                        <feature.icon size={17} />
+                      </div>
+                      <h3 className="pt-1.5 text-sm font-semibold leading-5">{feature.name}</h3>
+                    </div>
+                    <p className="mt-3 flex-1 text-sm leading-6 text-zinc-600">{feature.detail}</p>
+                    <ul className="mt-4 flex flex-wrap gap-1.5" aria-label="Talks to">
+                      {feature.talksTo.map((service) => (
+                        <li
+                          key={service}
+                          className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-0.5 text-xs font-medium text-zinc-700"
+                        >
+                          {service}
+                        </li>
+                      ))}
+                    </ul>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ))}
         </div>
       </main>
       <SiteFooter />
     </div>
-  );
-}
-
-function FeatureList({ features }: Readonly<{ features: Feature[] }>) {
-  return (
-    <ul className="space-y-6">
-      {features.map((feature) => (
-        <li key={feature.name}>
-          <h3 className="font-semibold text-zinc-950">{feature.name}</h3>
-          <p className="mt-1 text-sm text-zinc-500">Talks to: {feature.talksTo}</p>
-          <p className="mt-1">{feature.detail}</p>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function Section({ children, title }: Readonly<{ children: ReactNode; title: string }>) {
-  return (
-    <section>
-      <h2 className="text-xl font-semibold text-zinc-950">{title}</h2>
-      <div className="mt-4">{children}</div>
-    </section>
   );
 }
