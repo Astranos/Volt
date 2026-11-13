@@ -3,7 +3,7 @@
   "outputDirectory": "dist",
   "headers": [
     {
-      "source": "/:path((?!privacy(?:/|$)|api/|assets/|\\.well-known/|.*\\.[^/]+$).+)",
+      "source": "/:path((?!privacy(?:/|$)|data-sources(?:/|$)|api/|assets/|\\.well-known/|.*\\.[^/]+$).+)",
       "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
     },
     {
@@ -24,6 +24,13 @@
         }
       ]
     }
+  ],
+  "redirects": [
+    { "source": "/upc-search", "destination": "/", "permanent": true },
+    { "source": "/upc-search/:path*", "destination": "/", "permanent": true },
+    { "source": "/catalog", "destination": "/dashboard", "permanent": true },
+    { "source": "/api-keys", "destination": "/dashboard", "permanent": true },
+    { "source": "/admin", "destination": "/dashboard", "permanent": true }
   ],
   "rewrites": [
     { "source": "/api/shopify/admin/status", "destination": "https://sincere-trout-414.convex.site/api/shopify/admin/status" },

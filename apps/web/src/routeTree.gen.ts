@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as BillingRouteImport } from './routes/billing'
 import { Route as ClipRouteImport } from './routes/clip'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as DataSourcesRouteImport } from './routes/data-sources'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ScannerDemoRouteImport } from './routes/scanner-demo'
 import { Route as ScannerResultsRouteImport } from './routes/scanner-results'
@@ -38,6 +39,11 @@ const ClipRoute = ClipRouteImport.update({
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DataSourcesRoute = DataSourcesRouteImport.update({
+  id: '/data-sources',
+  path: '/data-sources',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacyRoute = PrivacyRouteImport.update({
@@ -76,6 +82,7 @@ export interface FileRoutesByFullPath {
   '/billing': typeof BillingRoute
   '/clip': typeof ClipRoute
   '/dashboard': typeof DashboardRoute
+  '/data-sources': typeof DataSourcesRoute
   '/privacy': typeof PrivacyRoute
   '/scanner-demo': typeof ScannerDemoRoute
   '/scanner-results': typeof ScannerResultsRoute
@@ -88,6 +95,7 @@ export interface FileRoutesByTo {
   '/billing': typeof BillingRoute
   '/clip': typeof ClipRoute
   '/dashboard': typeof DashboardRoute
+  '/data-sources': typeof DataSourcesRoute
   '/privacy': typeof PrivacyRoute
   '/scanner-demo': typeof ScannerDemoRoute
   '/scanner-results': typeof ScannerResultsRoute
@@ -101,6 +109,7 @@ export interface FileRoutesById {
   '/billing': typeof BillingRoute
   '/clip': typeof ClipRoute
   '/dashboard': typeof DashboardRoute
+  '/data-sources': typeof DataSourcesRoute
   '/privacy': typeof PrivacyRoute
   '/scanner-demo': typeof ScannerDemoRoute
   '/scanner-results': typeof ScannerResultsRoute
@@ -115,6 +124,7 @@ export interface FileRouteTypes {
     | '/billing'
     | '/clip'
     | '/dashboard'
+    | '/data-sources'
     | '/privacy'
     | '/scanner-demo'
     | '/scanner-results'
@@ -127,6 +137,7 @@ export interface FileRouteTypes {
     | '/billing'
     | '/clip'
     | '/dashboard'
+    | '/data-sources'
     | '/privacy'
     | '/scanner-demo'
     | '/scanner-results'
@@ -139,6 +150,7 @@ export interface FileRouteTypes {
     | '/billing'
     | '/clip'
     | '/dashboard'
+    | '/data-sources'
     | '/privacy'
     | '/scanner-demo'
     | '/scanner-results'
@@ -152,6 +164,7 @@ export interface RootRouteChildren {
   BillingRoute: typeof BillingRoute
   ClipRoute: typeof ClipRoute
   DashboardRoute: typeof DashboardRoute
+  DataSourcesRoute: typeof DataSourcesRoute
   PrivacyRoute: typeof PrivacyRoute
   ScannerDemoRoute: typeof ScannerDemoRoute
   ScannerResultsRoute: typeof ScannerResultsRoute
@@ -188,6 +201,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/data-sources': {
+      id: '/data-sources'
+      path: '/data-sources'
+      fullPath: '/data-sources'
+      preLoaderRoute: typeof DataSourcesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/privacy': {
@@ -240,6 +260,7 @@ const rootRouteChildren: RootRouteChildren = {
   BillingRoute: BillingRoute,
   ClipRoute: ClipRoute,
   DashboardRoute: DashboardRoute,
+  DataSourcesRoute: DataSourcesRoute,
   PrivacyRoute: PrivacyRoute,
   ScannerDemoRoute: ScannerDemoRoute,
   ScannerResultsRoute: ScannerResultsRoute,
