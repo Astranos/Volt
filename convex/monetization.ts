@@ -44,7 +44,7 @@ export async function accountPolicy(
       q.eq("ownerClerkUserId", ownerClerkUserId).eq("product", "workspace"),
     )
     .take(100);
-  // Volt is free, so old App Store and complimentary entitlements earn no longer history:
+  // Volt is free, so legacy entitlements earn no longer history:
   // they would exempt an account from the 7-day window, or lock it read-only once they lapse.
   const paid = rows.some((row) => hasPaidAccess(row, now));
   const offers = monetizationOfferLimits();

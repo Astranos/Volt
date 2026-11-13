@@ -3,13 +3,12 @@ import { describe, expect, test, vi } from "vitest";
 import { fetchWorkspaceSnapshot, type WorkspaceSnapshotPage } from "@volt/scanner-protocol";
 import { api } from "./_generated/api";
 import schema from "./schema";
-import { modules, grantFullAppAccess } from "./cloudWorkspace.testSupport";
+import { modules } from "./cloudWorkspace.testSupport";
 import { SNAPSHOT_PAGE_DOCUMENTS, SNAPSHOT_PAGE_READ_BYTES } from "./cloudWorkspace/snapshot";
 
 async function seed(count: number, text = "value") {
   const t = convexTest(schema, modules);
   const user = t.withIdentity({ subject: "alice" });
-  await grantFullAppAccess(t, "alice");
   await t.run(async (ctx) => {
     const workspaceId = await ctx.db.insert("workspaces", { ownerClerkUserId: "alice", name: "Alice", createdAt: 1, updatedAt: 1 });
     for (let index = 0; index < count; index++) {
@@ -82,7 +81,6 @@ describe("bounded complete workspace snapshots", () => {
     const page = await user.query(api.cloudWorkspace.workspaceSnapshotPage, { kind: "results", cursor: null });
     if (!page || page.isDone) throw new Error("Expected a continuation");
     const bob = t.withIdentity({ subject: "bob" });
-    await grantFullAppAccess(t, "bob");
     await bob.mutation(api.cloudWorkspace.ensureWorkspace, {});
     await expect(bob.query(api.cloudWorkspace.workspaceSnapshotPage, { kind: "results", cursor: page.continueCursor })).rejects.toThrow(/another workspace/);
     await expect(user.query(api.cloudWorkspace.workspaceSnapshotPage, { kind: "batches", cursor: page.continueCursor })).rejects.toThrow(/another workspace or stream/);
@@ -94,7 +92,6 @@ describe("bounded complete workspace snapshots", () => {
   test("keeps no-workspace null distinct from an existing empty workspace", async () => {
     const t = convexTest(schema, modules);
     const user = t.withIdentity({ subject: "newcomer" });
-    await grantFullAppAccess(t, "newcomer");
     expect(await fetchWorkspaceSnapshot(args => user.query(api.cloudWorkspace.workspaceSnapshotPage, args))).toBeNull();
     await user.mutation(api.cloudWorkspace.ensureWorkspace, {});
     expect(await fetchWorkspaceSnapshot(args => user.query(api.cloudWorkspace.workspaceSnapshotPage, args))).toMatchObject({ batches: [] });

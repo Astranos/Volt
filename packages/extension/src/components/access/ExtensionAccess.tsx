@@ -223,8 +223,6 @@ function statusCopy(status: ExtensionAccessStatus | null) {
       return `${status.freeSessionsRemaining} free session${
         status.freeSessionsRemaining === 1 ? "" : "s"
       } remaining`;
-    case "complimentary":
-      return "Complimentary workplace access";
     case "subscription":
       return "Volt Pro subscription active";
     case "exhausted":

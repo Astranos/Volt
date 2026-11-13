@@ -9,7 +9,6 @@
  */
 
 import type * as access from "../access.js";
-import type * as admin from "../admin.js";
 import type * as aiScanner from "../aiScanner.js";
 import type * as aiScannerQuota from "../aiScannerQuota.js";
 import type * as billingConfiguration from "../billingConfiguration.js";
@@ -79,7 +78,6 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   access: typeof access;
-  admin: typeof admin;
   aiScanner: typeof aiScanner;
   aiScannerQuota: typeof aiScannerQuota;
   billingConfiguration: typeof billingConfiguration;

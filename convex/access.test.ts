@@ -399,137 +399,49 @@ describe("account and entitlement access", () => {
   });
 
   test.each([
-    ["juanquenga@gmail.com", true, true],
-    ["JUANQUENGA@GMAIL.COM", true, true],
-    ["manager@paymore.com", true, true],
-    ["MANAGER@PAYMORE.COM", true, true],
-    ["unverified@paymore.com", false, false],
-    ["manager@sub.paymore.com", true, false],
-    ["manager@paymore.com.evil.test", true, false],
-    ["manager@notpaymore.com", true, false],
-  ])("resolves complimentary paid access for %s", async (email, emailVerified, complimentary) => {
+    ["manager@example.com", true],
+    ["MANAGER@EXAMPLE.COM", true],
+    ["unverified@example.com", false],
+    ["manager@sub.example.com", true],
+  ])("keeps %s on the free plan", async (email, emailVerified) => {
     const t = convexTest(schema, modules);
     const signedIn = t.withIdentity({
       subject: `user_${email.toLowerCase()}`,
       tokenIdentifier: `clerk|${email.toLowerCase()}`,
       email,
       email_verified: emailVerified,
+      org_id: "org_example",
     });
 
-    const status = await signedIn.mutation(getStatus, {});
-    expect(status.body).toMatchObject(
-      complimentary
-        ? {
-            access: "complimentary",
-            isAuthorized: true,
-            hasFullAppAccess: true,
-            requiresSubscription: false,
-            subscriptionStatus: "none",
-          }
-        : { access: "trial", hasFullAppAccess: false, subscriptionStatus: "none" },
-    );
-  });
-
-  test.each([
-    {
-      label: "Clerk user id",
-      env: "CLERK_COMPLIMENTARY_USER_IDS",
-      value: "user_explicit_access,user_someone_else",
-      subject: "user_explicit_access",
-      email: "ordinary@example.com",
-    },
-    {
-      label: "verified email",
-      env: "CLERK_COMPLIMENTARY_EMAILS",
-      value: "vip@example.com,other@example.com",
-      subject: "user_email_access",
-      email: "VIP@example.com",
-    },
-  ])("grants configurable complimentary access by $label", async ({ env, value, subject, email }) => {
-    vi.stubEnv(env, value);
-    const t = convexTest(schema, modules);
-    const signedIn = t.withIdentity({
-      subject,
-      tokenIdentifier: `clerk|${subject}`,
-      email,
-      email_verified: true,
-    });
-
-    expect((await signedIn.mutation(getStatus, {})).body).toMatchObject({
-      access: "complimentary",
-      hasFullAppAccess: true,
-      subscriptionStatus: "none",
-    });
-
-    vi.stubEnv(env, "");
     expect((await signedIn.mutation(getStatus, {})).body).toMatchObject({
       access: "trial",
-      hasFullAppAccess: false,
+      plan: "free",
       subscriptionStatus: "none",
+      capabilities: { cloudWorkspace: true },
     });
+    expect(await t.run(ctx => ctx.db.query("entitlements").collect())).toEqual([]);
   });
 
-  test("grants unlimited complimentary access to the configured Clerk organization", async () => {
-    vi.stubEnv("CLERK_COMPLIMENTARY_ORGANIZATION_ID", "org_volt_workplace");
+  test("ignores existing manual entitlements without modifying them", async () => {
     const t = convexTest(schema, modules);
-    const workUser = t.withIdentity({
-      subject: "user_work",
-      tokenIdentifier: "clerk|user_work",
-      org_id: "org_volt_workplace",
-      org_name: "Volt Workplace",
+    const signedIn = t.withIdentity({ subject: "legacy-user" });
+    const id = await t.run(ctx => ctx.db.insert("entitlements", {
+      clerkUserId: "legacy-user",
+      kind: "manual",
+      sourceIdentifier: "complimentary-admin:legacy-user",
+      productId: "pro",
+      status: "active",
+      validFrom: Date.now(),
+      updatedAt: Date.now(),
+    }));
+    expect((await signedIn.mutation(getStatus, {})).body).toMatchObject({
+      access: "trial",
+      plan: "free",
+      subscriptionStatus: "none",
+      aiScannerQuota: { kind: "metered" },
+      capabilities: { cloudWorkspace: true },
     });
-    const status = await workUser.mutation(getStatus, {});
-    expect(status.body).toMatchObject({
-      access: "complimentary",
-      isAuthorized: true,
-      hasFullAppAccess: true,
-      organizationId: "org_volt_workplace",
-      freeSessionsRemaining: 5,
-      requiresSubscription: false,
-    });
-    const entitlement = await t.run((ctx) =>
-      ctx.db
-        .query("organizationEntitlements")
-        .withIndex("by_clerkOrganizationId", (query) =>
-          query.eq("clerkOrganizationId", "org_volt_workplace"),
-        )
-        .unique(),
-    );
-    expect(entitlement).toMatchObject({ status: "active", source: "complimentary" });
-
-    const workSessionReady = makeFunctionReference<
-      "mutation",
-      {
-        clerkUserId: string;
-        tokenIdentifier: string;
-        organizationId: string;
-        token: string;
-      },
-      SessionResult
-    >("access:sessionReadyForHttp");
-    for (let sequence = 1; sequence <= 7; sequence += 1) {
-      const token = `work-join-${sequence}-abcdefghijklmnopqrstuvwxyz`;
-      await t.mutation(internal.scannerSignal.joinTokens.createJoinToken, {
-        token,
-        sessionId: `work-browser-${sequence}`,
-        usageSessionId: `work-usage-${sequence}`,
-        clerkUserId: "user_work",
-        origin: "https://example.test",
-      });
-      const ready = await t.mutation(workSessionReady, {
-        clerkUserId: "user_work",
-        tokenIdentifier: "clerk|user_work",
-        organizationId: "org_volt_workplace",
-        token,
-      });
-      expect(ready).toMatchObject({
-        statusCode: 200,
-        body: {
-          consumed: false,
-          status: { access: "complimentary", freeSessionsRemaining: 5 },
-        },
-      });
-    }
+    expect(await t.run(ctx => ctx.db.get(id))).toMatchObject({ status: "active" });
   });
 
   test.each([
@@ -697,70 +609,6 @@ describe("account and entitlement access", () => {
       access: "subscription",
       subscriptionStatus: "active",
       expiresAt: now + 120_000,
-    });
-  });
-});
-
-const adminOverview = makeFunctionReference<
-  "query",
-  Record<string, never>,
-  {
-    isAdmin: boolean;
-    accounts: Array<{ clerkUserId: string; email: string | null; hasProAccess: boolean; isComped: boolean }>;
-    grants: Array<{ id: string; email: string | null; status: string }>;
-  }
->("admin:overview");
-const adminGrantPro = makeFunctionReference<
-  "mutation",
-  { clerkUserId?: string; email?: string; note?: string },
-  { ok: true }
->("admin:grantPro");
-const adminRevokePro = makeFunctionReference<"mutation", { grantId: string }, { ok: true }>(
-  "admin:revokePro",
-);
-
-describe("admin comped Pro access", () => {
-  const admin = { subject: "user_admin", tokenIdentifier: "clerk|user_admin", email: "juanquenga@gmail.com" };
-
-  test("only an admin identity can read the console or hand out Pro", async () => {
-    const t = convexTest(schema, modules);
-    const stranger = t.withIdentity({ subject: "user_stranger", tokenIdentifier: "clerk|user_stranger", email: "someone@example.com" });
-
-    expect(await stranger.query(adminOverview, {})).toMatchObject({ isAdmin: false });
-    await expect(stranger.mutation(adminGrantPro, { email: "friend@example.com" })).rejects.toThrow();
-    expect(await t.withIdentity(admin).query(adminOverview, {})).toMatchObject({ isAdmin: true });
-  });
-
-  test("comps an email before that person signs in, then takes it back", async () => {
-    const t = convexTest(schema, modules);
-    const adminSession = t.withIdentity(admin);
-    await adminSession.mutation(adminGrantPro, { email: "Friend@Example.com", note: "beta tester" });
-
-    const friend = t.withIdentity({
-      subject: "user_friend",
-      tokenIdentifier: "clerk|user_friend",
-      email: "friend@example.com",
-    });
-    expect((await friend.mutation(getStatus, {})).body).toMatchObject({
-      access: "complimentary",
-      hasFullAppAccess: true,
-      subscriptionStatus: "none",
-    });
-
-    const overview = await adminSession.query(adminOverview, {});
-    expect(overview.accounts.find((account) => account.clerkUserId === "user_friend")).toMatchObject({
-      hasProAccess: true,
-      isComped: true,
-    });
-
-    const grant = overview.grants.find((entry) => entry.email === "friend@example.com");
-    expect(grant?.status).toBe("active");
-    await adminSession.mutation(adminRevokePro, { grantId: grant!.id });
-
-    expect((await friend.mutation(getStatus, {})).body).toMatchObject({
-      access: "trial",
-      hasFullAppAccess: false,
-      subscriptionStatus: "none",
     });
   });
 });

@@ -1,6 +1,5 @@
 export const ACCESS_KINDS = [
   "trial",
-  "complimentary",
   "subscription",
   "exhausted",
 ] as const;
@@ -67,7 +66,10 @@ export function parseExtensionAccessStatus(
   value: unknown,
 ): ExtensionAccessStatus | null {
   const record = objectFrom(value);
-  if (!record || !isOneOf(record.access, ACCESS_KINDS)) return null;
+  if (!record) return null;
+  // Normalize the retired access value from cached status payloads.
+  const access = record.access === "complimentary" ? "trial" : record.access;
+  if (!isOneOf(access, ACCESS_KINDS)) return null;
 
   const freeSessionsRemaining =
     typeof record.freeSessionsRemaining === "number" &&
@@ -76,7 +78,7 @@ export function parseExtensionAccessStatus(
       : 0;
 
   return {
-    access: record.access,
+    access,
     isAuthorized: record.isAuthorized === true,
     freeSessionsRemaining,
     requiresSignIn: record.requiresSignIn === true,

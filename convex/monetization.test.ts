@@ -102,7 +102,7 @@ describe("monetization entitlement policy", () => {
     expect(workspaceLifecycleEnabled()).toBe(false);
   });
 
-  test("old App Store and complimentary entitlements leave workspace history on the free 7-day policy", async () => {
+  test("legacy entitlements leave workspace history on the free 7-day policy", async () => {
     const freePolicy = {
       tier: "free",
       access: "write",

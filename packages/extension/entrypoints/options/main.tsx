@@ -3,7 +3,7 @@ import SettingsPage from "../../src/components/pages/SettingsPage";
 import "./options.css";
 
 /**
- * @fileoverview PayMore Chrome Extension Options/Settings Page
+ * @fileoverview Volt Chrome Extension Options/Settings Page
  * @description Extension Settings configuration page
  * @version 1.0.0
  * @author Juan Quenga

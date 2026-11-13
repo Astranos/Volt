@@ -5,7 +5,7 @@ const modules = import.meta.glob("./**/*.ts");
 const extensionId = "a".repeat(32);
 const clientId = "123-test.apps.googleusercontent.com";
 const subject = "1234567890";
-const email = "mi03@paymore.com";
+const email = "mi03@example.com";
 const userId = "user_test123";
 let google: Record<string, unknown>;
 let googleUser: Record<string, unknown>;
@@ -52,7 +52,7 @@ test("exchanges only a verified linked Google profile for a 60 second Clerk tick
   expect(response.headers.get("cache-control")).toBe("no-store");
   expect(response.headers.get("access-control-allow-origin")).toBe(`chrome-extension://${extensionId}`);
   expect(fetchMock.mock.calls[3][1]).toMatchObject({ method: "POST", body: JSON.stringify({ user_id: userId, expires_in_seconds: 60 }) });
-  expect(fetchMock.mock.calls[2][0]).toBe(`https://api.clerk.com/v1/users?email_address=mi03%40paymore.com&limit=2`);
+  expect(fetchMock.mock.calls[2][0]).toBe(`https://api.clerk.com/v1/users?email_address=mi03%40example.com&limit=2`);
 });
 test("fails closed without server configuration and rejects foreign browser origins before upstream calls", async () => {
   const response = await request({ origin: "https://evil.test" });
@@ -84,7 +84,7 @@ test("the expected Chrome profile subject must match the authenticated Google su
   google.user_id = "999";
   await rejects("profile_mismatch", 403);
 });
-test.each([{ id: "999" }, { email: "mi01@paymore.com" }, { verified_email: false }])("requires consistent verified Google userinfo %j", async (claims) => {
+test.each([{ id: "999" }, { email: "mi01@example.com" }, { verified_email: false }])("requires consistent verified Google userinfo %j", async (claims) => {
   Object.assign(googleUser, claims);
   await rejects("invalid_google_token", 401);
 });
@@ -128,13 +128,13 @@ test("ticket responses for another user cannot be redeemed", async () => {
 });
 
 test("email verification handles addresses containing s and rejects whitespace", async () => {
-  google.email = "store@paymore.com";
-  googleUser.email = "store@paymore.com";
-  user.email_addresses = [{ email_address: "store@paymore.com", verification: { status: "verified" } }];
-  user.external_accounts = [{ provider: "oauth_google", provider_user_id: subject, email_address: "store@paymore.com", verification: { status: "verified" } }];
+  google.email = "store@example.com";
+  googleUser.email = "store@example.com";
+  user.email_addresses = [{ email_address: "store@example.com", verification: { status: "verified" } }];
+  user.external_accounts = [{ provider: "oauth_google", provider_user_id: subject, email_address: "store@example.com", verification: { status: "verified" } }];
   expect((await request()).status).toBe(200);
   fetchMock.mockClear();
-  google.email = "store @paymore.com";
+  google.email = "store @example.com";
   await rejects("invalid_google_token", 401);
 });
 test("rejects Google links without verified status", async () => {

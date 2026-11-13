@@ -15,48 +15,6 @@ export function registerNavigationActions({
   registry,
   sendToActiveTab,
 }: NavigationControllerOptions) {
-  function goBackToPOS() {
-    log("Going back to POS tab");
-
-    chromeApi.tabs.query({}, (tabs) => {
-      const posTabs = tabs.filter(
-        (tab) => tab.url && tab.url.includes("pos.paymore.tech")
-      );
-
-      if (posTabs.length > 0) {
-        const sortedTabs = posTabs.sort((a, b) => {
-          const aTime = a.lastAccessed || 0;
-          const bTime = b.lastAccessed || 0;
-          return bTime - aTime;
-        });
-
-        const targetTab = sortedTabs[0];
-        log("Found POS tab:", targetTab.id, targetTab.url);
-        if (
-          typeof targetTab.id !== "number" ||
-          typeof targetTab.windowId !== "number"
-        ) {
-          log("POS tab missing id/windowId");
-          return;
-        }
-
-        chromeApi.tabs.update(targetTab.id, { active: true });
-        chromeApi.windows.update(targetTab.windowId, { focused: true });
-        chromeApi.tabs.query({ active: true, currentWindow: true }, (activeTabs) => {
-          if (activeTabs.length > 0 && typeof activeTabs[0].id === "number") {
-            chromeApi.tabs.remove(activeTabs[0].id);
-          }
-        });
-      } else {
-        log("No POS tabs found, opening new one");
-        chromeApi.tabs.create({
-          url: "https://pos.paymore.tech",
-          active: true,
-        });
-      }
-    });
-  }
-
   registry.register("hideControllerModal", (_message, _sender, sendResponse) => {
     sendToActiveTab({ action: "hideControllerModal" });
     sendResponse({ success: true });
@@ -174,12 +132,6 @@ export function registerNavigationActions({
         sendResponse({ success: false, error: "no_active_tab" });
       }
     });
-    return true;
-  });
-
-  registry.register("goBackToPOS", (_message, _sender, sendResponse) => {
-    goBackToPOS();
-    sendResponse({ success: true });
     return true;
   });
 }

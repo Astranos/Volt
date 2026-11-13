@@ -57,7 +57,7 @@ describe("addresses", () => {
       ["Store address", "9058 Telegraph Rd, Taylor 48180"],
       ["Spare key location", "Shelf 10234"],
       ["Store location", "https://maps.google.com/?cid=123456789012345"],
-      ["Email address", "mi01@paymore.com"],
+      ["Email address", "mi01@example.com"],
       ["IP address", "192.168.1.20"],
     ]) {
       expect(valueFormatOf(entry(title, value))).toBe("text");

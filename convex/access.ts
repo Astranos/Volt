@@ -6,7 +6,6 @@ import {
   internalMutation,
   mutation,
   type MutationCtx,
-  type QueryCtx,
 } from "./_generated/server";
 import { aiScannerQuotaForAccess, type AIScannerQuota } from "./aiScannerQuota";
 
@@ -14,13 +13,6 @@ export const FREE_SESSION_LIMIT = 5;
 export const RECONNECT_WINDOW_MS = 30 * 60 * 1000;
 export const MAX_SESSION_DURATION_MS = 8 * 60 * 60 * 1000;
 export const DEFAULT_STOREKIT_PRODUCT_ID = "com.volt.mobile.pro.monthly";
-const COMPLIMENTARY_EMAIL_ENTITLEMENT_PREFIX = "complimentary-email:";
-const COMPLIMENTARY_USER_ENTITLEMENT_PREFIX = "complimentary-user:";
-const COMPLIMENTARY_ORGANIZATION_ENTITLEMENT_PREFIX = "complimentary-organization:";
-/** Grants handed out by an admin from the web dashboard. */
-export const COMPLIMENTARY_ADMIN_ENTITLEMENT_PREFIX = "complimentary-admin:";
-const COMPLIMENTARY_ACCOUNT_EMAILS = new Set(["juanquenga@gmail.com"]);
-const COMPLIMENTARY_ACCOUNT_DOMAINS = new Set(["paymore.com"]);
 
 export type ClerkAuthContext = {
   clerkUserId?: string;
@@ -32,7 +24,7 @@ export type ClerkAuthContext = {
   name?: string;
 };
 
-type AccessSource = "trial" | "complimentary" | "subscription";
+type AccessSource = "trial" | "subscription";
 type SubscriptionStatus = "none" | "active" | "expired";
 
 export type AccessStatus = {
@@ -110,31 +102,6 @@ export function storeKitProductId() {
   return process.env.STOREKIT_PRODUCT_ID || DEFAULT_STOREKIT_PRODUCT_ID;
 }
 
-function configuredValues(name: string) {
-  return new Set(
-    (process.env[name] ?? "")
-      .split(/[\n,]/)
-      .map((value) => value.trim().toLowerCase())
-      .filter(Boolean),
-  );
-}
-
-export function isComplimentaryAccountEmail(email: string | undefined) {
-  if (!email) return false;
-  const normalized = email.trim().toLowerCase();
-  const separator = normalized.lastIndexOf("@");
-  if (separator <= 0 || separator === normalized.length - 1) return false;
-  return COMPLIMENTARY_ACCOUNT_EMAILS.has(normalized)
-    || configuredValues("CLERK_COMPLIMENTARY_EMAILS").has(normalized)
-    || COMPLIMENTARY_ACCOUNT_DOMAINS.has(normalized.slice(separator + 1))
-    || configuredValues("CLERK_COMPLIMENTARY_EMAIL_DOMAINS").has(normalized.slice(separator + 1));
-}
-
-export function isComplimentaryClerkUser(clerkUserId: string | undefined) {
-  if (!clerkUserId) return false;
-  return configuredValues("CLERK_COMPLIMENTARY_USER_IDS").has(clerkUserId.trim().toLowerCase());
-}
-
 function randomUuid() {
   return crypto.randomUUID();
 }
@@ -173,114 +140,6 @@ async function usageById(ctx: MutationCtx, usageSessionId: string) {
     .unique();
 }
 
-/**
- * True when an admin comped this account from the web dashboard, matched either
- * by Clerk user id or by the email the account signed in with.
- */
-export async function hasActiveCompedGrant(
-  ctx: Pick<MutationCtx, "db"> | Pick<QueryCtx, "db">,
-  clerkUserId: string | undefined,
-  email: string | undefined,
-) {
-  if (clerkUserId) {
-    const byUser = await ctx.db
-      .query("compedGrants")
-      .withIndex("by_clerkUserId", (query) => query.eq("clerkUserId", clerkUserId))
-      .take(10);
-    if (byUser.some((grant) => grant.status === "active")) return true;
-  }
-  const normalizedEmail = email?.trim().toLowerCase();
-  if (!normalizedEmail) return false;
-  const byEmail = await ctx.db
-    .query("compedGrants")
-    .withIndex("by_email", (query) => query.eq("email", normalizedEmail))
-    .take(10);
-  return byEmail.some((grant) => grant.status === "active");
-}
-
-async function syncComplimentaryAccountEntitlements(
-  ctx: MutationCtx,
-  clerkUserId: string,
-  auth: ClerkAuthContext,
-  now: number,
-  // The identity token does not always carry an email claim, so `ensureUser`
-  // passes the address already stored on the user row as a fallback.
-  storedEmail?: string,
-) {
-  const entitlements = await ctx.db
-    .query("entitlements")
-    .withIndex("by_clerkUserId", (query) => query.eq("clerkUserId", clerkUserId))
-    .take(100);
-  const complimentaryEntitlements = entitlements.filter(
-    (entitlement) => entitlement.kind === "manual"
-      && (
-        entitlement.sourceIdentifier.startsWith(COMPLIMENTARY_EMAIL_ENTITLEMENT_PREFIX)
-        || entitlement.sourceIdentifier.startsWith(COMPLIMENTARY_USER_ENTITLEMENT_PREFIX)
-        || entitlement.sourceIdentifier.startsWith(COMPLIMENTARY_ORGANIZATION_ENTITLEMENT_PREFIX)
-        || entitlement.sourceIdentifier.startsWith(COMPLIMENTARY_ADMIN_ENTITLEMENT_PREFIX)
-      ),
-  );
-
-  const desiredSourceIdentifiers = new Set<string>();
-  if (isComplimentaryClerkUser(clerkUserId)) {
-    desiredSourceIdentifiers.add(`${COMPLIMENTARY_USER_ENTITLEMENT_PREFIX}${clerkUserId}`);
-  }
-  if (auth.email) {
-    const normalizedEmail = auth.email.trim().toLowerCase();
-    if (auth.emailVerified === true && isComplimentaryAccountEmail(normalizedEmail)) {
-      desiredSourceIdentifiers.add(`${COMPLIMENTARY_EMAIL_ENTITLEMENT_PREFIX}${normalizedEmail}`);
-    }
-  } else {
-    for (const entitlement of complimentaryEntitlements) {
-      if (entitlement.sourceIdentifier.startsWith(COMPLIMENTARY_EMAIL_ENTITLEMENT_PREFIX)) {
-        desiredSourceIdentifiers.add(entitlement.sourceIdentifier);
-      }
-    }
-  }
-  if (await hasActiveCompedGrant(ctx, clerkUserId, auth.email ?? storedEmail)) {
-    desiredSourceIdentifiers.add(`${COMPLIMENTARY_ADMIN_ENTITLEMENT_PREFIX}${clerkUserId}`);
-  }
-  const configuredOrganizationId = process.env.CLERK_COMPLIMENTARY_ORGANIZATION_ID;
-  if (configuredOrganizationId && configuredOrganizationId === auth.organizationId) {
-    desiredSourceIdentifiers.add(
-      `${COMPLIMENTARY_ORGANIZATION_ENTITLEMENT_PREFIX}${configuredOrganizationId}`,
-    );
-  }
-
-  for (const entitlement of complimentaryEntitlements) {
-    if (!desiredSourceIdentifiers.has(entitlement.sourceIdentifier) && entitlement.status === "active") {
-      await ctx.db.patch(entitlement._id, { status: "revoked", updatedAt: now });
-    }
-  }
-
-  for (const sourceIdentifier of desiredSourceIdentifiers) {
-    const existing = complimentaryEntitlements.find(
-      (entitlement) => entitlement.sourceIdentifier === sourceIdentifier,
-    );
-    if (existing) {
-      if (existing.status !== "active" || existing.expiresAt !== undefined) {
-        await ctx.db.patch(existing._id, {
-          status: "active",
-          expiresAt: undefined,
-          productId: storeKitProductId(),
-          updatedAt: now,
-        });
-      }
-      continue;
-    }
-
-    await ctx.db.insert("entitlements", {
-      clerkUserId,
-      kind: "manual",
-      sourceIdentifier,
-      productId: storeKitProductId(),
-      status: "active",
-      validFrom: now,
-      updatedAt: now,
-    });
-  }
-}
-
 async function ensureUser(ctx: MutationCtx, auth: ClerkAuthContext, now: number) {
   if (!auth.clerkUserId || !auth.tokenIdentifier) return null;
   const existing = await userByClerkId(ctx, auth.clerkUserId);
@@ -292,7 +151,6 @@ async function ensureUser(ctx: MutationCtx, auth: ClerkAuthContext, now: number)
       updatedAt: now,
     };
     await ctx.db.patch(existing._id, updates);
-    await syncComplimentaryAccountEntitlements(ctx, existing.clerkUserId, auth, now, existing.email);
     return { ...existing, ...updates };
   }
 
@@ -307,9 +165,6 @@ async function ensureUser(ctx: MutationCtx, auth: ClerkAuthContext, now: number)
     updatedAt: now,
   });
   const user = await ctx.db.get(id);
-  if (user) {
-    await syncComplimentaryAccountEntitlements(ctx, user.clerkUserId, auth, now, user.email);
-  }
   return user;
 }
 
@@ -355,52 +210,11 @@ async function mergeAnonymousGrant(
   return { ok: true as const, user: { ...user, freeSessionsConsumed } };
 }
 
-async function ensureConfiguredOrganizationEntitlement(
-  ctx: MutationCtx,
-  organizationId: string | undefined,
-  organizationName: string | undefined,
-  now: number,
-) {
-  if (!organizationId) return null;
-  const configuredId = process.env.CLERK_COMPLIMENTARY_ORGANIZATION_ID;
-  if (!configuredId || configuredId !== organizationId) return null;
-  let entitlement = await ctx.db
-    .query("organizationEntitlements")
-    .withIndex("by_clerkOrganizationId", (query) => query.eq("clerkOrganizationId", organizationId))
-    .unique();
-
-  if (!entitlement) {
-    const id = await ctx.db.insert("organizationEntitlements", {
-      clerkOrganizationId: organizationId,
-      ...(organizationName ? { displayName: organizationName } : {}),
-      status: "active",
-      source: "complimentary",
-      createdAt: now,
-      updatedAt: now,
-    });
-    entitlement = await ctx.db.get(id);
-  } else if (entitlement.status !== "active") {
-    await ctx.db.patch(entitlement._id, {
-      status: "active",
-      ...(organizationName ? { displayName: organizationName } : {}),
-      updatedAt: now,
-    });
-    entitlement = await ctx.db.get(entitlement._id);
-  }
-  return entitlement?.status === "active" ? entitlement : null;
-}
-
 async function subscriptionForUser(ctx: MutationCtx, clerkUserId: string, now: number) {
   const entitlements = await ctx.db
     .query("entitlements")
     .withIndex("by_clerkUserId", (query) => query.eq("clerkUserId", clerkUserId))
     .take(100);
-  const activeComplimentary = entitlements.find(
-    (entitlement) => entitlement.kind === "manual"
-      && entitlement.status === "active"
-      && entitlement.validFrom <= now
-      && (entitlement.expiresAt === undefined || entitlement.expiresAt > now),
-  );
   const storeKitEntitlements = entitlements.filter((entitlement) => entitlement.kind === "storekit");
   const active = storeKitEntitlements
     .filter(
@@ -410,29 +224,10 @@ async function subscriptionForUser(ctx: MutationCtx, clerkUserId: string, now: n
     )
     .sort((left, right) => (right.expiresAt ?? Number.MAX_SAFE_INTEGER) - (left.expiresAt ?? Number.MAX_SAFE_INTEGER))[0];
   const storeKitStatus = active ? "active" as const : storeKitEntitlements.length ? "expired" as const : "none" as const;
-  if (activeComplimentary) {
-    return { status: storeKitStatus, entitlement: activeComplimentary, source: "complimentary" as const };
-  }
   if (active) {
     return { status: "active" as const, entitlement: active, source: "subscription" as const };
   }
   return { status: storeKitStatus };
-}
-
-export async function hasFullAppEntitlement(
-  ctx: Pick<MutationCtx, "db"> | Pick<QueryCtx, "db">,
-  clerkUserId: string,
-  now = Date.now(),
-) {
-  const entitlements = await ctx.db
-    .query("entitlements")
-    .withIndex("by_clerkUserId", (query) => query.eq("clerkUserId", clerkUserId))
-    .take(100);
-  return entitlements.some(
-    (entitlement) => entitlement.status === "active"
-      && entitlement.validFrom <= now
-      && (entitlement.expiresAt === undefined || entitlement.expiresAt > now),
-  );
 }
 
 type ResolvedPrincipal = {
@@ -486,9 +281,6 @@ async function buildAccessStatus(
 ): Promise<AccessStatus> {
   const freeSessionsConsumed = principal.user?.freeSessionsConsumed ?? principal.grant?.sessionsConsumed ?? 0;
   const freeSessionsRemaining = Math.max(0, FREE_SESSION_LIMIT - freeSessionsConsumed);
-  const organization = principal.user
-    ? await ensureConfiguredOrganizationEntitlement(ctx, auth.organizationId, auth.organizationName, now)
-    : null;
   const subscription = principal.user
     ? await subscriptionForUser(ctx, principal.user.clerkUserId, now)
     : { status: "none" as const };
@@ -505,23 +297,13 @@ async function buildAccessStatus(
     ...(auth.organizationId ? { organizationId: auth.organizationId } : {}),
   };
 
-  const plan = organization || subscription.source === "complimentary" || subscription.source === "subscription"
+  const plan = subscription.source === "subscription"
     ? "pro" as const
     : "free" as const;
   const aiScannerQuota = await aiScannerQuotaForAccess(ctx, principal.user?.clerkUserId, plan, now);
   const capabilities = { localCapture: true as const, cloudWorkspace: Boolean(principal.user), aiProductScanner: true as const };
   const withCapabilities = { ...shared, plan, capabilities, aiScannerQuota };
 
-  if (organization || subscription.source === "complimentary") {
-    return {
-      ...withCapabilities,
-      access: "complimentary",
-      isAuthorized: true,
-      hasFullAppAccess: true,
-      requiresSignIn: false,
-      requiresSubscription: false,
-    };
-  }
   if (subscription.status === "active" && subscription.source === "subscription") {
     return {
       ...withCapabilities,

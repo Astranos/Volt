@@ -294,6 +294,7 @@ export default defineSchema({
 
   entitlements: defineTable({
     clerkUserId: v.string(),
+    // Legacy manual rows remain valid in storage but no longer grant access.
     kind: v.union(v.literal("storekit"), v.literal("manual")),
     sourceIdentifier: v.string(),
     productId: v.string(),
@@ -329,39 +330,13 @@ export default defineSchema({
     .index("by_clerkUserId_and_periodKey_and_plan_and_countsTowardQuota", ["clerkUserId", "periodKey", "plan", "countsTowardQuota"])
     .index("by_requestId", ["requestId"]),
 
-  // Pro handed out by an admin from the web dashboard. Kept separate from
-  // `entitlements` so the grant survives independently of the derived
-  // entitlement row that `access.ts` syncs on every status check.
-  compedGrants: defineTable({
-    // Exactly one of these identifies the target. An email grant lets an admin
-    // comp somebody who has not signed into the app yet.
-    email: v.optional(v.string()),
-    clerkUserId: v.optional(v.string()),
-    note: v.optional(v.string()),
-    status: v.union(v.literal("active"), v.literal("revoked")),
-    grantedByClerkUserId: v.string(),
-    grantedByEmail: v.optional(v.string()),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("by_email", ["email"])
-    .index("by_clerkUserId", ["clerkUserId"]),
-
-  organizationEntitlements: defineTable({
-    clerkOrganizationId: v.string(),
-    displayName: v.optional(v.string()),
-    status: v.union(v.literal("active"), v.literal("inactive")),
-    source: v.literal("complimentary"),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  }).index("by_clerkOrganizationId", ["clerkOrganizationId"]),
-
   usageSessions: defineTable({
     usageSessionId: v.string(),
     browserSessionId: v.optional(v.string()),
     ownerType: v.union(v.literal("anonymous"), v.literal("user")),
     anonymousId: v.optional(v.string()),
     clerkUserId: v.optional(v.string()),
+    // Historical session values remain valid; new sessions use trial or subscription.
     accessSource: v.union(v.literal("trial"), v.literal("complimentary"), v.literal("subscription")),
     startedAt: v.number(),
     lastConnectedAt: v.number(),

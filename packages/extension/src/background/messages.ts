@@ -118,7 +118,6 @@ export type BackgroundActionMessage =
   | { action: "copyToClipboard"; text?: string }
   | { action: "readFromClipboard" }
   | { action: "openDevTools" }
-  | { action: "goBackToPOS" }
   | { action: "checkSiteStatus"; domain?: string }
   | { action: "updateDisabledSites"; sites?: unknown[] }
   | { action: "toggleCurrentSite"; enabled?: boolean; domain?: string };
@@ -157,7 +156,6 @@ const ACTIONS_WITH_NO_FIELDS = new Set([
   "closeTab",
   "readFromClipboard",
   "openDevTools",
-  "goBackToPOS",
 ]);
 
 export function isMessageRecord(value: unknown): value is MessageRecord {

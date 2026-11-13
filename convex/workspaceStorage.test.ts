@@ -7,7 +7,6 @@ import schema from "./schema";
 import {
   modules,
   result,
-  grantFullAppAccess,
   markBatchReady,
   authorizePhotoAccess,
 } from "./cloudWorkspace.testSupport";
@@ -59,6 +58,18 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
 });
+
+async function grantLegacySubscription(t: TestConvex<typeof schema>, userId: string) {
+  await t.run((ctx) => ctx.db.insert("entitlements", {
+    clerkUserId: userId,
+    kind: "storekit",
+    sourceIdentifier: `legacy-storekit:${userId}`,
+    productId: "com.volt.mobile.pro.monthly",
+    status: "active",
+    validFrom: Date.now(),
+    updatedAt: Date.now(),
+  }));
+}
 
 async function owner(t: ReturnType<typeof convexTest>, user = "owner") {
   const signedIn = t.withIdentity({ subject: user });
@@ -136,7 +147,7 @@ test("free records expire after seven days; expired rows cannot restore or final
     recordsUsed: 0,
     bytesUsed: 3,
   });
-  await grantFullAppAccess(t, "owner");
+  await grantLegacySubscription(t, "owner");
   await expect(
     signedIn.mutation(api.cloudWorkspace.restoreWorkspaceResults, {
       resultIds: ["one"],
@@ -157,11 +168,11 @@ test("legacy results stay protected and disabling rollout keeps new results unma
   ).not.toHaveProperty("deletedAt");
 });
 
-test("full-app access does not exempt captures from the 7-day window", async () => {
+test("legacy subscriptions do not exempt captures from the 7-day window", async () => {
   const t = convexTest(schema, modules);
   const { signedIn, credential } = await owner(t);
   await capture(t, credential, "before-grant");
-  await grantFullAppAccess(t, "owner");
+  await grantLegacySubscription(t, "owner");
   await capture(t, credential, "after-grant");
   vi.setSystemTime(Date.now() + 6 * DAY);
   expect(await t.mutation(sweep, {})).toBe(0);
@@ -284,7 +295,7 @@ async function setStorageUsage(
 test("captures count storage without rewriting the workspace row", async () => {
   const t = convexTest(schema, modules);
   const { signedIn, credential, workspaceId } = await owner(t);
-  await grantFullAppAccess(t, "owner");
+  await grantLegacySubscription(t, "owner");
   const before = await t.run((ctx) => ctx.db.get(workspaceId));
   await capture(t, credential, "first");
   await capture(t, credential, "second");
@@ -295,7 +306,7 @@ test("captures count storage without rewriting the workspace row", async () => {
 test("workspaces without a usage row keep their legacy counters", async () => {
   const t = convexTest(schema, modules);
   const { signedIn, credential, workspaceId } = await owner(t);
-  await grantFullAppAccess(t, "owner");
+  await grantLegacySubscription(t, "owner");
   await t.run((ctx) => ctx.db.patch(workspaceId, { managedRecordCount: 5, managedByteCount: 7 }));
   expect(await signedIn.query(usage, {})).toMatchObject({ recordsUsed: 5, bytesUsed: 7 });
   await capture(t, credential, "next");
@@ -352,7 +363,7 @@ test("record/byte caps, append, invalid photo sizes and restore are transactiona
 test("user-deleted photos deny access and cleanup retries keep bytes reserved", async () => {
   const t = convexTest(schema, modules);
   const { signedIn, credential } = await owner(t);
-  await grantFullAppAccess(t, "owner");
+  await grantLegacySubscription(t, "owner");
   await capture(t, credential, "photo", "photo");
   await signedIn.mutation(api.cloudWorkspace.deleteWorkspaceResults, {
     resultIds: ["photo"],

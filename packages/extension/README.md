@@ -83,8 +83,8 @@ WXT_VOLT_FULL_APP_URL=https://apps.apple.com/us/app/volt-scanner/id6771770148
 `WXT_EXTENSION_PUBLIC_KEY` keeps the Chrome extension ID stable. In the Clerk
 Dashboard, add `chrome-extension://<extension-id>` to the instance's allowed
 origins, enable the instance's Native API, and create a JWT template named
-`convex`. Include Clerk's organization ID claim in that template so selecting
-the complimentary workplace in the extension can be authorized by Convex.
+`convex`. Cloud workspace and mobile capture sync are free for every signed-in
+account, with seven days of rolling capture history.
 
 Google OAuth runs on `WXT_CLERK_SIGN_IN_URL`, then `WXT_CLERK_SYNC_HOST`
 shares the resulting Clerk session with the popup and background worker. OAuth

@@ -46,14 +46,14 @@ struct AccessStatus: Decodable, Sendable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         access = try container.decode(AccessKind.self, forKey: .access)
-        let legacyProAccess = access == .complimentary || access == .subscription
+        let legacyProAccess = access == .subscription
         plan = try container.decodeIfPresent(AccessPlan.self, forKey: .plan)
             ?? (legacyProAccess ? .pro : .free)
         capabilities = try container.decodeIfPresent(AccessCapabilities.self, forKey: .capabilities)
             ?? AccessCapabilities(localCapture: true, cloudWorkspace: legacyProAccess)
         isAuthorized = try container.decode(Bool.self, forKey: .isAuthorized)
         hasFullAppAccess = try container.decodeIfPresent(Bool.self, forKey: .hasFullAppAccess)
-            ?? (access == .complimentary || access == .subscription)
+            ?? (access == .subscription)
         freeSessionsRemaining = try container.decode(Int.self, forKey: .freeSessionsRemaining)
         requiresSignIn = try container.decode(Bool.self, forKey: .requiresSignIn)
         requiresSubscription = try container.decode(Bool.self, forKey: .requiresSubscription)

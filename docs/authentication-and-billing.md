@@ -1,6 +1,6 @@
 # Authentication and billing setup
 
-Volt uses Clerk for identity, Convex for authorization, usage, cloud-workspace metadata, cursor delivery, and live dictation drafts; Cloudflare R2 stores private photo bytes; StoreKit supports legacy iOS subscriptions, and Stripe supports the new web workspace plan behind disabled-by-default configuration. Any signed-in account can use local iPhone scanning, history, cloud workspace, and mobile capture sync for free during the pilot. The app does not offer new subscriptions or show upgrade prompts. Existing StoreKit and complimentary workplace or admin entitlements remain available for legacy subscription support and AI allowances. See [the monetization rollout](monetization-rollout.md) for paid storage setup, allowances, and staged activation. The App Clip uses a short-lived workspace guest grant created by signed-in Chrome.
+Volt uses Clerk for identity, Convex for authorization, usage, cloud-workspace metadata, cursor delivery, and live dictation drafts; Cloudflare R2 stores private photo bytes; StoreKit supports legacy iOS subscriptions, and Stripe supports the new web workspace plan behind disabled-by-default configuration. Any signed-in account can use local iPhone scanning, history, cloud workspace, and mobile capture sync for free during the pilot. The app does not offer new subscriptions or show upgrade prompts. Existing StoreKit subscriptions remain available for legacy subscription support and AI allowances. See [the monetization rollout](monetization-rollout.md) for paid storage setup, allowances, and staged activation. The App Clip uses a short-lived workspace guest grant created by signed-in Chrome.
 
 ## Clerk and Convex
 
@@ -19,24 +19,9 @@ Volt uses Clerk for identity, Convex for authorization, usage, cloud-workspace m
 
    ```text
    CLERK_JWT_ISSUER_DOMAIN=https://<your-clerk-domain>
-   CLERK_COMPLIMENTARY_ORGANIZATION_ID=org_<workplace-organization-id>
-   CLERK_COMPLIMENTARY_USER_IDS=user_abc,user_def
-   CLERK_COMPLIMENTARY_EMAILS=owner@example.com,reviewer@example.com
-   CLERK_COMPLIMENTARY_EMAIL_DOMAINS=company.example
    ```
 
    The issuer must exactly match the Clerk JWT `iss` claim. `convex/auth.config.ts` validates tokens against it. Do not put a Clerk secret key in the extension or app.
-4. Make the intended workplace Clerk Organization active for work users. Membership in the configured organization grants complimentary access and never creates a StoreKit requirement. Explicit Clerk user IDs are the most stable way to grant individual access. Email entries require Clerk's verified-email claim; domain entries apply only to the exact domain, not subdomains.
-
-   Update individual production grants without rebuilding the app. Values are comma-separated, and replacing a value replaces the whole allowlist:
-
-   ```sh
-   pnpm exec convex env set --prod CLERK_COMPLIMENTARY_USER_IDS 'user_abc,user_def'
-   pnpm exec convex env set --prod CLERK_COMPLIMENTARY_EMAILS 'owner@example.com,reviewer@example.com'
-   ```
-
-   The new entitlement is synchronized the next time that account refreshes access in Volt. Removing a user or email from the allowlist revokes the matching complimentary entitlement on its next authenticated refresh.
-
 Convex creates one `users` record per Clerk subject. The first authenticated request generates and stores a UUID as that user's StoreKit `appAccountToken`; subsequent requests return the same value. The full app must pass that UUID to StoreKit purchases. A verified transaction can only update the Clerk user whose stored token matches the signed transaction.
 
 For the full iOS app, enable Clerk's Native API and register the `com.volt.mobile` bundle identifier. Supply these Xcode build settings in each configuration instead of committing credentials:
@@ -123,13 +108,13 @@ The secret is returned only when `POST /api/access/anonymous` creates a grant. C
 
 Status responses contain:
 
-- `access`: `trial`, `complimentary`, `subscription`, or `exhausted` for the legacy App Clip and Chrome session flow
+- `access`: `trial`, `subscription`, or `exhausted` for the legacy App Clip and Chrome session flow
 - `isAuthorized`, `freeSessionsRemaining`, `requiresSignIn`, and `requiresSubscription` for that session flow
 - `hasFullAppAccess`, a legacy field that must not gate iPhone launch. Feature checks use the capability they need.
 - `plan`: `free` or `pro` for legacy entitlements and AI allowances, not cloud access
 - `capabilities`: local capture, cloud workspace, and AI product scanner permissions. Cloud workspace is enabled for every signed-in account; anonymous legacy trials do not get account cloud access.
 - `aiScannerQuota`: `unlimited` for Pro or a metered monthly limit for free accounts
-- `subscriptionStatus`: `none`, `active`, or `expired` for StoreKit billing only. Complimentary access is not a StoreKit subscription.
+- `subscriptionStatus`: `none`, `active`, or `expired` for StoreKit billing only.
 - `productId` and, for signed-in users, `clerkUserId` and `appAccountToken`
 - optional `organizationId` and subscription `expiresAt`
 
@@ -164,7 +149,7 @@ The App Clip is free and uses a short-lived, workspace-scoped cloud grant create
 
 The iOS app no longer offers the AI product scanner. The endpoint and quota below stay in place for older installed builds, and can be removed once those builds are gone.
 
-Every signed-in account can use the AI product scanner. Free accounts receive 10 analyses per UTC calendar month by default. Set `AI_SCANNER_FREE_MONTHLY_LIMIT` on the server to adjust that quota. Pro accounts, including StoreKit and complimentary workplace or admin Pro, have no monthly AI quota. Metered deployments still apply a safety rate limit. A development or preview deployment can set `AI_SCANNER_QUOTA_MODE=unlimited`; that setting is server-side only.
+Every signed-in account can use the AI product scanner. Free accounts receive 10 analyses per UTC calendar month by default. Set `AI_SCANNER_FREE_MONTHLY_LIMIT` on the server to adjust that quota. Accounts with active legacy StoreKit subscriptions have no monthly AI quota. Metered deployments still apply a safety rate limit. A development or preview deployment can set `AI_SCANNER_QUOTA_MODE=unlimited`; that setting is server-side only.
 
 An analysis counts after OpenRouter processes the image, including a response with no confident product match. Image validation failures and upstream or server failures do not consume the monthly quota. The app checks this capability when the user starts an AI analysis. Exhausted accounts see their reset time and can continue ordinary barcode and text capture without a purchase prompt. Account and StoreKit refresh can update the display in the background, but they never block app launch.
 

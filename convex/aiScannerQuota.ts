@@ -105,7 +105,8 @@ async function deviceAndPlan(ctx: MutationCtx, deviceId: string, deviceSecret: s
   const entitlements = await ctx.db.query("entitlements")
     .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", workspace.ownerClerkUserId)).take(100);
   const pro = entitlements.some((entitlement) =>
-    entitlement.status === "active"
+    entitlement.kind === "storekit"
+    && entitlement.status === "active"
     && entitlement.validFrom <= now
     && (entitlement.expiresAt === undefined || entitlement.expiresAt > now));
   return { device, workspace, clerkUserId: workspace.ownerClerkUserId, plan: pro ? "pro" as const : "free" as const, now };
