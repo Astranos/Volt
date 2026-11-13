@@ -3,7 +3,7 @@
   "outputDirectory": "dist",
   "headers": [
     {
-      "source": "/:path((?!privacy(?:/|$)|data-sources(?:/|$)|api/|assets/|\\.well-known/|.*\\.[^/]+$).+)",
+      "source": "/:path((?!privacy(?:/|$)|api/|assets/|\\.well-known/|.*\\.[^/]+$).+)",
       "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
     },
     {
@@ -49,6 +49,8 @@
       "source": "/apple-app-site-association",
       "destination": "/apple-app-site-association"
     },
+    { "source": "/app-sign-in", "destination": "/app-sign-in.html" },
+    { "source": "/app-sign-in/", "destination": "/app-sign-in.html" },
     {
       "source": "/clip",
       "destination": "/clip.html"

@@ -20,16 +20,16 @@ type Feature = { name: string; talksTo: ReactNode; detail: ReactNode };
 
 const extensionFeatures: Feature[] = [
   {
-    name: "Shopify admin buttons, product search, and Shopify Audit",
-    talksTo: <>admin.shopify.com, your store’s *.myshopify.com admin, and the Shopify Admin API</>,
+    name: "Shopify admin buttons, inventory search, and Shopify Audit",
+    talksTo: <>admin.shopify.com and your store’s *.myshopify.com admin pages, plus the Shopify Admin API through Volt’s backend</>,
     detail:
-      "Runs only inside your own Shopify admin. Inventory search and audits use the Shopify Admin API with the access your store granted when it installed Volt.",
+      "The buttons run inside your own Shopify admin. Inventory search (also on the new tab and side panel) and audits use the Shopify Admin API with the access your store granted when it connected to Volt.",
   },
   {
     name: "Mobile capture sync and QR sign-in",
     talksTo: <>Volt’s backend (Convex, Cloudflare R2) and Clerk for sign-in</>,
     detail:
-      "Barcodes, text, and photos from the Volt iPhone app arrive through your own Volt account. Chrome profile sign-in checks your Google account with Google’s sign-in service.",
+      "Barcodes, text, and photos from the Volt iPhone app arrive through your own Volt account. Chrome profile sign-in checks your Google account with Google’s sign-in service. The older direct phone-to-computer pairing uses Google’s public STUN servers and Cloudflare’s TURN relay to connect the two devices.",
   },
   {
     name: "Search shortcuts, context menu, and new tab search",
@@ -49,14 +49,15 @@ const extensionFeatures: Feature[] = [
       "These run on whatever page you have open so they can highlight barcodes, preview a link on Shift+click, or type a mobile capture into the field you picked. They do not send page contents to Volt or anyone else.",
   },
   {
-    name: "Quick links in the command palette",
-    talksTo: <>A published Google Sheet (CSV) that you can replace in Settings</>,
-    detail: "The sheet is a list of bookmarks. Volt opens a link only when you choose it.",
+    name: "Quick links, bookmarks, and new tab",
+    talksTo: <>A published Google Sheet (CSV) that you can replace in Settings, and Google’s favicon service for link icons</>,
+    detail:
+      "The sheet is a list of bookmarks. Icons come from Chrome’s own favicon cache, falling back to Google’s favicon service for the link’s domain. Volt opens a link only when you choose it.",
   },
   {
-    name: "QR code tool",
-    talksTo: <>api.qrserver.com</>,
-    detail: "Turns text you select into a QR code image.",
+    name: "Handbook",
+    talksTo: <>Volt’s backend</>,
+    detail: "Notes, guides, and saved values you keep in Volt are stored in your own Volt account. Saved secrets are encrypted.",
   },
 ];
 
@@ -77,9 +78,9 @@ const appFeatures: Feature[] = [
 const kioskFeatures: Feature[] = [
   {
     name: "In-store catalog",
-    talksTo: <>The store’s own *.myshopify.com storefront (products.json, meta.json) and cdn.shopify.com for photos</>,
+    talksTo: <>Volt’s kiosk server, which reads the store’s own *.myshopify.com storefront (products.json, meta.json). Photos load from cdn.shopify.com.</>,
     detail:
-      "The kiosk shows a store’s public Shopify listings straight from Shopify. A store is identified by its Shopify shop address, so any Shopify store can use it. The store name and logo on screen are that store’s branding, not a data source.",
+      "The kiosk shows a store’s public Shopify listings, read directly from Shopify. A store is identified by its Shopify shop address. The PayMore name and logo are built into the kiosk for participating franchise stores. They are not loaded from any paymore.com service.",
   },
   {
     name: "Ask to see an item",

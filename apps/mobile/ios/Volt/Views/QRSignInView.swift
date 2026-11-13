@@ -8,7 +8,9 @@ struct QRSignInView: View {
     @Environment(Clerk.self) private var clerk
     @Environment(QRSignInStore.self) private var store
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @FocusState private var emailFocused: Bool
+    @State private var cameraDenied = false
 
     var body: some View {
         @Bindable var store = store
@@ -102,17 +104,24 @@ struct QRSignInView: View {
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
 
-                SignInQRScannerView { value in
-                    Task { await store.handleScannedValue(value, clerk: clerk) }
+                if cameraDenied {
+                    cameraDeniedNotice
+                } else {
+                    SignInQRScannerView(
+                        onCode: { value in
+                            Task { await store.handleScannedValue(value, clerk: clerk) }
+                        },
+                        onDenied: { cameraDenied = true }
+                    )
+                    .aspectRatio(1, contentMode: .fit)
+                    .frame(maxWidth: 320)
+                    .clipShape(.rect(cornerRadius: 24))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 24)
+                            .strokeBorder(VoltBrand.green.opacity(0.6), lineWidth: 2)
+                    }
+                    .accessibilityLabel("Camera for scanning the sign-in QR code")
                 }
-                .aspectRatio(1, contentMode: .fit)
-                .frame(maxWidth: 320)
-                .clipShape(.rect(cornerRadius: 24))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 24)
-                        .strokeBorder(VoltBrand.green.opacity(0.6), lineWidth: 2)
-                }
-                .accessibilityLabel("Camera for scanning the sign-in QR code")
 
                 if let scanHint = store.scanHint {
                     Label(scanHint, systemImage: "info.circle")
@@ -142,6 +151,26 @@ struct QRSignInView: View {
         }
     }
 
+    private var cameraDeniedNotice: some View {
+        VStack(spacing: 12) {
+            Label("Camera access is off", systemImage: "camera.badge.ellipsis")
+                .font(.headline)
+            Text("Allow camera access in Settings to scan the code, or close this and sign in with your email instead.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding(20)
+        .frame(maxWidth: 320)
+        .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 24))
+        .accessibilityIdentifier("volt-qr-sign-in-camera-denied")
+    }
+
     private func send() {
         Task { await store.requestSignIn() }
     }
@@ -151,6 +180,7 @@ struct QRSignInView: View {
 /// code can be followed by the right one without reopening the sheet.
 private struct SignInQRScannerView: UIViewRepresentable {
     let onCode: (String) -> Void
+    let onDenied: () -> Void
 
     func makeUIView(context: Context) -> PreviewView {
         let view = PreviewView()
@@ -162,6 +192,7 @@ private struct SignInQRScannerView: UIViewRepresentable {
 
     func updateUIView(_ uiView: PreviewView, context: Context) {
         context.coordinator.onCode = onCode
+        context.coordinator.onDenied = onDenied
     }
 
     static func dismantleUIView(_ uiView: PreviewView, coordinator: Coordinator) {
@@ -169,16 +200,18 @@ private struct SignInQRScannerView: UIViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onCode: onCode)
+        Coordinator(onCode: onCode, onDenied: onDenied)
     }
 
     final class Coordinator: NSObject, AVCaptureMetadataOutputObjectsDelegate, @unchecked Sendable {
         var onCode: (String) -> Void
+        var onDenied: () -> Void
         private let session = AVCaptureSession()
         private var lastValue: String?
 
-        init(onCode: @escaping (String) -> Void) {
+        init(onCode: @escaping (String) -> Void, onDenied: @escaping () -> Void) {
             self.onCode = onCode
+            self.onDenied = onDenied
         }
 
         func start(in view: PreviewView) {
@@ -187,11 +220,16 @@ private struct SignInQRScannerView: UIViewRepresentable {
                 Task { @MainActor in self.configure(view) }
             case .notDetermined:
                 AVCaptureDevice.requestAccess(for: .video) { [weak self, weak view] granted in
-                    guard granted, let self, let view else { return }
+                    guard let self else { return }
+                    guard granted else {
+                        Task { @MainActor in self.onDenied() }
+                        return
+                    }
+                    guard let view else { return }
                     Task { @MainActor in self.configure(view) }
                 }
             default:
-                break
+                Task { @MainActor in self.onDenied() }
             }
         }
 

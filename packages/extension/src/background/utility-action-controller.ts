@@ -20,16 +20,6 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function arrayBufferToBase64(buffer: ArrayBuffer) {
-  let binary = "";
-  const bytes = new Uint8Array(buffer);
-  const len = bytes.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
-
 export function registerUtilityActions({
   chromeApi,
   getDebug,
@@ -135,32 +125,6 @@ export function registerUtilityActions({
     chromeApi.storage.local.set({ debugLogs: getDebug() });
     log("DEBUG toggled", getDebug());
     sendResponse({ success: true, debug: getDebug() });
-    return true;
-  });
-
-  registry.register("generateQr", (message, _sender, sendResponse) => {
-    const text = message.text || "";
-    const size = Number(message.size || 256);
-    if (!text) {
-      sendResponse({ success: false, error: "missing_text" });
-      return true;
-    }
-    const endpoint = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(
-      text
-    )}`;
-    fetch(endpoint)
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const buffer = await response.arrayBuffer();
-        sendResponse({
-          success: true,
-          dataUrl: `data:image/png;base64,${arrayBufferToBase64(buffer)}`,
-        });
-      })
-      .catch((error) => {
-        log("generateQr error", errorMessage(error));
-        sendResponse({ success: false, error: errorMessage(error) });
-      });
     return true;
   });
 

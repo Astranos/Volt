@@ -108,7 +108,6 @@ export type BackgroundActionMessage =
   | { action: "getActiveTab" }
   | { action: "FETCH_CSV_LINKS"; url?: string }
   | { action: "toggleDebug"; value?: boolean }
-  | { action: "generateQr"; text?: string; size?: number }
   | { action: "ping" }
   | { action: "toggleSidepanelTool"; tool?: string }
   | { action: "previousTab" }
@@ -365,12 +364,6 @@ function parseActionMessage(action: string, message: MessageRecord): RuntimeMess
       return { action, section: optionalString(message.section) };
     case "toggleDebug":
       return { action, value: optionalBoolean(message.value) };
-    case "generateQr":
-      return {
-        action,
-        text: optionalString(message.text),
-        size: optionalNumber(message.size),
-      };
     case "copyToClipboard":
       return { action, text: optionalString(message.text) };
     case "checkSiteStatus":
