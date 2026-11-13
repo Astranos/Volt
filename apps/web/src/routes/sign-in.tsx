@@ -9,7 +9,7 @@ export const Route = createFileRoute("/sign-in")({
 
 function SignInPage() {
   return (
-    <AuthPage title="Pick up your captures on any screen you happen to be at.">
+    <AuthPage title="Your captures, on any screen.">
       {/*
         Hash routing keeps Clerk's multi-step flows inside a single static
         route, which is all the Vercel catch-all rewrite can serve.

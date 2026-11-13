@@ -1,24 +1,24 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { motion } from "motion/react";
-import { ClipboardList, ImageIcon, ScanBarcode } from "lucide-react";
+import { History, ImageIcon, ScanBarcode } from "lucide-react";
 
 import { authConfigured } from "./app-providers";
 
 const highlights = [
   {
     icon: ScanBarcode,
-    title: "Every capture, everywhere",
-    body: "Barcodes and OCR text land in your workspace the moment the phone accepts them.",
+    title: "Scan on your iPhone",
+    body: "Barcodes, text, and photos sync to Chrome as you capture them.",
   },
   {
     icon: ImageIcon,
-    title: "Listing photos on a real screen",
-    body: "Review the shots you just took at full size instead of squinting at a viewfinder.",
+    title: "Review on a bigger screen",
+    body: "Open photos at full size in Chrome or the dashboard.",
   },
   {
-    icon: ClipboardList,
-    title: "One account, every surface",
-    body: "The same sign-in powers Chrome, the iPhone app, and this dashboard.",
+    icon: History,
+    title: "Free, with 7-day history",
+    body: "Every account gets every feature. Captures clear after 7 days.",
   },
 ];
 
@@ -56,7 +56,7 @@ export function AuthPage({
           transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
         >
           <p className="text-sm font-semibold text-emerald-300">
-            Cloud scanner workspace
+            Free for every account
           </p>
           <h2 className="mt-3 text-3xl font-semibold leading-tight">
             {title}
