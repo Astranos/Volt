@@ -18,7 +18,7 @@ The current installed app and App Clip use cloud delivery. Legacy signaling tabl
 
 ## Development
 
-Follow the [contributor backend setup](../CONTRIBUTING.md#backend) to use your own development deployment and Clerk instance. Configuration for R2 and StoreKit is in [authentication and billing](../docs/authentication-and-billing.md). Never copy production credentials into a contributor environment.
+Follow the [contributor backend setup](../CONTRIBUTING.md#backend) to use your own development deployment and Clerk instance. Configuration for R2 photo storage and existing App Store subscribers is in [authentication and access](../docs/authentication.md). Never copy production credentials into a contributor environment.
 
 From the repository root, run the isolated backend tests:
 

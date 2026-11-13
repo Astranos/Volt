@@ -2,7 +2,7 @@ import ClerkKit
 import SwiftUI
 
 /// Volt is free, so this only shows for accounts with an old App Store subscription. Those
-/// customers keep restore and cancellation; see docs/authentication-and-billing.md.
+/// customers keep restore and cancellation; see docs/authentication.md.
 struct SubscriptionActionsView: View {
     @Environment(Clerk.self) private var clerk
     @Environment(AccessStore.self) private var accessStore

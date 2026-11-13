@@ -16,7 +16,7 @@ Volt combines market search, offer calculation, and listing helpers in a Chrome 
 - Sync captures to your account workspace and insert text into a selected Chrome computer.
 - Open tabs, bookmarks, history, and tools from a keyboard-driven command menu.
 
-Volt is actively developed. Chrome's browser tools are free. Every signed-in account can scan, sync captures, and use the cloud workspace for free, with a rolling seven-day capture history. Nothing is sold on the web. The App Clip offers temporary, checkout-free capture through a workspace guest grant. See [authentication and billing](docs/authentication-and-billing.md) for the access model.
+Volt is free and actively developed. Every signed-in account gets every feature, including scanning, capture sync, and the cloud workspace, with a rolling seven-day capture history. The App Clip offers temporary capture through a workspace guest grant from signed-in Chrome. See [authentication and access](docs/authentication.md) for how accounts and access work.
 
 ## Start contributing
 
@@ -51,7 +51,7 @@ Convex stores capture metadata; private photo bytes go directly to Cloudflare R2
 - [Contributor setup and checks](CONTRIBUTING.md)
 - [Environment glossary](docs/environment-glossary.md)
 - [Current product and domain context](CONTEXT.md)
-- [Authentication and billing](docs/authentication-and-billing.md)
+- [Authentication and access](docs/authentication.md)
 - [Architecture decisions](docs/adr)
 - [Maintainability notes](docs/maintainability.md)
 - [Chrome extension releases](packages/extension/docs/RELEASE_PROCESS.md)

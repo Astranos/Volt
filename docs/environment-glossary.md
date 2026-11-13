@@ -24,7 +24,7 @@ An **environment** is a compatible set of client configuration, identity service
 | --- | --- |
 | **Clerk instance** | The identity system in one stage. Development and production instances have different users, sessions, publishable keys, and frontend API domains. |
 | **Clerk account** | A user within one Clerk instance, identified by its Clerk user ID. The same email in two instances is not the same account or workspace. |
-| **Clerk session** | A client's signed-in state for a Clerk account. Chrome and iPhone each hold their own session. A valid session does not itself grant Pro features. |
+| **Clerk session** | A client's signed-in state for a Clerk account. Chrome and iPhone each hold their own session. |
 | **Clerk JWT** | A short-lived token issued from Volt's `convex` template. Convex checks its issuer against `CLERK_JWT_ISSUER_DOMAIN`. The extension's cookie mirror helps Clerk sign-in reach the side panel; it is not a workspace record. |
 | **Convex deployment** | One backend instance with its own functions, data, and environment variables. A `.convex.cloud` URL is for Convex clients; the matching `.convex.site` URL serves HTTP actions. |
 | **Cloudflare R2 bucket** | Private storage for photo bytes. Convex holds photo metadata and grants short-lived upload or download URLs. |
@@ -50,4 +50,4 @@ Name the client, its delivery or build mode, its Clerk instance, and its Convex 
 
 > iPhone app: local Debug build; development Clerk; development Convex. Chrome extension: unpacked development build; the same Clerk instance and Convex deployment. Both are signed into the same Clerk user, but the iPhone does not list the Enrolled Computer.
 
-That report separates four checks: whether each client has a Clerk session, whether Convex accepts its token, whether the account has the `cloudWorkspace` capability, and whether both devices belong to the same Cloud Scanner Workspace. For setup details, see the [contributor guide](../CONTRIBUTING.md#configure-interactive-development) and [authentication and billing](authentication-and-billing.md#clerk-and-convex).
+That report separates four checks: whether each client has a Clerk session, whether Convex accepts its token, whether the account has the `cloudWorkspace` capability, and whether both devices belong to the same Cloud Scanner Workspace. For setup details, see the [contributor guide](../CONTRIBUTING.md#configure-interactive-development) and [authentication and access](authentication.md#clerk-and-convex).
