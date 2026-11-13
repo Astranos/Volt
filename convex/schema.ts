@@ -454,6 +454,8 @@ export default defineSchema({
   productApiKeys: defineTable(v.any()),
   productApiAccess: defineTable(v.any()),
   productApiRateLimits: defineTable(v.any()),
+  // Retired admin grant records (complimentary access was removed).
+  compedGrants: defineTable(v.any()),
 
   scannerReconnectRequests: defineTable({
     pairingId: v.string(),

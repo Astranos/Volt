@@ -1,7 +1,7 @@
 import { useMemo, type ReactNode } from "react";
 import { ConvexProviderWithAuth, type ConvexReactClient } from "convex/react";
 import { getFunctionName, type FunctionReference } from "convex/server";
-import type { HandbookEntry } from "@/src/domain/handbook";
+import type { HandbookEntry } from "@volt/handbook";
 
 // Sample handbook. The logins are fake and only ever shown masked or as
 // obviously placeholder text; real credentials never belong in fixtures.

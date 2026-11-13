@@ -19,21 +19,26 @@ import {
 } from "lucide-react";
 import { api } from "../../../../../convex/_generated/api";
 import {
+  draftFor,
+  emptyField,
+  entryFields,
+  fieldDisplayValue,
   filterHandbook,
   formatHandbookUpdated,
   groupHandbook,
   guideSummary,
   handbookCategories,
   noteSummary,
+  hasFieldRows,
   BLANK_SUGGESTIONS,
+  type HandbookDraft,
   type HandbookEntry,
   type HandbookEntryId,
   type HandbookFilter,
-} from "../../domain/handbook";
+} from "@volt/handbook";
 import { useHandbookCategoryOrder, useHandbookEntries } from "../../hooks/useHandbookEntries";
 import { cn } from "../../lib/utils";
 import { ExtensionAccountControl, SidepanelSignInCard, useSidepanelSignIn, useSidepanelSignedIn } from "../access/ExtensionAccess";
-import { entryFields, fieldDisplayValue, hasFieldRows } from "../../domain/handbook-format";
 import {
   EntryFields,
   EntryIcon,
@@ -45,7 +50,7 @@ import {
   ValueText,
   VariantToggle,
 } from "./handbook-parts";
-import { draftFor, emptyField, HandbookEditor, type HandbookDraft } from "./HandbookEditor";
+import { HandbookEditor } from "./HandbookEditor";
 import "./handbook-page.css";
 
 type View =

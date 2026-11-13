@@ -16,9 +16,19 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { api } from "../../../../../convex/_generated/api";
-import type { HandbookEntry, HandbookEntryId, HandbookStep } from "../../domain/handbook";
-import { addressLines, entryFields, fieldDisplayValue, mapsUrl, valueFormatOf, type HandbookField } from "../../domain/handbook-format";
-import { parseHandbookMarkdown, type Inline } from "../../domain/handbook-markdown";
+import {
+  addressLines,
+  entryFields,
+  fieldDisplayValue,
+  mapsUrl,
+  parseHandbookMarkdown,
+  valueFormatOf,
+  type HandbookEntry,
+  type HandbookEntryId,
+  type HandbookField,
+  type HandbookStep,
+  type Inline,
+} from "@volt/handbook";
 import { cn } from "../../lib/utils";
 import "./handbook.css";
 
@@ -70,16 +80,26 @@ export function useHandbookSecret(id: HandbookEntryId) {
   const timer = useRef<number | null>(null);
   useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
 
+  // Each reveal or hide starts a new request generation; only the latest reveal may show
+  // a password, so a slow response can't re-show one after it was hidden.
+  const generation = useRef(0);
+
   const fetchSecret = () => revealSecret({ id });
+  const hide = () => {
+    generation.current += 1;
+    setState(null);
+  };
   const reveal = async () => {
+    const current = ++generation.current;
     const login = await fetchSecret();
+    if (current !== generation.current) return;
     setState({ id, login });
     if (timer.current) window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setState(null), REVEAL_MS);
+    timer.current = window.setTimeout(hide, REVEAL_MS);
   };
   return {
     revealed,
-    toggle: () => (revealed ? setState(null) : void reveal()),
+    toggle: () => (revealed ? hide() : void reveal()),
     copySecret: async () => (await fetchSecret()).secret,
   };
 }

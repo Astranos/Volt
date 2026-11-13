@@ -53,7 +53,6 @@ export function AuthPage({
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-950 lg:grid lg:grid-cols-[1.05fr_1fr]">
       <section className="relative hidden overflow-hidden bg-zinc-950 px-12 py-12 text-white lg:flex lg:flex-col xl:px-16">
-        <div className="dark-grid pointer-events-none absolute inset-0 opacity-25 [mask-image:radial-gradient(ellipse_at_30%_45%,black,transparent_75%)]" />
         <div className="pointer-events-none absolute -left-32 top-1/4 size-[36rem] rounded-full bg-emerald-500/15 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-40 right-0 size-[28rem] rounded-full bg-emerald-400/10 blur-3xl" />
 
@@ -68,16 +67,9 @@ export function AuthPage({
           initial="hidden"
           animate="visible"
         >
-          <motion.p
-            variants={rise}
-            className="inline-flex items-center gap-2 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-300"
-          >
-            <span className="size-1.5 rounded-full bg-emerald-400" />
-            Free for every account
-          </motion.p>
           <motion.h2
             variants={rise}
-            className="mt-5 text-4xl font-semibold leading-[1.1] tracking-tight xl:text-[2.75rem]"
+            className="text-4xl font-semibold leading-[1.1] tracking-tight xl:text-[2.75rem]"
           >
             {title}
           </motion.h2>

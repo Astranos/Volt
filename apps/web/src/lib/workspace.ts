@@ -94,7 +94,9 @@ export function formatBytes(bytes: number): string {
   if (bytes <= 0) return "0 KB";
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < 1024 ** 3) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  const gigabytes = bytes / 1024 ** 3;
+  return `${Number.isInteger(gigabytes) ? gigabytes : gigabytes.toFixed(1)} GB`;
 }
 
 export function formatRelativeTime(iso: string, now = Date.now()): string {

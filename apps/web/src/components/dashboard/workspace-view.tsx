@@ -1,4 +1,3 @@
-import { StorageSummary } from "./storage-summary";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
@@ -45,15 +44,12 @@ export function WorkspaceView() {
   const resultActions = useResultActions();
   const clipboard = useCopy();
   return (
-    <>
-    <StorageSummary />
     <WorkspaceContent
       {...workspace}
       resolvePhoto={resolvePhoto}
       {...resultActions}
       {...clipboard}
     />
-    </>
   );
 }
 

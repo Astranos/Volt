@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { addressLines, displayValue, entryFields, fieldDisplayValue, formatAddress, formatPhoneInput, formatPhoneTyping, hasFieldRows, parseAddress, recognizeAddress, valueFormatOf } from "./handbook-format";
-import { markdownPlainText, parseHandbookMarkdown } from "./handbook-markdown";
+import { addressLines, displayValue, entryFields, fieldDisplayValue, formatAddress, formatPhoneInput, formatPhoneTyping, hasFieldRows, parseAddress, recognizeAddress, valueFormatOf } from "./format";
+import { markdownPlainText, parseHandbookMarkdown } from "./markdown";
 
 describe("phone formatting", () => {
   test("adds dashes as digits are typed", () => {

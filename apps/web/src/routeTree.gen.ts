@@ -13,9 +13,11 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ClipRouteImport } from './routes/clip'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as DataSourcesRouteImport } from './routes/data-sources'
+import { Route as HandbookRouteImport } from './routes/handbook'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ScannerDemoRouteImport } from './routes/scanner-demo'
 import { Route as ScannerResultsRouteImport } from './routes/scanner-results'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as ThankyouRouteImport } from './routes/thankyou'
@@ -40,6 +42,11 @@ const DataSourcesRoute = DataSourcesRouteImport.update({
   path: '/data-sources',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HandbookRoute = HandbookRouteImport.update({
+  id: '/handbook',
+  path: '/handbook',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
@@ -53,6 +60,11 @@ const ScannerDemoRoute = ScannerDemoRouteImport.update({
 const ScannerResultsRoute = ScannerResultsRouteImport.update({
   id: '/scanner-results',
   path: '/scanner-results',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignInRoute = SignInRouteImport.update({
@@ -76,9 +88,11 @@ export interface FileRoutesByFullPath {
   '/clip': typeof ClipRoute
   '/dashboard': typeof DashboardRoute
   '/data-sources': typeof DataSourcesRoute
+  '/handbook': typeof HandbookRoute
   '/privacy': typeof PrivacyRoute
   '/scanner-demo': typeof ScannerDemoRoute
   '/scanner-results': typeof ScannerResultsRoute
+  '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
   '/thankyou': typeof ThankyouRoute
@@ -88,9 +102,11 @@ export interface FileRoutesByTo {
   '/clip': typeof ClipRoute
   '/dashboard': typeof DashboardRoute
   '/data-sources': typeof DataSourcesRoute
+  '/handbook': typeof HandbookRoute
   '/privacy': typeof PrivacyRoute
   '/scanner-demo': typeof ScannerDemoRoute
   '/scanner-results': typeof ScannerResultsRoute
+  '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
   '/thankyou': typeof ThankyouRoute
@@ -101,9 +117,11 @@ export interface FileRoutesById {
   '/clip': typeof ClipRoute
   '/dashboard': typeof DashboardRoute
   '/data-sources': typeof DataSourcesRoute
+  '/handbook': typeof HandbookRoute
   '/privacy': typeof PrivacyRoute
   '/scanner-demo': typeof ScannerDemoRoute
   '/scanner-results': typeof ScannerResultsRoute
+  '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
   '/thankyou': typeof ThankyouRoute
@@ -115,9 +133,11 @@ export interface FileRouteTypes {
     | '/clip'
     | '/dashboard'
     | '/data-sources'
+    | '/handbook'
     | '/privacy'
     | '/scanner-demo'
     | '/scanner-results'
+    | '/settings'
     | '/sign-in'
     | '/sign-up'
     | '/thankyou'
@@ -127,9 +147,11 @@ export interface FileRouteTypes {
     | '/clip'
     | '/dashboard'
     | '/data-sources'
+    | '/handbook'
     | '/privacy'
     | '/scanner-demo'
     | '/scanner-results'
+    | '/settings'
     | '/sign-in'
     | '/sign-up'
     | '/thankyou'
@@ -139,9 +161,11 @@ export interface FileRouteTypes {
     | '/clip'
     | '/dashboard'
     | '/data-sources'
+    | '/handbook'
     | '/privacy'
     | '/scanner-demo'
     | '/scanner-results'
+    | '/settings'
     | '/sign-in'
     | '/sign-up'
     | '/thankyou'
@@ -152,9 +176,11 @@ export interface RootRouteChildren {
   ClipRoute: typeof ClipRoute
   DashboardRoute: typeof DashboardRoute
   DataSourcesRoute: typeof DataSourcesRoute
+  HandbookRoute: typeof HandbookRoute
   PrivacyRoute: typeof PrivacyRoute
   ScannerDemoRoute: typeof ScannerDemoRoute
   ScannerResultsRoute: typeof ScannerResultsRoute
+  SettingsRoute: typeof SettingsRoute
   SignInRoute: typeof SignInRoute
   SignUpRoute: typeof SignUpRoute
   ThankyouRoute: typeof ThankyouRoute
@@ -190,6 +216,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DataSourcesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/handbook': {
+      id: '/handbook'
+      path: '/handbook'
+      fullPath: '/handbook'
+      preLoaderRoute: typeof HandbookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/privacy': {
       id: '/privacy'
       path: '/privacy'
@@ -209,6 +242,13 @@ declare module '@tanstack/react-router' {
       path: '/scanner-results'
       fullPath: '/scanner-results'
       preLoaderRoute: typeof ScannerResultsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sign-in': {
@@ -240,9 +280,11 @@ const rootRouteChildren: RootRouteChildren = {
   ClipRoute: ClipRoute,
   DashboardRoute: DashboardRoute,
   DataSourcesRoute: DataSourcesRoute,
+  HandbookRoute: HandbookRoute,
   PrivacyRoute: PrivacyRoute,
   ScannerDemoRoute: ScannerDemoRoute,
   ScannerResultsRoute: ScannerResultsRoute,
+  SettingsRoute: SettingsRoute,
   SignInRoute: SignInRoute,
   SignUpRoute: SignUpRoute,
   ThankyouRoute: ThankyouRoute,

@@ -8,10 +8,12 @@ import {
 } from "@clerk/clerk-react";
 import {
   ArrowUpRight,
+  BookOpen,
   Chrome,
+  History,
   LayoutDashboard,
   Menu,
-  ScanLine,
+  Settings,
   Smartphone,
   X,
 } from "lucide-react";
@@ -24,7 +26,7 @@ import { authConfigured } from "./app-providers";
 import { AuthUnavailable } from "./auth-page";
 import { WorkspaceProvider } from "./workspace-provider";
 
-type AuthenticatedDestination = "workspace" | "scanner-results";
+type AuthenticatedDestination = "workspace" | "scanner-results" | "handbook" | "settings";
 type AppLayoutProps = {
   current: AuthenticatedDestination;
   children: ReactNode;
@@ -34,13 +36,23 @@ type AppLayoutProps = {
 const destinations = {
   workspace: {
     href: "/dashboard",
-    label: "Dashboard / Activity",
+    label: "Dashboard",
     icon: LayoutDashboard,
   },
   "scanner-results": {
     href: "/scanner-results",
-    label: "Scanner results",
-    icon: ScanLine,
+    label: "Capture history",
+    icon: History,
+  },
+  handbook: {
+    href: "/handbook",
+    label: "Handbook",
+    icon: BookOpen,
+  },
+  settings: {
+    href: "/settings",
+    label: "Settings",
+    icon: Settings,
   },
 } satisfies Record<
   AuthenticatedDestination,
@@ -49,6 +61,8 @@ const destinations = {
 const destinationOrder: readonly AuthenticatedDestination[] = [
   "workspace",
   "scanner-results",
+  "handbook",
+  "settings",
 ];
 
 export function AppShell({

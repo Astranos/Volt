@@ -16,9 +16,11 @@ export const retiredTables = [
   "productApiKeys",
   "productApiAccess",
   "productApiRateLimits",
+  "compedGrants",
 ] as const;
 
-// Run once manually after deploying the retirement schema. Safe to restart.
+// Run once manually after deploying the retirement schema. Safe to restart: each run
+// starts at the first table, and tables that are already empty finish in one batch.
 export const purge = internalMutation({
   args: { table: v.optional(v.union(...retiredTables.map((table) => v.literal(table)))) },
   returns: v.null(),

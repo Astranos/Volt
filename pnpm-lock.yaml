@@ -107,6 +107,12 @@ importers:
       '@clerk/clerk-react':
         specifier: ^5.55.0
         version: 5.61.3(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      '@codemirror/state':
+        specifier: ^6.7.6
+        version: 6.7.6
+      '@codemirror/view':
+        specifier: ^6.43.15
+        version: 6.43.15
       '@tailwindcss/vite':
         specifier: ^4.1.18
         version: 4.1.18(vite@7.3.1(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.9.0))
@@ -119,6 +125,9 @@ importers:
       '@vercel/analytics':
         specifier: ^2.0.1
         version: 2.0.1(react@19.2.3)
+      '@volt/handbook':
+        specifier: workspace:*
+        version: link:../../packages/handbook
       '@volt/scanner-protocol':
         specifier: workspace:*
         version: link:../../packages/scanner-protocol
@@ -177,24 +186,12 @@ importers:
       '@codemirror/autocomplete':
         specifier: ^6.20.4
         version: 6.20.4
-      '@codemirror/commands':
-        specifier: ^6.11.1
-        version: 6.11.1
-      '@codemirror/lang-markdown':
-        specifier: ^6.5.2
-        version: 6.5.2
-      '@codemirror/language':
-        specifier: ^6.13.1
-        version: 6.13.1
       '@codemirror/state':
         specifier: ^6.7.6
         version: 6.7.6
       '@codemirror/view':
         specifier: ^6.43.15
         version: 6.43.15
-      '@lezer/markdown':
-        specifier: ^1.8.1
-        version: 1.8.1
       '@radix-ui/react-accordion':
         specifier: ^1.2.12
         version: 1.2.12(@types/react-dom@19.2.3(@types/react@19.2.9))(@types/react@19.2.9)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -240,6 +237,9 @@ importers:
       '@radix-ui/react-tooltip':
         specifier: ^1.2.8
         version: 1.2.8(@types/react-dom@19.2.3(@types/react@19.2.9))(@types/react@19.2.9)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      '@volt/handbook':
+        specifier: workspace:*
+        version: link:../handbook
       '@volt/scanner-protocol':
         specifier: workspace:*
         version: link:../scanner-protocol
@@ -319,6 +319,37 @@ importers:
       wxt:
         specifier: ^0.20.11
         version: 0.20.13(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.33.0)(rollup@4.55.2)(terser@5.46.0)(tsx@4.21.0)(yaml@2.9.0)
+
+  packages/handbook:
+    dependencies:
+      '@codemirror/autocomplete':
+        specifier: ^6.20.4
+        version: 6.20.4
+      '@codemirror/commands':
+        specifier: ^6.11.1
+        version: 6.11.1
+      '@codemirror/lang-markdown':
+        specifier: ^6.5.2
+        version: 6.5.2
+      '@codemirror/language':
+        specifier: ^6.13.1
+        version: 6.13.1
+      '@codemirror/state':
+        specifier: ^6.7.6
+        version: 6.7.6
+      '@codemirror/view':
+        specifier: ^6.43.15
+        version: 6.43.15
+      '@lezer/markdown':
+        specifier: ^1.8.1
+        version: 1.8.1
+      convex:
+        specifier: ^1.41.0
+        version: 1.41.0(@clerk/clerk-react@5.61.3(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@clerk/react@6.12.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6)
+    devDependencies:
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
 
   packages/scanner-protocol:
     devDependencies:

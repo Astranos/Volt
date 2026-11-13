@@ -46,13 +46,6 @@ a {
   background-size: 48px 48px;
 }
 
-.dark-grid {
-  background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.12) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.12) 1px, transparent 1px);
-  background-size: 40px 40px;
-}
-
 .scan-beam {
   animation: scan-beam 2.8s ease-in-out infinite;
 }

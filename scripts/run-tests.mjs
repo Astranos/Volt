@@ -6,8 +6,8 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const scopes = {
   all: ["apps/", "packages/", "convex/", "scripts/"],
-  extension: ["packages/extension/"],
-  web: ["apps/web/", "scripts/pwa.test.mjs"],
+  extension: ["packages/extension/", "packages/handbook/"],
+  web: ["apps/web/", "packages/handbook/", "scripts/pwa.test.mjs"],
   kiosk: ["apps/kiosk/"],
   convex: ["convex/"],
   mobile: ["apps/mobile/"],

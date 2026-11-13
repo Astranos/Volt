@@ -1,7 +1,7 @@
 // Where the note renderer (src/domain/handbook-markdown.ts) finds formatting, as source
 // offsets. The editor styles exactly these ranges, so it never shows formatting that a
 // saved note would print as literal text, or the other way around.
-import { parseInline, type Inline } from "../../../domain/handbook-markdown";
+import { parseInline, type Inline } from "../markdown";
 
 // The renderer's line patterns, tried on the trimmed line in the same order.
 const HEADING = /^(#{1,3})\s+(.*)$/;

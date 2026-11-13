@@ -7,13 +7,12 @@ import {
   formatHandbookUpdated,
   groupHandbook,
   guideSummary,
-  HANDBOOK_OPEN_ENTRY_KEY,
-  HANDBOOK_PAGE_PATH,
+  hasFieldRows,
   noteSummary,
   type HandbookEntry,
   type HandbookEntryId,
-} from "../../domain/handbook";
-import { hasFieldRows } from "../../domain/handbook-format";
+} from "@volt/handbook";
+import { HANDBOOK_OPEN_ENTRY_KEY, HANDBOOK_PAGE_PATH } from "../../domain/handbook";
 import { useHandbookCategoryOrder, useHandbookEntries } from "../../hooks/useHandbookEntries";
 import { cn } from "../../lib/utils";
 import { SidepanelSignInCard, useSidepanelSignIn, useSidepanelSignedIn } from "../access/ExtensionAccess";

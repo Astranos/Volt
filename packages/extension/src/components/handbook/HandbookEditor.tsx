@@ -4,139 +4,34 @@ import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { api } from "../../../../../convex/_generated/api";
 import {
   DEFAULT_HANDBOOK_CATEGORIES,
-  parseKeyCombo,
-  type HandbookEntry,
-  type HandbookEntryId,
-} from "../../domain/handbook";
-import {
-  entryFields,
+  DRAFT_PLACEHOLDERS,
+  FORMAT_OPTIONS,
+  KIND_OPTIONS,
+  MAX_DRAFT_FIELDS,
+  MAX_DRAFT_VARIANTS,
+  draftToSave,
+  emptyField,
+  emptyStep,
+  emptyVariant,
   formatAddress,
   formatPhoneInput,
   formatPhoneTyping,
-  parseAddress,
+  handbookErrorText,
+  hasOlderNotes,
+  keepsSavedLogin,
+  moveItem as move,
+  switchFieldFormat,
+  switchKind,
   type AddressParts,
-  type HandbookValueFormat,
-} from "../../domain/handbook-format";
+  type DraftField,
+  type DraftStep,
+  type DraftVariant,
+  type HandbookDraft,
+  type HandbookEntry,
+  type HandbookEntryId,
+} from "@volt/handbook";
 import { cn } from "../../lib/utils";
 import { NoteEditor } from "./NoteEditor";
-
-type Kind = HandbookEntry["kind"];
-type DraftStep = { text: string; keys: string; command: string; tip: string };
-type DraftVariant = { label: string; warning: string; steps: DraftStep[] };
-export type DraftField = { label: string; format: HandbookValueFormat; value: string; address: AddressParts };
-export type HandbookDraft = {
-  kind: Kind;
-  title: string;
-  category: string;
-  comment: string;
-  fields: DraftField[];
-  body: string;
-  showInList: boolean;
-  pinned: boolean;
-  variants: DraftVariant[];
-  username: string;
-  secret: string;
-};
-
-const KIND_OPTIONS: Array<{ kind: Kind; label: string }> = [
-  { kind: "value", label: "Quick value" },
-  { kind: "secret", label: "Login" },
-  { kind: "guide", label: "Guide" },
-  { kind: "note", label: "Note" },
-];
-const FORMAT_OPTIONS: Array<{ format: HandbookValueFormat; label: string }> = [
-  { format: "text", label: "Text" },
-  { format: "phone", label: "Phone" },
-  { format: "address", label: "Address" },
-];
-const PLACEHOLDERS: Record<Kind, { title: string; category: string }> = {
-  value: { title: "Store phone", category: "Store info" },
-  secret: { title: "PSN", category: "Logins" },
-  guide: { title: "Skip Windows sign-in", category: "Setup guides" },
-  note: { title: "Opening checklist", category: "Procedures" },
-};
-const emptyAddress = (): AddressParts => ({ street: "", city: "", state: "", zip: "" });
-export const emptyField = (format: HandbookValueFormat = "text"): DraftField => ({ label: "", format, value: "", address: emptyAddress() });
-const MAX_FIELDS = 8;
-const fieldValue = (field: DraftField) => (field.format === "address" ? formatAddress(field.address) : field.value);
-const emptyStep = (): DraftStep => ({ text: "", keys: "", command: "", tip: "" });
-const emptyVariant = (): DraftVariant => ({ label: "", warning: "", steps: [emptyStep()] });
-
-export function draftFor(entry: HandbookEntry | null, defaults: Partial<HandbookDraft> = {}): HandbookDraft {
-  const fields = entry?.kind === "value"
-    ? entryFields(entry).map((field) => ({
-      label: field.label ?? "",
-      format: field.format,
-      value: field.value,
-      address: field.format === "address" ? parseAddress(field.value) : emptyAddress(),
-    }))
-    : [emptyField()];
-  return {
-    kind: entry?.kind ?? "value",
-    title: entry?.title ?? "",
-    category: entry?.category ?? "",
-    comment: entry?.comment ?? "",
-    fields,
-    // Guides (intro) and notes use this. Quick values and logins no longer have notes, but
-    // any left from older versions are kept here and sent back, so the server can fold
-    // them into the comment instead of a save dropping them.
-    body: entry?.body ?? "",
-    showInList: entry?.showInList ?? false,
-    pinned: entry?.pinned ?? false,
-    variants: entry?.variants?.map((variant) => ({
-      label: variant.label,
-      warning: variant.warning ?? "",
-      steps: variant.steps.map((step) => ({
-        text: step.text,
-        keys: step.keys?.join(" + ") ?? "",
-        command: step.command ?? "",
-        tip: step.tip ?? "",
-      })),
-    })) ?? [emptyVariant()],
-    username: "",
-    secret: "",
-    ...defaults,
-  };
-}
-
-/**
- * Changes an entry's type. Turning a quick value into a note moves the value into
- * the note (above any older notes) so it isn't silently dropped on save.
- */
-function switchKind(draft: HandbookDraft, kind: Kind): HandbookDraft {
-  if (draft.kind !== "value" || kind !== "note") return { ...draft, kind };
-  // Each value becomes a line ("Phone: 313-555-0100"), unless the note already has that exact line.
-  const lines = draft.fields
-    .map((field) => [field.label.trim(), fieldValue(field).trim()])
-    .filter(([, value]) => value)
-    .map(([label, value]) => (label ? `${label}: ${value}` : value));
-  const existing = new Set(draft.body.split("\n").map((line) => line.trim()));
-  const added = lines.filter((line) => !existing.has(line));
-  const body = added.length ? [added.join("\n"), draft.body].filter(Boolean).join("\n\n") : draft.body;
-  return { ...draft, kind, body };
-}
-
-function move<T>(items: T[], index: number, offset: number) {
-  const target = index + offset;
-  if (target < 0 || target >= items.length) return items;
-  const next = [...items];
-  [next[index], next[target]] = [next[target], next[index]];
-  return next;
-}
-
-// Codes named before notes were called pages and short notes were called notes.
-const RENAMED_ERRORS: Record<string, string> = {
-  HANDBOOK_NOTE_TOO_LONG: "Comment too long.",
-  HANDBOOK_PAGE_REQUIRED: "Write something in the note before saving.",
-  HANDBOOK_PAGE_TOO_LONG: "Note too long.",
-};
-
-function errorText(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error);
-  const code = message.match(/HANDBOOK_[A-Z_]+/)?.[0];
-  if (!code) return message;
-  return RENAMED_ERRORS[code] ?? code.replace(/^HANDBOOK_/, "").replaceAll("_", " ").toLowerCase().replace(/^./, (letter) => letter.toUpperCase()) + ".";
-}
 
 export function HandbookEditor({
   entry,
@@ -160,48 +55,13 @@ export function HandbookEditor({
     setDraft((current) => ({ ...current, [key]: value }));
   const setVariant = (index: number, variant: DraftVariant) =>
     set("variants", draft.variants.map((item, itemIndex) => (itemIndex === index ? variant : item)));
-  const keepsLogin = entry?.kind === "secret" && draft.kind === "secret";
-  // Notes left on a saved quick value or login from an earlier version. A note's or guide's
-  // text never counts as that, even after switching the type here.
-  const hadOlderNotes = (entry?.kind === "value" || entry?.kind === "secret") && Boolean(entry.body?.trim());
-  const keepsBody = draft.kind === "guide" || draft.kind === "note" || hadOlderNotes;
+  const keepsLogin = keepsSavedLogin(entry, draft);
+  const hadOlderNotes = hasOlderNotes(entry);
 
   const save = async () => {
     setSaving(true);
     setError(null);
-    const content = {
-      kind: draft.kind,
-      title: draft.title,
-      category: draft.category,
-      comment: draft.comment || undefined,
-      // `value`/`valueFormat` mirror the first field for older extensions; `fields` is the source of truth.
-      value: draft.kind === "value" ? fieldValue(draft.fields[0]) : undefined,
-      valueFormat: draft.kind === "value" ? draft.fields[0].format : undefined,
-      // An empty list for other kinds tells the server this editor already moved the values
-      // (into a note, say); its fallback for older extensions would otherwise add them again.
-      fields: draft.kind === "value"
-        ? draft.fields.map((field) => ({ label: field.label.trim() || undefined, value: fieldValue(field), format: field.format }))
-        : [],
-      body: keepsBody && draft.body.trim() ? draft.body : undefined,
-      showInList: draft.kind === "note" ? draft.showInList : undefined,
-      pinned: draft.pinned,
-      variants: draft.kind === "guide"
-        ? draft.variants.map((variant) => ({
-          label: variant.label,
-          warning: variant.warning || undefined,
-          steps: variant.steps.map((step) => ({
-            text: step.text,
-            keys: step.keys.trim() ? parseKeyCombo(step.keys) : undefined,
-            command: step.command || undefined,
-            tip: step.tip || undefined,
-          })),
-        }))
-        : undefined,
-    };
-    // While editing a login, a blank username or password keeps the stored one.
-    const credentials = draft.kind === "secret" && (draft.secret || draft.username || !keepsLogin)
-      ? { username: draft.username || undefined, secret: draft.secret }
-      : undefined;
+    const { content, credentials } = draftToSave(draft, entry);
     try {
       if (entry) {
         await update({ id: entry._id, ...content, credentials });
@@ -210,7 +70,7 @@ export function HandbookEditor({
         onSaved(await create({ ...content, credentials }));
       }
     } catch (cause) {
-      setError(errorText(cause));
+      setError(handbookErrorText(cause));
     } finally {
       setSaving(false);
     }
@@ -251,14 +111,14 @@ export function HandbookEditor({
 
       <div className="handbook-field-row">
         <Field label="Title">
-          <input value={draft.title} onChange={(event) => set("title", event.target.value)} placeholder={PLACEHOLDERS[draft.kind].title} required autoFocus />
+          <input value={draft.title} onChange={(event) => set("title", event.target.value)} placeholder={DRAFT_PLACEHOLDERS[draft.kind].title} required autoFocus />
         </Field>
         <Field label="Category">
           <input
             value={draft.category}
             onChange={(event) => set("category", event.target.value)}
             list="handbook-categories"
-            placeholder={PLACEHOLDERS[draft.kind].category}
+            placeholder={DRAFT_PLACEHOLDERS[draft.kind].category}
             required
           />
           <datalist id="handbook-categories">
@@ -369,7 +229,7 @@ export function HandbookEditor({
               </Field>
             </fieldset>
           ))}
-          {draft.variants.length < 4 ? (
+          {draft.variants.length < MAX_DRAFT_VARIANTS ? (
             <button type="button" className="handbook-button" onClick={() => set("variants", [...draft.variants, emptyVariant()])}>
               <Plus aria-hidden="true" />
               Add another method
@@ -520,13 +380,7 @@ function ValueFieldsEditor({ fields, onChange }: { fields: DraftField[]; onChang
                     aria-checked={field.format === option.format}
                     className={cn(field.format === option.format && "is-active")}
                     // Carry what's typed across, so switching types doesn't lose it.
-                    onClick={() => setField(index, {
-                      ...field,
-                      format: option.format,
-                      address: option.format === "address" && field.format !== "address" ? parseAddress(field.value) : field.address,
-                      value: field.format === "address" && option.format !== "address" ? formatAddress(field.address)
-                        : option.format === "phone" ? formatPhoneInput(field.value) : field.value,
-                    })}
+                    onClick={() => setField(index, switchFieldFormat(field, option.format))}
                   >
                     {option.label}
                   </button>
@@ -563,7 +417,7 @@ function ValueFieldsEditor({ fields, onChange }: { fields: DraftField[]; onChang
           ) : null}
         </fieldset>
       ))}
-      {fields.length < MAX_FIELDS ? (
+      {fields.length < MAX_DRAFT_FIELDS ? (
         <button type="button" className="handbook-button handbook-add-value" onClick={() => onChange([...fields, emptyField()])}>
           <Plus aria-hidden="true" />
           Add another value
