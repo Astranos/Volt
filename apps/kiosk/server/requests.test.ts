@@ -4,12 +4,12 @@ import { createRequestHandlers, type RequestBackend } from './requests.js';
 import type { CatalogResponse } from '../src/catalog.js';
 
 const time = 1_800_000_000_000;
-const input = { storeSlug: 'taylormi', productId: '12', variantId: '34', requestKey: '12345678-1234-4234-8234-123456789abc:34' };
+const input = { storeSlug: 'paymore-taylor', productId: '12', variantId: '34', requestKey: '12345678-1234-4234-8234-123456789abc:34' };
 const receipt = { id: 'request1', status: 'waiting' as const, createdAt: time, expiresAt: time + 3600000 };
 const catalog: CatalogResponse = {
-  store: { slug: 'taylormi', name: 'Taylor', region: '', address: '', storefrontUrl: 'https://taylormi.paymore.com' },
+  store: { slug: 'paymore-taylor', name: 'Taylor', region: '', address: '', storefrontUrl: 'https://paymore-taylor.myshopify.com' },
   checkedAt: new Date(time).toISOString(), status: 'fresh',
-  products: [{ id: '12', title: 'Camera', category: 'Cameras', condition: 'Good', priceCents: 2000, priceMaxCents: 2000, images: ['https://cdn.shopify.com/a.jpg'], url: 'https://taylormi.paymore.com/products/camera', description: '', details: [], publishedAt: new Date(time).toISOString(), variants: [{ id: '34', title: 'Default Title', priceCents: 2000, sku: 'MI01-8773A-E9' }] }],
+  products: [{ id: '12', title: 'Camera', category: 'Cameras', condition: 'Good', priceCents: 2000, priceMaxCents: 2000, images: ['https://cdn.shopify.com/a.jpg'], url: 'https://paymore-taylor.myshopify.com/products/camera', description: '', details: [], publishedAt: new Date(time).toISOString(), variants: [{ id: '34', title: 'Default Title', priceCents: 2000, sku: 'MI01-8773A-E9' }] }],
 };
 function setup() {
   const db = {
@@ -67,13 +67,13 @@ describe('item request HTTP boundary', () => {
   });
   it('lists one store and rejects duplicate store parameters', async () => {
     const { api, db } = setup();
-    expect((await api.GET(new Request('https://pm.juanquenga.com/api/requests?store=southfieldmi'))).status).toBe(200);
-    expect(db.list).toHaveBeenCalledWith({ secret: 's'.repeat(32), storeSlug: 'southfieldmi' });
-    expect((await api.GET(new Request('https://pm.juanquenga.com/api/requests?store=taylormi&store=southfieldmi'))).status).toBe(400);
+    expect((await api.GET(new Request('https://pm.juanquenga.com/api/requests?store=paymore-southfield'))).status).toBe(200);
+    expect(db.list).toHaveBeenCalledWith({ secret: 's'.repeat(32), storeSlug: 'paymore-southfield' });
+    expect((await api.GET(new Request('https://pm.juanquenga.com/api/requests?store=paymore-taylor&store=paymore-southfield'))).status).toBe(400);
   });
   it('returns 404 for missing or expired updates', async () => {
     const { api } = setup();
-    expect((await api.PATCH(new Request('https://pm.juanquenga.com/api/requests', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeSlug: 'taylormi', id: 'request1', status: 'shown' }) }))).status).toBe(404);
+    expect((await api.PATCH(new Request('https://pm.juanquenga.com/api/requests', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeSlug: 'paymore-taylor', id: 'request1', status: 'shown' }) }))).status).toBe(404);
   });
   it.each([['RATE_LIMITED', 429], ['QUEUE_FULL', 429], ['CONFLICT', 409], ['UNAUTHORIZED', 503], ['INVALID_INPUT', 400]])('maps %s without leaking backend details', async (code, status) => {
     const { api, db } = setup();
@@ -90,10 +90,25 @@ describe('item request HTTP boundary', () => {
   });
   it('returns the saved staff update without changing its expiry', async () => {
     const { api, db } = setup();
-    const saved = { ...receipt, storeSlug: 'taylormi', productId: '12', variantId: '34', title: 'Camera', variantTitle: 'Default Title', sku: 'MI01-8773A-E9', imageUrl: null, priceCents: 2000, productUrl: 'https://taylormi.paymore.com/products/camera', status: 'found' as const, updatedAt: time + 2000 };
+    const saved = { ...receipt, storeSlug: 'paymore-taylor', productId: '12', variantId: '34', title: 'Camera', variantTitle: 'Default Title', sku: 'MI01-8773A-E9', imageUrl: null, priceCents: 2000, productUrl: 'https://paymore-taylor.myshopify.com/products/camera', status: 'found' as const, updatedAt: time + 2000 };
     db.setStatus.mockResolvedValue(saved);
-    const response = await api.PATCH(new Request('https://pm.juanquenga.com/api/requests', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeSlug: 'taylormi', id: 'request1', status: 'found' }) }));
+    const response = await api.PATCH(new Request('https://pm.juanquenga.com/api/requests', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeSlug: 'paymore-taylor', id: 'request1', status: 'found' }) }));
     expect(await response.json()).toEqual(saved);
+  });
+  it.each([['taylormi', 'paymore-taylor'], ['southfieldmi', 'paymore-southfield']])('canonicalizes legacy request identity %s and echoes it to native clients', async (legacy, handle) => {
+    const { api, db, getCatalog } = setup();
+    expect((await api.POST(post({ ...input, storeSlug: legacy }))).status).toBe(200);
+    expect(getCatalog).toHaveBeenCalledWith(handle);
+    expect(db.enqueue).toHaveBeenCalledWith(expect.objectContaining({ storeSlug: handle }));
+    const saved = { ...receipt, storeSlug: handle, productId: '12', variantId: '34', title: 'Camera', variantTitle: '', sku: null, imageUrl: null, priceCents: 2000, productUrl: `https://${handle}.myshopify.com/products/camera`, updatedAt: time };
+    db.list.mockResolvedValue({ requests: [saved], serverNow: time });
+    const queue = await api.GET(new Request(`https://pm.voltresale.app/api/requests?store=${legacy}`));
+    expect(await queue.json()).toEqual({ requests: [{ ...saved, storeSlug: legacy }], serverNow: time });
+    expect(db.list).toHaveBeenCalledWith(expect.objectContaining({ storeSlug: handle }));
+    db.setStatus.mockResolvedValue({ ...saved, status: 'found' });
+    const update = await api.PATCH(new Request('https://pm.voltresale.app/api/requests', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeSlug: legacy, id: saved.id, status: 'found' }) }));
+    expect(await update.json()).toMatchObject({ storeSlug: legacy, status: 'found' });
+    expect(db.setStatus).toHaveBeenCalledWith(expect.objectContaining({ storeSlug: handle }));
   });
   it('bounds slow catalog calls and never enqueues after the deadline', async () => {
     vi.useFakeTimers();
@@ -112,13 +127,13 @@ describe('item request HTTP boundary', () => {
   it('lets the Volt extension read the queue and set statuses, but not create requests', async () => {
     const { api, db } = setup();
     const origin = { origin: 'chrome-extension://bmgghhmlflbhlnomgnoodpidekpaaifk' };
-    expect((await api.GET(new Request('https://pm.juanquenga.com/api/requests?store=taylormi', { headers: origin }))).status).toBe(200);
-    db.setStatus.mockResolvedValueOnce({ id: 'request1', storeSlug: 'taylormi', productId: '12', variantId: '34', title: 'Camera', variantTitle: 'Default Title', sku: null, imageUrl: null, priceCents: 2000, productUrl: 'https://taylormi.paymore.com/products/camera', status: 'found', createdAt: time, updatedAt: time, expiresAt: time + 3600000 });
-    const patch = new Request('https://pm.juanquenga.com/api/requests', { method: 'PATCH', headers: { 'content-type': 'application/json', ...origin }, body: JSON.stringify({ storeSlug: 'taylormi', id: 'request1', status: 'found' }) });
+    expect((await api.GET(new Request('https://pm.juanquenga.com/api/requests?store=paymore-taylor', { headers: origin }))).status).toBe(200);
+    db.setStatus.mockResolvedValueOnce({ id: 'request1', storeSlug: 'paymore-taylor', productId: '12', variantId: '34', title: 'Camera', variantTitle: 'Default Title', sku: null, imageUrl: null, priceCents: 2000, productUrl: 'https://paymore-taylor.myshopify.com/products/camera', status: 'found', createdAt: time, updatedAt: time, expiresAt: time + 3600000 });
+    const patch = new Request('https://pm.juanquenga.com/api/requests', { method: 'PATCH', headers: { 'content-type': 'application/json', ...origin }, body: JSON.stringify({ storeSlug: 'paymore-taylor', id: 'request1', status: 'found' }) });
     expect((await api.PATCH(patch)).status).toBe(200);
     expect((await api.POST(post(input, origin))).status).toBe(400);
     expect(db.enqueue).not.toHaveBeenCalled();
     const other = { origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' };
-    expect((await api.GET(new Request('https://pm.juanquenga.com/api/requests?store=taylormi', { headers: other }))).status).toBe(400);
+    expect((await api.GET(new Request('https://pm.juanquenga.com/api/requests?store=paymore-taylor', { headers: other }))).status).toBe(400);
   });
 });

@@ -18,6 +18,28 @@
     },
     { "source": "/(.*)\\.(js|css|html)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }] }
   ],
+  "redirects": [
+    {
+      "source": "/taylormi",
+      "destination": "/paymore-taylor",
+      "permanent": true
+    },
+    {
+      "source": "/taylormi/requests",
+      "destination": "/paymore-taylor/requests",
+      "permanent": true
+    },
+    {
+      "source": "/southfieldmi",
+      "destination": "/paymore-southfield",
+      "permanent": true
+    },
+    {
+      "source": "/southfieldmi/requests",
+      "destination": "/paymore-southfield/requests",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     { "source": "/:store([a-z0-9][a-z0-9-]*)/requests", "destination": "/index.html" },
     { "source": "/:store([a-z0-9][a-z0-9-]*)", "destination": "/index.html" }

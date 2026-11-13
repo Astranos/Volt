@@ -20,9 +20,9 @@ Inventory refreshes every minute. A failed refresh retains the last snapshot and
 2. Select `VoltKiosk` and the connected iPad.
 3. Check Signing & Capabilities. Automatic signing uses the existing development team, `GB5SPLUARQ`, and the separate bundle ID. Change the team if needed.
 4. Run the app from Xcode.
-5. Enter the store subdomain, such as `taylormi`, or its PayMore address, such as `taylormi.paymore.com`. The app verifies the catalog before saving the store.
+5. Enter the store's `.myshopify.com` address, its shop handle, or a `pm.voltresale.app/<handle>` kiosk link. The app verifies the catalog before saving the store.
 
-To preset a store for installation, set `KioskDefaultStoreSlug` in `ios/VoltKiosk/Info.plist`. A previously saved store takes precedence. To use another deployment of the kiosk backend, change `KioskAPIBaseURL` to its HTTPS origin. This setting is bundled in the app and cannot be edited by customers. No Shopify, Clerk, or Convex secrets belong in the native app.
+To preset a store for installation, set `KioskDefaultStoreSlug` in `ios/VoltKiosk/Info.plist`. A previously saved store takes precedence. At launch, legacy production slugs in `kiosk.storeSlug` are mapped to Shopify handles and saved back to UserDefaults. To use another deployment of the kiosk backend, change `KioskAPIBaseURL` to its HTTPS origin. This setting is bundled in the app and cannot be edited by customers. No Shopify, Clerk, or Convex secrets belong in the native app.
 
 The app includes its own tablet-and-store icon. To redraw it, run `xcrun swift scripts/render-icon.swift` from `apps/kiosk-ios`. Distribution still needs provisioning for the intended distribution method. This package does not reuse the scanner's release automation.
 

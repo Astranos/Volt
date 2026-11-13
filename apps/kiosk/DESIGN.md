@@ -1,6 +1,6 @@
 # A product-first tablet catalog
 
-Customers standing in the store need to find a device, inspect it, and ask for help. Marketing banners, account links, and checkout controls compete with that task. The kiosk keeps PayMore's green, white, and charcoal cues while giving the catalog most of the screen.
+Customers standing in the store need to find a device, inspect it, and ask for help. Marketing banners, account links, and checkout controls compete with that task. The kiosk keeps the retailer's green, white, and charcoal cues while giving the catalog most of the screen.
 
 ## Layout alternatives
 
@@ -19,11 +19,13 @@ The selected layout keeps products visible without requiring customers to know a
 
 Embedding the kiosk inside Volt's existing account-oriented web app would reuse its app shell, but also couple public store browsing to authentication and scanner navigation. A separate workspace app reuses the modern frontend stack without those dependencies. This is a deployment boundary, not a legacy-technology fork.
 
-The browser calls `/api/catalog?store=taylormi`. The server validates the slug, constructs its exact `*.paymore.com` host, fetches Shopify pages, validates their fields, and returns the shared `CatalogResponse` schema. Store metadata is optional enrichment from the same host. The browser owns search, filter, sort, detail, photo enlargement, and inactivity state. The server owns store selection, upstream validation, price ranges, and snapshot freshness.
+The browser calls `/api/catalog?store=<handle>`. The server validates the Shopify handle, constructs `https://<handle>.myshopify.com`, fetches `/products.json` pages, validates their fields, and returns the shared `CatalogResponse` schema. Optional `/meta.json` supplies the store name and region. It never changes the origin or invents a street address. The browser owns search, filter, sort, detail, photo enlargement, and inactivity state. The server owns store selection, upstream validation, price ranges, and snapshot freshness.
 
-A manual franchise registry was the initial design. Direct host resolution replaces it so new franchise URLs work without a code change. Arbitrary Shopify domains remain unsupported; requests stay within the PayMore namespace and never follow redirects. Each store has separate cached data, with a 64-store cache cap and 16 concurrent loads per process.
+Direct Shopify handle resolution lets new stores work without a registry entry. Arbitrary custom domains remain unsupported; requests stay within the `.myshopify.com` namespace and never follow redirects. Each store has separate cached data, with a 64-store cache cap and 16 concurrent loads per process.
 
-The existing Convex PayMore catalog remains a specification lookup. Its UPC-based merging and lack of store stock make it unsuitable as the kiosk's inventory source.
+The existing Convex retailer catalog remains a specification lookup. Its UPC-based merging and lack of store stock make it unsuitable as the kiosk's inventory source.
+
+Legacy production slugs map to canonical Shopify handles across web paths, HTTP APIs, extension settings, and Convex requests. The native app rewrites saved UserDefaults on launch. HTTP responses echo a requested legacy slug for installed native clients that enforce identity equality; upstream URLs and internal storage still use the canonical handle. Existing request rows expire after one hour, so no data migration runs.
 
 ## Constraints to preserve
 

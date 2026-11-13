@@ -44,7 +44,8 @@ final class KioskSession {
         self.now = now
         self.lastActivity = now
         let saved = defaults.string(forKey: "kiosk.storeSlug") ?? defaultStoreSlug
-        self.storeSlug = saved.flatMap { StoreAddress.validSlug($0) ? $0 : nil }
+        self.storeSlug = saved.flatMap { StoreAddress.validSlug($0) ? StoreAddress.canonicalSlug($0) : nil }
+        if let storeSlug, storeSlug != saved { defaults.set(storeSlug, forKey: "kiosk.storeSlug") }
         if storeSlug != nil { phase = .loading }
     }
 
@@ -75,7 +76,7 @@ final class KioskSession {
     func connect(to address: String) async -> Bool {
         guard !isConnecting else { return false }
         guard let slug = StoreAddress.slug(from: address) else {
-            setupError = "Enter a PayMore store address, such as southfieldmi.paymore.com."
+            setupError = "Enter a Shopify store address, such as your-store.myshopify.com."
             return false
         }
         isConnecting = true

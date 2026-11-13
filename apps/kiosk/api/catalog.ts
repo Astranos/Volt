@@ -1,3 +1,4 @@
+import { canonicalStoreSlug } from '../src/store-address.js';
 import { createCatalogService } from '../server/catalog.js';
 
 const service = createCatalogService();
@@ -11,7 +12,10 @@ export async function GET(request: Request): Promise<Response> {
     return Response.json({ error: 'A valid store is required.' }, { status: 400, headers });
   }
   try {
-    return Response.json(await service.getCatalog(slug), { headers });
+    const catalog = await service.getCatalog(slug);
+    // Installed native clients require the response slug to equal their request.
+    const response = canonicalStoreSlug(slug) === slug ? catalog : { ...catalog, store: { ...catalog.store, slug } };
+    return Response.json(response, { headers });
   } catch (error) {
     const status = error instanceof Error && 'statusCode' in error && error.statusCode === 404 ? 404 : 503;
     return Response.json({ error: status === 404 ? 'Store not found.' : 'Inventory is temporarily unavailable. Please ask an associate.' }, { status, headers });

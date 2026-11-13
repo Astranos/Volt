@@ -17,7 +17,7 @@ function KioskStoreSetting() {
   const save = async () => {
     const slug = normalizeKioskStore(draft);
     if (!slug) {
-      setMessage("Enter a store like taylormi or taylormi.paymore.com.");
+      setMessage("Enter the store’s .myshopify.com address, shop handle, or kiosk link.");
       return;
     }
     setChecking(true);
@@ -43,7 +43,7 @@ function KioskStoreSetting() {
         </div>
       ) : (
         <form className="mt-3 flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); void save(); }}>
-          <input aria-label="Kiosk store" className="h-9 min-w-56 flex-1 rounded-md border border-input bg-background px-3 text-sm" onChange={(event) => setDraft(event.target.value)} placeholder="taylormi or taylormi.paymore.com" value={draft} />
+          <input aria-label="Kiosk store" className="h-9 min-w-56 flex-1 rounded-md border border-input bg-background px-3 text-sm" onChange={(event) => setDraft(event.target.value)} placeholder="your-store.myshopify.com" value={draft} />
           <button className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-50" disabled={checking || !draft.trim()} type="submit">{checking ? "Checking…" : "Save"}</button>
         </form>
       )}

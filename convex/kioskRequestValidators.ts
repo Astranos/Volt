@@ -1,4 +1,10 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
+import { canonicalStoreSlug, isStoreSlug } from "../apps/kiosk/src/store-address";
+
+export function requestStoreSlug(value: string): string {
+  if (!isStoreSlug(value)) throw new ConvexError({ code: "INVALID_INPUT" });
+  return canonicalStoreSlug(value);
+}
 
 export const requestStatus = v.union(v.literal("waiting"), v.literal("found"), v.literal("shown"), v.literal("given"), v.literal("cleared"));
 export const staffStatus = v.union(v.literal("found"), v.literal("shown"), v.literal("given"), v.literal("cleared"));

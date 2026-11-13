@@ -1,3 +1,5 @@
+export { storeSlugFromInput as normalizeKioskStore } from '../../../../apps/kiosk/src/store-address';
+
 /** The kiosk's public JSON API, shared with the in-store web portal and the iPad app. */
 export const KIOSK_API_BASE = "https://pm.voltresale.app";
 /** chrome.storage.sync key for the kiosk store whose requests the new tab shows. */
@@ -20,24 +22,6 @@ export type KioskRequest = {
   expiresAt: number;
 };
 export type KioskQueue = { requests: KioskRequest[]; serverNow: number };
-
-const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
-
-/** "taylormi", "taylormi.paymore.com", or a kiosk link like "pm.voltresale.app/taylormi" → "taylormi". */
-export function normalizeKioskStore(input: string): string | null {
-  const value = input.trim().toLowerCase();
-  if (!value) return null;
-  if (SLUG.test(value)) return value;
-  try {
-    const url = new URL(value.includes("://") ? value : `https://${value}`);
-    const paymore = /^([a-z0-9-]+)\.paymore\.com$/.exec(url.hostname)?.[1];
-    const kioskPath = url.hostname === new URL(KIOSK_API_BASE).hostname ? url.pathname.split("/")[1] : undefined;
-    const slug = paymore ?? kioskPath;
-    return slug && SLUG.test(slug) ? slug : null;
-  } catch {
-    return null;
-  }
-}
 
 const STATUSES: readonly KioskRequestStatus[] = ["waiting", "found", "shown", "given", "cleared"];
 

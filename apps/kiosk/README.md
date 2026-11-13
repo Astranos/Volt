@@ -1,6 +1,6 @@
-# PayMore in-store browsing
+# In-store browsing
 
-A customer-facing catalog for mounted tablets and smaller screens. A store's public path matches its PayMore subdomain: `/taylormi` or `/southfieldmi`. The proposed production host is `https://pm.juanquenga.com`; this repository does not configure that domain.
+A customer-facing catalog for mounted tablets and smaller screens, hosted at `https://pm.voltresale.app`. A store's public path is `/<handle>`, using the handle from its `.myshopify.com` domain.
 
 The app uses React 19, TypeScript, Vite, Tailwind 4, and Base UI. It is a separate workspace package so kiosk customers do not load Volt's account, scanner, or billing screens. Volt's existing application and deployment stay unchanged.
 
@@ -9,11 +9,11 @@ The app uses React 19, TypeScript, Vite, Tailwind 4, and Base UI. It is a separa
 From the repository root, run:
 
 ```sh
-pnpm install --ignore-scripts
+pnpm install --frozen-lockfile --ignore-scripts
 pnpm dev:kiosk
 ```
 
-Open `http://127.0.0.1:4175/taylormi` or `http://127.0.0.1:4175/southfieldmi`. The local API fetches that store's public Shopify listings. The home page also accepts a PayMore store URL or subdomain. No Shopify admin credentials or Convex configuration are required. The catalog requires network access; it never substitutes sample products.
+Open `http://127.0.0.1:4175/<handle>`. The local API fetches that store's public Shopify listings directly from `https://<handle>.myshopify.com/products.json`. Setup accepts a shop handle, `.myshopify.com` domain or HTTPS URL, or `pm.voltresale.app/<handle>` kiosk link. No Shopify admin credentials or Convex configuration are required. The catalog requires network access; it never substitutes sample products.
 
 ## Verify a change
 
@@ -30,7 +30,7 @@ The requests check is development-only. It creates a temporary request, verifies
 
 ## Use the staff request queue
 
-Open `/<store>/requests`, for example `/taylormi/requests`. Customers use **Ask to see item** beside the SKU. The staff page updates every three seconds and shows the requested product, variant, photo, exact SKU, and waiting time.
+Open `/<store>/requests`, for example `/<handle>/requests`. Customers use **Ask to see item** beside the SKU. The staff page updates every three seconds and shows the requested product, variant, photo, exact SKU, and waiting time.
 
 **Found** keeps a request active. **Shown**, **Given to customer**, and **Clear** remove it from the active queue. Every request expires one hour after creation; changing its status does not extend that deadline. Convex also deletes expired records with a scheduled function.
 
@@ -48,23 +48,33 @@ Check the UI at 1024 × 768 and 768 × 1024, plus a narrow phone viewport. Searc
 
 ## Open another franchise
 
-Visit `/<subdomain>` for any franchise with an accessible public Shopify feed at `https://<subdomain>.paymore.com/products.json`. No registry entry or redeployment is required. For example, `/southfieldmi` reads only `southfieldmi.paymore.com`.
+Visit `/<handle>` for any store with an accessible public feed at `https://<handle>.myshopify.com/products.json`. No registry entry or redeployment is required.
 
-The server validates a single DNS label and constructs the PayMore hostname itself. It rejects arbitrary URLs, ports, credentials, reserved hosts, internal store codes, and nested subdomains. Redirects are not followed. A missing or inaccessible store never falls back to Taylor. Store names and addresses come from optional storefront metadata, not a hardcoded list.
+The server validates a single DNS label and constructs the Shopify hostname itself. It rejects arbitrary custom domains, ports, credentials, reserved hosts, internal store codes, and nested subdomains. Redirects are not followed. Product URLs use the same Shopify origin. A missing or inaccessible store never falls back to another store.
 
-Taylor uses `taylormi`, not its internal code `MI01`. Item SKUs are different: their exact public Shopify values, such as `MI01-8773A-E9`, appear on cards and in product details so staff can locate the item. Search accepts those SKUs.
+Store display names and regions come from optional `/meta.json` JSON on that Shopify origin. Custom domain fields in metadata never change the fetch target. If metadata lacks a street address, the kiosk leaves it empty. Product descriptions still use Cheerio to extract structured listing content; store metadata no longer scrapes a homepage.
+
+Exact public Shopify SKUs, such as `MI01-8773A-E9`, appear on cards and in product details so staff can locate the item. Search accepts those SKUs.
+
+## Existing store migration
+
+One small compatibility map covers the two production stores. Legacy `taylormi` and `southfieldmi` identities resolve to the corresponding Taylor and Southfield Shopify handles. Vercel permanently redirects both catalog and requests paths before SPA rewrites. The client also normalizes legacy paths if they reach the app.
+
+The HTTP APIs accept those legacy identities but fetch, cache, and persist requests under the canonical handle. Catalog responses echo the requested legacy slug, as do queue rows and status updates, because installed native clients compare response slugs to their request. Product links still point at Shopify. The native app migrates `kiosk.storeSlug` in UserDefaults on launch and saves the new handle. Extension settings normalize saved legacy slugs when read.
+
+Convex canonicalizes enqueue, list, and update identities, and accepts product snapshots only on the canonical Shopify host. Existing queue rows need no data migration because they expire within one hour. A row created under a legacy identity before rollout may disappear from the active queue during that transition.
 
 Confirm the franchise permits using its listings and branding before rollout. The public Shopify feed is an initial read-only integration, not a guarantee that Shopify will keep that endpoint available. A store with unpublished stock or multiple inventory locations needs an authorized location-aware integration before claiming that all physical stock is represented.
 
 ## Publish as a separate project
 
-Do not deploy this folder over the existing Volt project. The separate project is `paymore-kiosk` in `juanquengas-projects`. It builds with `pnpm build`, serves `dist`, and runs `api/catalog.ts` as a server function.
+Do not deploy this folder over the existing Volt project. Use the existing separate kiosk project in `juanquengas-projects`. It builds with `pnpm build`, serves `dist`, and runs `api/catalog.ts` as a server function.
 
-For a CLI deployment, run `node apps/kiosk/scripts/prepare-deploy.ts` from the repository root. The script prints a temporary directory containing only this app and a standalone lockfile derived from the workspace lockfile. Link that directory to `paymore-kiosk` before deploying it. This avoids uploading unrelated Volt source and keeps dependency versions reproducible. Do not deploy the app folder without the workspace lockfile.
+For a CLI deployment, run `node apps/kiosk/scripts/prepare-deploy.ts` from the repository root. The script prints a temporary directory containing only this app and a standalone lockfile derived from the workspace lockfile. Link that directory to the existing kiosk project before deploying it. This avoids uploading unrelated Volt source and keeps dependency versions reproducible. Do not deploy the app folder without the workspace lockfile.
 
 For a Git-connected project instead, set its root directory to `apps/kiosk`. Keep Node 24 and pnpm 10.14.0. Vercel must detect the pnpm 9-format lockfile or use `ENABLE_EXPERIMENTAL_COREPACK=1`; an older default pnpm fails under Node 24.
 
-After approving a preview and testing the physical tablet, attach `pm.juanquenga.com` to that project and apply the DNS record Vercel supplies. Domain changes and publishing are separate rollout steps, not performed by local development.
+After approving a preview and testing the physical tablet, attach `pm.voltresale.app` to that project and apply the DNS record Vercel supplies. Domain changes and publishing are separate rollout steps, not performed by local development.
 
 ## Inventory behavior
 

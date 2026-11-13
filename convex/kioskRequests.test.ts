@@ -11,13 +11,13 @@ const list = makeFunctionReference<"query", FunctionArgs<References["list"]>, Fu
 const setStatus = makeFunctionReference<"mutation", FunctionArgs<References["setStatus"]>, FunctionReturnType<References["setStatus"]>>("kioskRequests:setStatus");
 const expire = makeFunctionReference<"mutation", FunctionArgs<References["expire"]>, null>("kioskRequests:expire");
 const secret = "test-only-secret-000000000000000000000000";
-const access = { secret, storeSlug: "taylormi" };
+const access = { secret, storeSlug: "paymore-taylor" };
 const listAccess = () => ({ ...access, now: Date.now() });
-function input(index = 1, visitor = 1, storeSlug = "taylormi") {
+function input(index = 1, visitor = 1, storeSlug = "paymore-taylor") {
   return {
     secret, storeSlug, requestKey: `00000000-0000-4000-8000-${visitor.toString().padStart(12, "0")}:${index}`,
     clientHash: visitor.toString(16).padStart(64, "0"),
-    product: { productId: `${index}`, variantId: `${index}`, title: "Camera", variantTitle: "Default Title", sku: "MI01-8773A-E9", imageUrl: "https://cdn.shopify.com/test.jpg", priceCents: 999, productUrl: `https://${storeSlug}.paymore.com/products/camera` },
+    product: { productId: `${index}`, variantId: `${index}`, title: "Camera", variantTitle: "Default Title", sku: "MI01-8773A-E9", imageUrl: "https://cdn.shopify.com/test.jpg", priceCents: 999, productUrl: `https://${storeSlug}.myshopify.com/products/camera` },
   };
 }
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(1_800_000_000_000); vi.stubEnv("KIOSK_REQUEST_SECRET", secret); });
@@ -40,10 +40,10 @@ test("deduplicates retries, keeps expiry fixed and never exposes private fields"
 test("isolates stores for queue, dedup and updates", async () => {
   const t = convexTest(schema, modules);
   const first = await t.mutation(enqueue, input());
-  const second = await t.mutation(enqueue, input(1, 1, "southfieldmi"));
+  const second = await t.mutation(enqueue, input(1, 1, "paymore-southfield"));
   expect(first.id).not.toBe(second.id);
   expect((await t.query(list, listAccess())).requests.map(row => row.id)).toEqual([first.id]);
-  expect(await t.mutation(setStatus, { ...access, storeSlug: "southfieldmi", id: first.id, status: "given" })).toBeNull();
+  expect(await t.mutation(setStatus, { ...access, storeSlug: "paymore-southfield", id: first.id, status: "given" })).toBeNull();
 });
 
 test("found remains active; terminal states cannot reopen and retry stays deduplicated", async () => {
@@ -100,7 +100,7 @@ test("limits store to thirty per minute separately from visitor limit", async ()
   const t = convexTest(schema, modules);
   for (let index = 1; index <= 30; index++) await t.mutation(enqueue, input(index, index));
   await expect(t.mutation(enqueue, input(31, 31))).rejects.toThrow("RATE_LIMITED");
-  expect((await t.mutation(enqueue, input(31, 31, "southfieldmi"))).status).toBe("waiting");
+  expect((await t.mutation(enqueue, input(31, 31, "paymore-southfield"))).status).toBe("waiting");
 });
 
 test("caps active queue at one hundred and returns oldest first", async () => {
@@ -116,7 +116,7 @@ test("caps active queue at one hundred and returns oldest first", async () => {
 });
 
 test.each([
-  { imageUrl: "https://evil.example/image.png" }, { productUrl: "https://southfieldmi.paymore.com/products/camera" },
+  { imageUrl: "https://evil.example/image.png" }, { productUrl: "https://paymore-southfield.myshopify.com/products/camera" },
   { priceCents: -1 }, { priceCents: 1.5 }, { title: "" }, { productId: "not-an-id" },
 ])("rejects invalid snapshots %j", async product => {
   const t = convexTest(schema, modules);
@@ -133,4 +133,21 @@ test("uses supplied server time for expiry and response", async () => {
   const row = await t.mutation(enqueue, input());
   expect((await t.query(list, { ...access, now: row.expiresAt - 1 })).requests).toHaveLength(1);
   expect(await t.query(list, { ...access, now: row.expiresAt })).toEqual({ requests: [], serverNow: row.expiresAt });
+});
+
+
+test.each([['taylormi', 'paymore-taylor'], ['southfieldmi', 'paymore-southfield']])("legacy %s shares queue, dedup and updates with its handle", async (legacy, handle) => {
+  const t = convexTest(schema, modules);
+  const canonical = input(1, 1, handle);
+  const first = await t.mutation(enqueue, { ...canonical, storeSlug: legacy });
+  expect(await t.mutation(enqueue, canonical)).toEqual(first);
+  expect((await t.query(list, { secret, storeSlug: legacy, now: Date.now() })).requests).toMatchObject([{ id: first.id, storeSlug: handle }]);
+  expect((await t.query(list, { secret, storeSlug: handle, now: Date.now() })).requests).toHaveLength(1);
+  expect(await t.mutation(setStatus, { secret, storeSlug: legacy, id: first.id, status: "found" })).toMatchObject({ storeSlug: handle, status: "found" });
+  expect((await t.query(list, { secret, storeSlug: handle, now: Date.now() })).requests[0]?.status).toBe("found");
+});
+
+test.each(['https://taylormi.paymore.com/products/camera', 'https://evil.example/products/camera', 'https://paymore-taylor.myshopify.com.evil.example/products/camera', 'https://user@paymore-taylor.myshopify.com/products/camera'])('rejects non-Shopify or credentialed product URL %s', async productUrl => {
+  const t = convexTest(schema, modules);
+  await expect(t.mutation(enqueue, { ...input(), product: { ...input().product, productUrl } })).rejects.toThrow('INVALID_INPUT');
 });

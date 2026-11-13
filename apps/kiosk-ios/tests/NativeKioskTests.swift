@@ -11,10 +11,10 @@ struct NativeKioskTests {
         try await testQueue(catalog)
         if CommandLine.arguments.contains("--live") {
             let api = KioskAPI(baseURL: URL(string: "https://pm.voltresale.app")!)
-            let live = try await api.catalog(storeSlug: "taylormi")
-            precondition(live.store.slug == "taylormi")
+            let live = try await api.catalog(storeSlug: "paymore-taylor")
+            precondition(live.store.slug == "paymore-taylor")
             print("Live native API decoded \(live.products.count) products for \(live.store.name), status \(live.status.rawValue).")
-            let queue = try await api.queue(storeSlug: "taylormi")
+            let queue = try await api.queue(storeSlug: "paymore-taylor")
             print("Live queue decoded \(queue.requests.count) requests. No live writes performed.")
         }
         print("Native kiosk checks passed: data decoding, browse rules, API requests/errors, persistence, freshness, idle reset, request retries, late responses, and queue updates.")
@@ -40,10 +40,11 @@ struct NativeKioskTests {
         precondition(catalog.acceptsRequests(at: catalog.checkedAt.addingTimeInterval(59)))
         precondition(catalog.acceptsRequests(at: catalog.checkedAt.addingTimeInterval(60)))
         precondition(!catalog.acceptsRequests(at: catalog.checkedAt.addingTimeInterval(301)))
-        for input in ["taylormi", "TAYLORMI", "https://taylormi.paymore.com/", "taylormi.paymore.com"] {
-            precondition(StoreAddress.slug(from: input) == "taylormi")
+        for input in ["paymore-taylor", "PAYMORE-TAYLOR", "https://paymore-taylor.myshopify.com/", "paymore-taylor.myshopify.com", "pm.voltresale.app/paymore-taylor", "https://pm.voltresale.app/paymore-taylor/requests/", "taylormi", "pm.voltresale.app/taylormi"] {
+            precondition(StoreAddress.slug(from: input) == "paymore-taylor")
         }
-        for input in ["https://evil.example", "https://a.b.paymore.com", "https://user@taylormi.paymore.com", "https://taylormi.paymore.com:8443", "https://taylormi.paymore.com/products", "javascript:alert(1)", "taylormi?next=evil", "-taylormi", "taylormi-"] {
+        precondition(StoreAddress.slug(from: "southfieldmi") == "paymore-southfield")
+        for input in ["taylormi.paymore.com", "https://a.b.myshopify.com", "http://paymore-taylor.myshopify.com", "pm.voltresale.app/paymore-taylor/other", "pm.voltresale.app/paymore-taylor?x=1", "mi01", "www", "https://evil.example", "https://a.b.paymore.com", "https://user@paymore-taylor.myshopify.com", "https://paymore-taylor.myshopify.com:8443", "https://paymore-taylor.myshopify.com/products", "javascript:alert(1)", "paymore-taylor?next=evil", "-paymore-taylor", "paymore-taylor-"] {
             precondition(StoreAddress.slug(from: input) == nil, "Rejected address expected: \(input)")
         }
     }
@@ -55,13 +56,13 @@ struct NativeKioskTests {
         defer { session.invalidateAndCancel() }
         let api = KioskAPI(baseURL: URL(string: "https://pm.voltresale.app")!, session: session)
         await FixtureURLProtocol.http.set(status: 200, data: fixtureData)
-        let loaded = try await api.catalog(storeSlug: "taylormi")
+        let loaded = try await api.catalog(storeSlug: "paymore-taylor")
         precondition(loaded.products == catalog.products)
         let read = await FixtureURLProtocol.http.lastRequest!
         precondition(read.url?.path == "/api/catalog")
-        precondition(URLComponents(url: read.url!, resolvingAgainstBaseURL: false)?.queryItems == [URLQueryItem(name: "store", value: "taylormi")])
+        precondition(URLComponents(url: read.url!, resolvingAgainstBaseURL: false)?.queryItems == [URLQueryItem(name: "store", value: "paymore-taylor")])
         await FixtureURLProtocol.http.set(status: 200, data: Data("{\"id\":\"receipt\",\"status\":\"waiting\",\"createdAt\":10,\"expiresAt\":20}".utf8))
-        _ = try await api.createRequest(storeSlug: "taylormi", productID: "1", variantID: "11", requestKey: "12345678-1234-1234-1234-123456789abc:11")
+        _ = try await api.createRequest(storeSlug: "paymore-taylor", productID: "1", variantID: "11", requestKey: "12345678-1234-1234-1234-123456789abc:11")
         let write = await FixtureURLProtocol.http.lastRequest!
         precondition(write.httpMethod == "POST" && write.value(forHTTPHeaderField: "Content-Type") == "application/json")
         let sentBody = await FixtureURLProtocol.http.lastBody
@@ -69,18 +70,18 @@ struct NativeKioskTests {
         precondition(body["variantId"] == "11" && body["productId"] == "1" && body["requestKey"]?.hasSuffix(":11") == true)
         await FixtureURLProtocol.http.set(status: 429, data: Data("{\"error\":\"Please wait before requesting another item.\"}".utf8))
         do {
-            _ = try await api.catalog(storeSlug: "taylormi")
+            _ = try await api.catalog(storeSlug: "paymore-taylor")
             preconditionFailure("Expected server error")
         } catch KioskAPIError.server(let status, let message) {
             precondition(status == 429 && message.contains("Please wait"))
         }
         await FixtureURLProtocol.http.set(status: 200, data: Data("{\"products\":[]}".utf8))
-        do { _ = try await api.catalog(storeSlug: "taylormi"); preconditionFailure("Expected schema rejection") }
+        do { _ = try await api.catalog(storeSlug: "paymore-taylor"); preconditionFailure("Expected schema rejection") }
         catch KioskAPIError.invalidResponse { }
         var wrongStore = String(decoding: fixtureData, as: UTF8.self)
-        wrongStore = wrongStore.replacingOccurrences(of: "\"slug\":\"taylormi\"", with: "\"slug\":\"otherstore\"")
+        wrongStore = wrongStore.replacingOccurrences(of: "\"slug\":\"paymore-taylor\"", with: "\"slug\":\"otherstore\"")
         await FixtureURLProtocol.http.set(status: 200, data: Data(wrongStore.utf8))
-        do { _ = try await api.catalog(storeSlug: "taylormi"); preconditionFailure("Expected mismatched store rejection") }
+        do { _ = try await api.catalog(storeSlug: "paymore-taylor"); preconditionFailure("Expected mismatched store rejection") }
         catch KioskAPIError.invalidResponse { }
     }
 
@@ -91,14 +92,21 @@ struct NativeKioskTests {
         let suite = "volt-kiosk-tests-" + UUID().uuidString
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
+        for (legacy, handle) in [("taylormi", "paymore-taylor"), ("southfieldmi", "paymore-southfield")] {
+            defaults.set(legacy, forKey: "kiosk.storeSlug")
+            let migrated = KioskSession(api: api, defaults: defaults)
+            precondition(migrated.storeSlug == handle)
+            precondition(defaults.string(forKey: "kiosk.storeSlug") == handle)
+        }
+        defaults.removeObject(forKey: "kiosk.storeSlug")
         let session = KioskSession(api: api, defaults: defaults)
         precondition(session.storeSlug == nil)
         let invalid = await session.connect(to: "https://evil.example")
         precondition(!invalid && session.storeSlug == nil && session.setupError != nil)
-        let connected = await session.connect(to: "taylormi.paymore.com")
-        precondition(connected && defaults.string(forKey: "kiosk.storeSlug") == "taylormi")
+        let connected = await session.connect(to: "paymore-taylor.myshopify.com")
+        precondition(connected && defaults.string(forKey: "kiosk.storeSlug") == "paymore-taylor")
         let restored = KioskSession(api: api, defaults: defaults)
-        precondition(restored.storeSlug == "taylormi")
+        precondition(restored.storeSlug == "paymore-taylor")
         let product = catalog.products[0]
         let variant = product.variants[0]
         precondition(session.canRequest(productID: product.id))
@@ -164,14 +172,14 @@ struct NativeKioskTests {
     @MainActor
     static func testQueue(_ catalog: KioskCatalog) async throws {
         let api = FixtureAPI(catalog: catalog)
-        let queue = KioskRequestQueue(storeSlug: "taylormi", api: api)
+        let queue = KioskRequestQueue(storeSlug: "paymore-taylor", api: api)
         await queue.refresh()
         precondition(queue.requests.map(\.id) == ["request"] && queue.waitingCount == 1)
         await queue.update(queue.requests[0], to: .found)
         precondition(queue.requests[0].status == .found && queue.foundCount == 1)
         await queue.update(queue.requests[0], to: .shown)
         precondition(queue.requests.isEmpty)
-        let offlineQueue = KioskRequestQueue(storeSlug: "taylormi", api: FixtureAPI(catalog: catalog))
+        let offlineQueue = KioskRequestQueue(storeSlug: "paymore-taylor", api: FixtureAPI(catalog: catalog))
         await offlineQueue.refresh()
         precondition(offlineQueue.requests.count == 1)
         offlineQueue.tick(at: Date.now.addingTimeInterval(3601))
@@ -179,9 +187,9 @@ struct NativeKioskTests {
     }
 
     static let fixtureData = Data(#"""
-    {"store":{"slug":"taylormi","name":"PayMore Taylor","region":"MI","address":"Taylor, MI","storefrontUrl":"https://taylormi.paymore.com"},"checkedAt":"2026-10-05T19:00:00.123Z","status":"fresh","products":[
-      {"id":"1","title":"Apple Phone","category":"Phones","condition":"Good","priceCents":10000,"priceMaxCents":15000,"images":["https://cdn.shopify.com/phone.jpg"],"url":"https://taylormi.paymore.com/products/phone","description":"Unlocked phone","details":[{"kind":"heading","text":"Cosmetic Condition"},{"kind":"paragraph","text":"Light wear"},{"kind":"list","items":["Charger included"]},{"kind":"specifications","rows":[{"label":"Storage","value":"128 GB"}]}],"publishedAt":"2026-10-01T10:00:00Z","variants":[{"id":"11","title":"128 GB","priceCents":10000,"sku":"MI01-123"},{"id":"12","title":"256 GB","priceCents":15000,"sku":null}]},
-      {"id":"2","title":"Game Controller","category":"Gaming","condition":"See item details","priceCents":2500,"priceMaxCents":2500,"images":[],"url":"https://taylormi.paymore.com/products/controller","description":"Wireless gamepad","details":[],"publishedAt":"2026-10-02T10:00:00.000Z","variants":[{"id":"21","title":"Default Title","priceCents":2500,"sku":"MI01-234"}]}
+    {"store":{"slug":"paymore-taylor","name":"PayMore Taylor","region":"MI","address":"Taylor, MI","storefrontUrl":"https://paymore-taylor.myshopify.com"},"checkedAt":"2026-10-05T19:00:00.123Z","status":"fresh","products":[
+      {"id":"1","title":"Apple Phone","category":"Phones","condition":"Good","priceCents":10000,"priceMaxCents":15000,"images":["https://cdn.shopify.com/phone.jpg"],"url":"https://paymore-taylor.myshopify.com/products/phone","description":"Unlocked phone","details":[{"kind":"heading","text":"Cosmetic Condition"},{"kind":"paragraph","text":"Light wear"},{"kind":"list","items":["Charger included"]},{"kind":"specifications","rows":[{"label":"Storage","value":"128 GB"}]}],"publishedAt":"2026-10-01T10:00:00Z","variants":[{"id":"11","title":"128 GB","priceCents":10000,"sku":"MI01-123"},{"id":"12","title":"256 GB","priceCents":15000,"sku":null}]},
+      {"id":"2","title":"Game Controller","category":"Gaming","condition":"See item details","priceCents":2500,"priceMaxCents":2500,"images":[],"url":"https://paymore-taylor.myshopify.com/products/controller","description":"Wireless gamepad","details":[],"publishedAt":"2026-10-02T10:00:00.000Z","variants":[{"id":"21","title":"Default Title","priceCents":2500,"sku":"MI01-234"}]}
     ]}
     """#.utf8)
 }
@@ -267,6 +275,6 @@ private actor FixtureAPI: KioskServing {
         return request(status: status, expiresAt: Date.now.timeIntervalSince1970 * 1000 + 3600000)
     }
     private func request(status: KioskRequestStatus, expiresAt: Double, id: String = "request") -> KioskProductRequest {
-        KioskProductRequest(id: id, storeSlug: "taylormi", productId: "1", variantId: "11", title: "Apple Phone", variantTitle: "128 GB", sku: "MI01-123", imageUrl: nil, priceCents: 10000, productUrl: URL(string: "https://taylormi.paymore.com/products/phone")!, status: status, createdAt: 1, updatedAt: 1, expiresAt: expiresAt)
+        KioskProductRequest(id: id, storeSlug: "paymore-taylor", productId: "1", variantId: "11", title: "Apple Phone", variantTitle: "128 GB", sku: "MI01-123", imageUrl: nil, priceCents: 10000, productUrl: URL(string: "https://paymore-taylor.myshopify.com/products/phone")!, status: status, createdAt: 1, updatedAt: 1, expiresAt: expiresAt)
     }
 }

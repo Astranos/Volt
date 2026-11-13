@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 
 const base = new URL(process.argv[2] || 'http://127.0.0.1:4175');
 if (!['127.0.0.1', 'localhost'].includes(base.hostname)) throw new Error('This check creates a temporary request. Use a local development server.');
-const storeSlug = 'taylormi';
+const storeSlug = 'paymore-taylor';
 async function call(path, method = 'GET', body) {
   const response = await fetch(new URL(path, base), { method, headers: { 'Content-Type': 'application/json', Origin: base.origin }, body: body ? JSON.stringify(body) : undefined });
   const data = await response.json();
@@ -25,7 +25,7 @@ try {
   assert.equal(matching[0].sku, variant.sku);
   assert.equal(matching[0].title, product.title);
   assert.ok(!('clientHash' in matching[0]) && !('requestKey' in matching[0]));
-  const otherStore = await call('/api/requests?store=southfieldmi');
+  const otherStore = await call('/api/requests?store=paymore-southfield');
   assert.ok(!otherStore.requests.some(item => item.id === receipt.id), 'Store isolation required');
   await call('/api/requests', 'PATCH', { storeSlug, id: receipt.id, status: 'found' });
   queue = await call('/api/requests?store=' + storeSlug);

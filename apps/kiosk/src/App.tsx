@@ -283,8 +283,14 @@ export default function App() {
   const path = window.location.pathname;
   const requestPath = /^(\/[^/]+)\/requests\/?$/.exec(path);
   const requestSlug = requestPath?.[1] ? routeSlug(requestPath[1]) : null;
-  if (requestSlug) return <RequestsPage key={requestSlug} slug={requestSlug} />;
   const slug = routeSlug(path);
+  const canonicalPath = requestSlug ? `/${requestSlug}/requests` : slug ? `/${slug}` : null;
+  useEffect(() => {
+    if (canonicalPath && canonicalPath !== path) {
+      window.history.replaceState(null, '', canonicalPath + window.location.search + window.location.hash);
+    }
+  }, [canonicalPath, path]);
+  if (requestSlug) return <RequestsPage key={requestSlug} slug={requestSlug} />;
   if (slug) return <Browse slug={slug} />;
   return (
     <main className="store-chooser">

@@ -5,11 +5,11 @@ import type { Store } from "../catalog";
 import { StoreHeader } from "./StoreHeader";
 
 const store: Store = {
-  slug: "taylormi",
+  slug: "paymore-taylor",
   name: "Taylor",
   region: "Michigan",
   address: "",
-  storefrontUrl: "https://taylormi.paymore.com",
+  storefrontUrl: "https://paymore-taylor.myshopify.com",
 };
 
 describe("StoreHeader", () => {
@@ -19,9 +19,9 @@ describe("StoreHeader", () => {
       : <StoreHeader slug={store.slug} store={store} page="requests" />);
     const $ = load(html);
     expect($(".store-location").text()).toBe("Taylor, Michigan");
-    expect($("header").text()).not.toContain("taylormi");
+    expect($("header").text()).not.toContain("paymore-taylor");
     expect($("img").attr("src")).toBe("/paymore-logo.png");
-    expect($("nav a").map((_, link) => $(link).attr("href")).get()).toEqual(["/taylormi"]);
+    expect($("nav a").map((_, link) => $(link).attr("href")).get()).toEqual(["/paymore-taylor"]);
     expect($("nav").text()).not.toContain("Requests");
     expect($("nav [aria-current=page]").text()).toBe(page === "catalog" ? "Products" : "");
     expect($("nav [aria-current]")).toHaveLength(page === "catalog" ? 1 : 0);
