@@ -11,7 +11,7 @@ const registerCustomer = makeFunctionReference<
 >("webBilling:registerCustomer");
 const reserveCheckout = makeFunctionReference<
   "mutation",
-  { product: "workspace" | "api"; requestKey: string },
+  { product: "workspace"; requestKey: string },
   { acquired: boolean; requestKey: string }
 >("webBilling:reserveCheckout");
 const getCustomer = makeFunctionReference<
@@ -24,7 +24,7 @@ type SubscriptionEvent = {
   eventCreated: number;
   stripeCustomerId: string;
   metadataOwnerClerkUserId: string;
-  product: "workspace" | "api";
+  product: "workspace";
   stripeSubscriptionId: string;
   status: "active" | "past_due" | "canceled";
   currentPeriodEnd: number;
@@ -62,7 +62,6 @@ beforeEach(() => {
   vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_fake");
   vi.stubEnv("STRIPE_WEBHOOK_SECRET", "whsec_fake");
   vi.stubEnv("STRIPE_WORKSPACE_PRICE_ID", "price_workspace");
-  vi.stubEnv("STRIPE_API_PRICE_ID", "price_api");
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -77,27 +76,21 @@ describe("server billing ledger", () => {
         billingEnabled: boolean;
         offers: {
           workspace: { paidRecordsLimit: number };
-          api: { monthlyLimit: number };
         };
         workspace: { checkoutEnabled: boolean };
-        api: { checkoutEnabled: boolean };
       }
     >("webBilling:getAccountBilling");
     vi.stubEnv("WORKSPACE_PAID_RECORD_LIMIT", "30000");
-    vi.stubEnv("PRODUCT_API_MONTHLY_LIMIT", "6000");
     expect(await alice.query(billing, {})).toMatchObject({
       offers: {
         workspace: { paidRecordsLimit: 30000 },
-        api: { monthlyLimit: 6000 },
       },
       workspace: { checkoutEnabled: true },
-      api: { checkoutEnabled: false },
     });
     vi.stubEnv("STRIPE_WEBHOOK_SECRET", "");
     expect(await alice.query(billing, {})).toMatchObject({
       billingEnabled: false,
       workspace: { checkoutEnabled: false },
-      api: { checkoutEnabled: false },
     });
   });
 
@@ -125,7 +118,7 @@ describe("server billing ledger", () => {
     ).toHaveLength(1);
   });
 
-  test("serializes checkout attempts and keeps API checkout disabled until commercial authorization", async () => {
+  test("serializes checkout attempts and respects disabled billing", async () => {
     const t = convexTest(schema, modules);
     const alice = asUser(t, "alice");
     await alice.mutation(registerCustomer, { stripeCustomerId: "cus_alice" });
@@ -141,19 +134,6 @@ describe("server billing ledger", () => {
     ]);
     expect(a.requestKey).toBe(b.requestKey);
     expect([a.acquired, b.acquired].sort()).toEqual([false, true]);
-    await expect(
-      alice.mutation(reserveCheckout, {
-        product: "api",
-        requestKey: "api_one",
-      }),
-    ).rejects.toThrow("unavailable");
-    vi.stubEnv("PRODUCT_API_COMMERCIAL_ENABLED", "true");
-    expect(
-      await alice.mutation(reserveCheckout, {
-        product: "api",
-        requestKey: "api_one",
-      }),
-    ).toMatchObject({ acquired: true });
     vi.stubEnv("BILLING_ENABLED", "false");
     await expect(
       alice.mutation(reserveCheckout, {

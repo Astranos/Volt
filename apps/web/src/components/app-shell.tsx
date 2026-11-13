@@ -9,7 +9,6 @@ import {
 import {
   ArrowUpRight,
   Chrome,
-  Database,
   KeyRound,
   LayoutDashboard,
   Menu,
@@ -27,7 +26,7 @@ import { AuthUnavailable } from "./auth-page";
 import { WorkspaceProvider } from "./workspace-provider";
 
 type AuthenticatedDestination =
-  "workspace" | "scanner-results" | "product-data" | "api-keys" | "billing";
+  "workspace" | "scanner-results" | "billing";
 type AppLayoutProps = {
   current: AuthenticatedDestination;
   children: ReactNode;
@@ -46,8 +45,6 @@ const destinations = {
     label: "Scanner results",
     icon: ScanLine,
   },
-  "product-data": { href: "/catalog", label: "Product data", icon: Database },
-  "api-keys": { href: "/api-keys", label: "API keys", icon: KeyRound },
 } satisfies Record<
   AuthenticatedDestination,
   { href: string; label: string; icon: typeof LayoutDashboard }
@@ -55,8 +52,6 @@ const destinations = {
 const destinationOrder: readonly AuthenticatedDestination[] = [
   "workspace",
   "scanner-results",
-  "product-data",
-  "api-keys",
   "billing",
 ];
 

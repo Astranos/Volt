@@ -4,7 +4,7 @@ import { monetizationOfferLimits } from "./monetization";
 import { internalMutation, internalQuery, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
-export const billingProduct = v.union(v.literal("workspace"), v.literal("api"));
+export const billingProduct = v.literal("workspace");
 export const billingStatus = v.union(
   v.literal("incomplete"),
   v.literal("incomplete_expired"),
@@ -34,11 +34,6 @@ const offersValidator = v.object({
     freeBytesLimit: v.number(),
     paidBytesLimit: v.number(),
     freeRetentionDays: v.number(),
-    monthlyPriceUsd: v.number(),
-  }),
-  api: v.object({
-    evaluationLimit: v.number(),
-    monthlyLimit: v.number(),
     monthlyPriceUsd: v.number(),
   }),
 });
@@ -121,11 +116,7 @@ export const reserveCheckout = internalMutation({
     const { customer } = await ownCustomer(ctx);
     if (!customer) throw new ConvexError("Billing customer missing");
     const config = billingConfiguration();
-    if (
-      !(args.product === "workspace"
-        ? config.workspaceEnabled
-        : config.apiEnabled)
-    )
+    if (!config.workspaceEnabled)
       throw new ConvexError("Checkout is unavailable");
     const subscriptions = await ctx.db
       .query("webSubscriptions")
@@ -143,16 +134,14 @@ export const reserveCheckout = internalMutation({
       throw new ConvexError(
         "A subscription already exists; manage it in billing",
       );
-    const field =
-      args.product === "workspace" ? "workspaceCheckout" : "apiCheckout";
-    const existing = customer[field];
+    const existing = customer.workspaceCheckout;
     if (existing && existing.expiresAt > Date.now())
       return { ...existing, acquired: false };
     const reservation = {
       requestKey: args.requestKey,
       expiresAt: Date.now() + 31 * 60_000,
     };
-    await ctx.db.patch(customer._id, { [field]: reservation });
+    await ctx.db.patch(customer._id, { workspaceCheckout: reservation });
     return { ...reservation, acquired: true };
   },
 });
@@ -168,12 +157,10 @@ export const finishCheckout = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const { customer } = await ownCustomer(ctx);
-    const field =
-      args.product === "workspace" ? "workspaceCheckout" : "apiCheckout";
-    if (!customer || customer[field]?.requestKey !== args.requestKey)
+    if (!customer || customer.workspaceCheckout?.requestKey !== args.requestKey)
       throw new ConvexError("Checkout reservation changed");
     await ctx.db.patch(customer._id, {
-      [field]: {
+      workspaceCheckout: {
         requestKey: args.requestKey,
         sessionId: args.sessionId,
         url: args.url,
@@ -190,13 +177,12 @@ export const getAccountBilling = query({
     billingEnabled: v.boolean(),
     portalEnabled: v.boolean(),
     workspace: planView,
-    api: planView,
     offers: offersValidator,
   }),
   handler: async (ctx) => {
     const { identity, customer } = await ownCustomer(ctx);
     const config = billingConfiguration();
-    const view = async (product: "workspace" | "api", enabled: boolean) => {
+    const view = async (product: "workspace", enabled: boolean) => {
       const subscriptions = await ctx.db
         .query("webSubscriptions")
         .withIndex("by_ownerClerkUserId_and_product", (q) =>
@@ -226,7 +212,6 @@ export const getAccountBilling = query({
       billingEnabled: config.billingEnabled,
       portalEnabled: config.billingEnabled && Boolean(customer),
       workspace: await view("workspace", config.workspaceEnabled),
-      api: await view("api", config.apiEnabled),
     };
   },
 });

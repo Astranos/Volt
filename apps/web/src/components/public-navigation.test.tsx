@@ -31,21 +31,18 @@ describe("public discovery navigation", () => {
     const header = renderToStaticMarkup(<SiteHeaderFrame />);
     expect(header).toContain('aria-label="Volt home"');
     expect(header).toContain('src="/favicon.svg"');
-    expect(header).toContain('href="/upc-search"');
     expect(header).toContain("Support");
     expect(header).toContain('href="/sign-in"');
     expect(header).not.toContain('href="/dashboard"');
   });
 
-  test("makes UPC search discoverable without an account", () => {
+  test("shows public account links without an account", () => {
     const header = renderToStaticMarkup(<SiteHeader />);
     const footer = renderToStaticMarkup(<SiteFooter />);
-    expect(header).toContain('href="/upc-search"');
-    expect(header).toContain("UPC search");
+    expect(footer).toContain('href="/dashboard"');
+    expect(footer).toContain("Resale or Paymore Electronics.");
     expect(header).toContain('href="/sign-in"');
     expect(header).not.toContain('href="/dashboard"');
-    expect(footer).toContain('href="/upc-search"');
-    expect(footer).toContain("Free UPC search");
   });
 
   test("offers sign in to a signed-out visitor", () => {
@@ -78,7 +75,6 @@ describe("public discovery navigation", () => {
 
   test("keeps the scanner header focused on support", () => {
     const header = renderToStaticMarkup(<SiteHeader variant="scanner" />);
-    expect(header).not.toContain('href="/upc-search"');
     expect(header).toContain("Support");
   });
 });

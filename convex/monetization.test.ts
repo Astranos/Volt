@@ -4,7 +4,6 @@ import { beforeEach, afterEach, describe, expect, test, vi } from "vitest";
 import schema from "./schema";
 import {
   accountPolicy,
-  apiPolicyForOwner,
   workspaceLifecycleEnabled,
   monetizationOfferLimits,
 } from "./monetization";
@@ -14,7 +13,7 @@ const modules = import.meta.glob("./**/*.ts");
 const DAY = 86_400_000;
 const now = Date.UTC(2026, 9, 5, 12);
 type Subscription = {
-  product?: "workspace" | "api";
+  product?: "workspace";
   status?:
     | "active"
     | "past_due"
@@ -75,21 +74,18 @@ beforeEach(() => {
   vi.stubEnv("VOLT_ENTITLEMENT_BYPASS", "");
   vi.stubEnv("WORKSPACE_STORAGE_POLICY_ENABLED", "");
   vi.stubEnv("BILLING_ENABLED", "");
-  vi.stubEnv("PRODUCT_API_COMMERCIAL_ENABLED", "");
   for (const key of [
     "WORKSPACE_PAID_RECORD_LIMIT",
     "WORKSPACE_FREE_RECORD_LIMIT",
     "WORKSPACE_PAID_BYTE_LIMIT",
     "WORKSPACE_FREE_BYTE_LIMIT",
-    "PRODUCT_API_MONTHLY_LIMIT",
-    "PRODUCT_API_EVALUATION_LIMIT",
   ])
     vi.stubEnv(key, "");
 });
 afterEach(() => vi.unstubAllEnvs());
 
 describe("monetization entitlement policy", () => {
-  test("a fresh account defaults to free history and lifetime API evaluation with all rollouts disabled", async () => {
+  test("a fresh account defaults to free history with all rollouts disabled", async () => {
     const t = convexTest(schema, modules);
     expect(await workspace(t)).toMatchObject({
       tier: "free",
@@ -99,14 +95,6 @@ describe("monetization entitlement policy", () => {
       bytesLimit: 104_857_600,
       paidThrough: null,
       graceEndsAt: null,
-    });
-    expect(
-      await t.run((ctx) => apiPolicyForOwner(ctx, "clerk|alice", now)),
-    ).toMatchObject({
-      tier: "evaluation",
-      limit: 100,
-      periodKey: "evaluation",
-      resetsAt: null,
     });
     expect(workspaceLifecycleEnabled()).toBe(false);
     expect(billingConfiguration().billingEnabled).toBe(false);
@@ -224,40 +212,14 @@ describe("monetization entitlement policy", () => {
     });
   });
 
-  test("paid API is separate from workspace and commercial authorization is mandatory", async () => {
-    const t = convexTest(schema, modules);
-    await insertSubscription(t, { product: "api" });
-    expect(await workspace(t)).toMatchObject({ tier: "free" });
-    expect(
-      await t.run((ctx) => apiPolicyForOwner(ctx, "clerk|alice", now)),
-    ).toMatchObject({ tier: "evaluation", limit: 100 });
-    vi.stubEnv("PRODUCT_API_COMMERCIAL_ENABLED", "true");
-    expect(
-      await t.run((ctx) => apiPolicyForOwner(ctx, "clerk|alice", now)),
-    ).toMatchObject({
-      tier: "api",
-      limit: 5_000,
-      periodKey: "2026-10",
-      resetsAt: Date.UTC(2026, 10, 1),
-      paidThrough: now + DAY,
-    });
-    expect(
-      await t.run((ctx) => apiPolicyForOwner(ctx, "clerk|bob", now)),
-    ).toMatchObject({ tier: "evaluation" });
-  });
-
   test("invalid and excessive environment limits retain conservative defaults", async () => {
     const t = convexTest(schema, modules);
     vi.stubEnv("WORKSPACE_FREE_RECORD_LIMIT", "-1");
     vi.stubEnv("WORKSPACE_FREE_BYTE_LIMIT", "Infinity");
-    vi.stubEnv("PRODUCT_API_EVALUATION_LIMIT", "1.5");
     expect(await workspace(t)).toMatchObject({
       recordsLimit: 1_000,
       bytesLimit: 104_857_600,
     });
-    expect(
-      await t.run((ctx) => apiPolicyForOwner(ctx, "clerk|alice", now)),
-    ).toMatchObject({ limit: 100 });
     vi.stubEnv("WORKSPACE_FREE_RECORD_LIMIT", "1000000000001");
     expect(await workspace(t)).toMatchObject({ recordsLimit: 1_000 });
     vi.stubEnv("WORKSPACE_FREE_RECORD_LIMIT", "250");
@@ -268,7 +230,6 @@ describe("monetization entitlement policy", () => {
         paidRecordsLimit: 25_000,
         monthlyPriceUsd: 12,
       },
-      api: { evaluationLimit: 100, monthlyLimit: 5_000, monthlyPriceUsd: 29 },
     });
   });
 });

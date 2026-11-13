@@ -6,9 +6,8 @@ import { action, internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { billingConfiguration } from "./billingConfiguration";
 
-const productValidator = v.union(v.literal("workspace"), v.literal("api"));
+const productValidator = v.literal("workspace");
 const redirectValidator = v.object({ url: v.string() });
-type BillingProduct = "workspace" | "api";
 
 function stripeClient() {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -16,27 +15,21 @@ function stripeClient() {
   return new Stripe(key, { maxNetworkRetries: 2 });
 }
 
-function checkoutConfiguration(product: BillingProduct) {
+function checkoutConfiguration() {
   const config = billingConfiguration();
-  const enabled =
-    product === "workspace" ? config.workspaceEnabled : config.apiEnabled;
-  const priceId =
-    product === "workspace" ? config.workspacePrice : config.apiPrice;
+  const enabled = config.workspaceEnabled;
+  const priceId = config.workspacePrice;
   if (!enabled || !priceId || !config.appUrl)
     throw new ConvexError("Checkout is unavailable");
   return { priceId, appUrl: config.appUrl };
 }
 
-async function validatePrice(
-  stripe: Stripe,
-  priceId: string,
-  product: BillingProduct,
-) {
+async function validatePrice(stripe: Stripe, priceId: string) {
   const price = await stripe.prices.retrieve(priceId);
   if (
     !price.active ||
     price.currency !== "usd" ||
-    price.unit_amount !== (product === "workspace" ? 1200 : 2900) ||
+    price.unit_amount !== 1200 ||
     price.type !== "recurring" ||
     price.recurring?.interval !== "month" ||
     price.recurring.interval_count !== 1 ||
@@ -51,9 +44,9 @@ export const createCheckout = action({
   handler: async (ctx, args): Promise<{ url: string }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Authentication required");
-    const config = checkoutConfiguration(args.product);
+    const config = checkoutConfiguration();
     const stripe = stripeClient();
-    await validatePrice(stripe, config.priceId, args.product);
+    await validatePrice(stripe, config.priceId);
     let customer = await ctx.runQuery(internal.webBilling.getCustomer, {});
     if (!customer) {
       const created = await stripe.customers.create(
@@ -237,11 +230,10 @@ export const processWebhook = internalAction({
     const customerId = objectId(subscription.customer);
     const owner = subscription.metadata.voltOwnerClerkUserId;
     const product = subscription.metadata.voltProduct;
-    if (!customerId || !owner || (product !== "workspace" && product !== "api"))
+    if (!customerId || !owner || product !== "workspace")
       return { status: 200 };
     const config = billingConfiguration();
-    const priceId =
-      product === "workspace" ? config.workspacePrice : config.apiPrice;
+    const priceId = config.workspacePrice;
     const item = subscription.items.data[0];
     if (
       !priceId ||

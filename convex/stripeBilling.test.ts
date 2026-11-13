@@ -40,7 +40,7 @@ vi.mock("stripe", async (importOriginal) => {
 const modules = import.meta.glob("./**/*.ts");
 const checkout = makeFunctionReference<
   "action",
-  { product: "workspace" | "api" },
+  { product: "workspace" },
   { url: string }
 >("stripeBilling:createCheckout");
 const portal = makeFunctionReference<
@@ -121,8 +121,6 @@ beforeEach(() => {
   vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_fake");
   vi.stubEnv("STRIPE_WEBHOOK_SECRET", "whsec_test");
   vi.stubEnv("STRIPE_WORKSPACE_PRICE_ID", "price_workspace");
-  vi.stubEnv("STRIPE_API_PRICE_ID", "price_api");
-  vi.stubEnv("PRODUCT_API_COMMERCIAL_ENABLED", "false");
   mocks.priceRetrieve.mockResolvedValue({
     active: true,
     currency: "usd",
@@ -145,13 +143,10 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("Stripe server boundary", () => {
-  test("requires auth and server commercial configuration before external calls", async () => {
+  test("requires auth and server billing configuration before external calls", async () => {
     const t = convexTest(schema, modules);
     await expect(t.action(checkout, { product: "workspace" })).rejects.toThrow(
       "Authentication required",
-    );
-    await expect(alice(t).action(checkout, { product: "api" })).rejects.toThrow(
-      "unavailable",
     );
     vi.stubEnv("APP_URL", "https://volt.example.evil/path");
     await expect(

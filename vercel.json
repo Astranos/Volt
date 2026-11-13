@@ -6,13 +6,8 @@
   "outputDirectory": "apps/web/dist",
   "headers": [
     {
-      "source": "/:path((?!upc-search(?:/|$)|privacy(?:/|$)|api/|assets/|\\.well-known/|.*\\.[^/]+$).+)",
+      "source": "/:path((?!privacy(?:/|$)|api/|assets/|\\.well-known/|.*\\.[^/]+$).+)",
       "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
-    },
-    {
-      "source": "/upc-search/:path*",
-      "has": [{ "type": "query", "key": "q" }],
-      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, follow" }]
     },
     {
       "source": "/.well-known/apple-app-site-association",
@@ -39,8 +34,6 @@
     { "source": "/api/shopify/admin/search", "destination": "https://sincere-trout-414.convex.site/api/shopify/admin/search" },
     { "source": "/shopify", "destination": "/shopify.html" },
     { "source": "/shopify/", "destination": "/shopify.html" },
-    { "source": "/upc-search", "destination": "/upc-search.html" },
-    { "source": "/upc-search/", "destination": "/upc-search.html" },
     { "source": "/robots.txt", "destination": "/robots.txt" },
     { "source": "/sitemap.xml", "destination": "/sitemap.xml" },
     {

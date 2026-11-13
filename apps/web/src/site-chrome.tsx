@@ -17,7 +17,6 @@ const footerLinkGroups = [
   {
     title: "Links",
     links: [
-      ["Free UPC search", "/upc-search"],
       ["Workspace dashboard", "/dashboard"],
       ["Privacy", "/privacy"],
       [
@@ -92,9 +91,6 @@ export function SiteHeaderFrame({
             className="flex items-center gap-5 text-sm text-zinc-600 sm:gap-7"
             aria-label="Primary"
           >
-            <a className="hover:text-zinc-950" href="/upc-search">
-              UPC search
-            </a>
             <a className="hover:text-zinc-950" href={supportUrl}>
               Support
             </a>

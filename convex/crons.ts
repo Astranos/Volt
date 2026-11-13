@@ -6,11 +6,6 @@ const crons = cronJobs();
 const cleanupUsageSessions = makeFunctionReference<"mutation", Record<string, never>, { ended: number }>(
   "access:cleanupUsageSessions",
 );
-const cleanupProductApiRateLimitWindows = makeFunctionReference<
-  "mutation",
-  Record<string, never>,
-  { deleted: number }
->("productApiKeys:cleanupRateLimitWindows");
 
 crons.interval(
   "cleanup expired scanner signaling state",
@@ -41,13 +36,6 @@ crons.interval(
 );
 
 crons.interval(
-  "cleanup product API rate limit windows",
-  { minutes: 5 },
-  cleanupProductApiRateLimitWindows,
-  {},
-);
-
-crons.interval(
   "sweep mobile sign-in requests",
   { seconds: 60 },
   internal.mobileSignIn.sweep,
@@ -56,6 +44,5 @@ crons.interval(
 
 crons.interval("expire managed workspace history", { minutes: 5 }, makeFunctionReference<"mutation">("workspaceStorage:sweepRetention"), {});
 crons.interval("purge expired workspace objects", { minutes: 5 }, makeFunctionReference<"action">("workspaceStorage:purgeExpiredObjects"), {});
-crons.interval("refund expired API reservations", { minutes: 1 }, makeFunctionReference<"mutation">("productApiUsage:cleanupExpiredReservations"), {});
 
 export default crons;

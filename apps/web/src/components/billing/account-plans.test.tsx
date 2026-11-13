@@ -17,16 +17,10 @@ vi.mock("convex/react", () => ({
               paidBytesLimit: 1073741824,
               freeRetentionDays: 7,
             },
-            api: {
-              monthlyPriceUsd: 29,
-              evaluationLimit: 100,
-              monthlyLimit: 5000,
-            },
           },
           billingEnabled: false,
           portalEnabled: false,
           workspace: { checkoutEnabled: false },
-          api: { checkoutEnabled: false },
         }
       : path.includes("workspaceStorage")
         ? {
@@ -39,21 +33,13 @@ vi.mock("convex/react", () => ({
             bytesUsed: 20,
             bytesLimit: 104857600,
           }
-        : {
-            tier: "evaluation",
-            used: 2,
-            limit: 100,
-            remaining: 98,
-            enforcementEnabled: false,
-            resetsAt: null,
-          };
+        : undefined;
   },
 }));
 vi.mock("../../../../../convex/_generated/api", () => ({
   api: {
     webBilling: { getAccountBilling: "webBilling" },
     workspaceStorage: { getUsage: "workspaceStorage" },
-    productApiUsage: { getStatus: "usage" },
     stripeBilling: { createCheckout: "checkout", createPortal: "portal" },
   },
 }));
@@ -64,9 +50,8 @@ describe("account plans", () => {
     state.enabled = false;
     const html = renderToStaticMarkup(<AccountPlans />);
     expect(html).toContain("Checkout is unavailable");
-    expect(html.match(/disabled=""/g)).toHaveLength(2);
+    expect(html.match(/disabled=""/g)).toHaveLength(1);
     expect(html).toContain("not yet enforced");
-    expect(html).toContain("100 successful requests total");
   });
   test("storage summary shows actual policy and links to plans", () => {
     state.enabled = true;

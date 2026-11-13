@@ -5,15 +5,12 @@ import { DashboardHome } from "./dashboard-home";
 import { AppLayout } from "../app-shell";
 
 describe("dashboard and scanner navigation", () => {
-  test("dashboard contains activity and tool links, not scanner result controls", () => {
+  test("dashboard links to scanner results", () => {
     const html = renderToStaticMarkup(
-      <DashboardHome activity={<section>Catalog activity fixture</section>} />,
+      <DashboardHome />,
     );
-    expect(html).toContain("Dashboard / Activity");
-    expect(html).toContain("Catalog activity fixture");
-    for (const path of ["/scanner-results", "/catalog", "/api-keys"]) {
-      expect(html).toContain(`href="${path}"`);
-    }
+    expect(html).toContain("Dashboard");
+    expect(html).toContain('href="/scanner-results"');
     expect(html).not.toContain("Search captures");
     expect(html).not.toContain("Export CSV");
   });

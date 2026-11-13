@@ -11,9 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
-import { Route as ApiKeysRouteImport } from './routes/api-keys'
 import { Route as BillingRouteImport } from './routes/billing'
-import { Route as CatalogRouteImport } from './routes/catalog'
 import { Route as ClipRouteImport } from './routes/clip'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as PrivacyRouteImport } from './routes/privacy'
@@ -22,7 +20,6 @@ import { Route as ScannerResultsRouteImport } from './routes/scanner-results'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as ThankyouRouteImport } from './routes/thankyou'
-import { Route as UpcSearchRouteImport } from './routes/upc-search'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -34,19 +31,9 @@ const AdminRoute = AdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiKeysRoute = ApiKeysRouteImport.update({
-  id: '/api-keys',
-  path: '/api-keys',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const BillingRoute = BillingRouteImport.update({
   id: '/billing',
   path: '/billing',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CatalogRoute = CatalogRouteImport.update({
-  id: '/catalog',
-  path: '/catalog',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ClipRoute = ClipRouteImport.update({
@@ -89,18 +76,11 @@ const ThankyouRoute = ThankyouRouteImport.update({
   path: '/thankyou',
   getParentRoute: () => rootRouteImport,
 } as any)
-const UpcSearchRoute = UpcSearchRouteImport.update({
-  id: '/upc-search',
-  path: '/upc-search',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
-  '/api-keys': typeof ApiKeysRoute
   '/billing': typeof BillingRoute
-  '/catalog': typeof CatalogRoute
   '/clip': typeof ClipRoute
   '/dashboard': typeof DashboardRoute
   '/privacy': typeof PrivacyRoute
@@ -109,14 +89,11 @@ export interface FileRoutesByFullPath {
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
   '/thankyou': typeof ThankyouRoute
-  '/upc-search': typeof UpcSearchRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
-  '/api-keys': typeof ApiKeysRoute
   '/billing': typeof BillingRoute
-  '/catalog': typeof CatalogRoute
   '/clip': typeof ClipRoute
   '/dashboard': typeof DashboardRoute
   '/privacy': typeof PrivacyRoute
@@ -125,15 +102,12 @@ export interface FileRoutesByTo {
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
   '/thankyou': typeof ThankyouRoute
-  '/upc-search': typeof UpcSearchRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
-  '/api-keys': typeof ApiKeysRoute
   '/billing': typeof BillingRoute
-  '/catalog': typeof CatalogRoute
   '/clip': typeof ClipRoute
   '/dashboard': typeof DashboardRoute
   '/privacy': typeof PrivacyRoute
@@ -142,16 +116,13 @@ export interface FileRoutesById {
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
   '/thankyou': typeof ThankyouRoute
-  '/upc-search': typeof UpcSearchRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/admin'
-    | '/api-keys'
     | '/billing'
-    | '/catalog'
     | '/clip'
     | '/dashboard'
     | '/privacy'
@@ -160,14 +131,11 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/sign-up'
     | '/thankyou'
-    | '/upc-search'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/admin'
-    | '/api-keys'
     | '/billing'
-    | '/catalog'
     | '/clip'
     | '/dashboard'
     | '/privacy'
@@ -176,14 +144,11 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/sign-up'
     | '/thankyou'
-    | '/upc-search'
   id:
     | '__root__'
     | '/'
     | '/admin'
-    | '/api-keys'
     | '/billing'
-    | '/catalog'
     | '/clip'
     | '/dashboard'
     | '/privacy'
@@ -192,15 +157,12 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/sign-up'
     | '/thankyou'
-    | '/upc-search'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
-  ApiKeysRoute: typeof ApiKeysRoute
   BillingRoute: typeof BillingRoute
-  CatalogRoute: typeof CatalogRoute
   ClipRoute: typeof ClipRoute
   DashboardRoute: typeof DashboardRoute
   PrivacyRoute: typeof PrivacyRoute
@@ -209,7 +171,6 @@ export interface RootRouteChildren {
   SignInRoute: typeof SignInRoute
   SignUpRoute: typeof SignUpRoute
   ThankyouRoute: typeof ThankyouRoute
-  UpcSearchRoute: typeof UpcSearchRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -228,25 +189,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api-keys': {
-      id: '/api-keys'
-      path: '/api-keys'
-      fullPath: '/api-keys'
-      preLoaderRoute: typeof ApiKeysRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/billing': {
       id: '/billing'
       path: '/billing'
       fullPath: '/billing'
       preLoaderRoute: typeof BillingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/catalog': {
-      id: '/catalog'
-      path: '/catalog'
-      fullPath: '/catalog'
-      preLoaderRoute: typeof CatalogRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/clip': {
@@ -305,22 +252,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ThankyouRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/upc-search': {
-      id: '/upc-search'
-      path: '/upc-search'
-      fullPath: '/upc-search'
-      preLoaderRoute: typeof UpcSearchRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
-  ApiKeysRoute: ApiKeysRoute,
   BillingRoute: BillingRoute,
-  CatalogRoute: CatalogRoute,
   ClipRoute: ClipRoute,
   DashboardRoute: DashboardRoute,
   PrivacyRoute: PrivacyRoute,
@@ -329,7 +267,6 @@ const rootRouteChildren: RootRouteChildren = {
   SignInRoute: SignInRoute,
   SignUpRoute: SignUpRoute,
   ThankyouRoute: ThankyouRoute,
-  UpcSearchRoute: UpcSearchRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

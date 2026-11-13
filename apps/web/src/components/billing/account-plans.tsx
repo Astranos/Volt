@@ -14,12 +14,11 @@ const button =
 export function AccountPlans() {
   const billing = useQuery(api.webBilling.getAccountBilling, {});
   const storage = useQuery(api.workspaceStorage.getUsage, {});
-  const usage = useQuery(api.productApiUsage.getStatus, {});
   const checkout = useAction(api.stripeBilling.createCheckout);
   const portal = useAction(api.stripeBilling.createPortal);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  async function open(product: "workspace" | "api" | "portal") {
+  async function open(product: "workspace" | "portal") {
     setPending(true);
     setError(null);
     try {
@@ -35,13 +34,12 @@ export function AccountPlans() {
       setPending(false);
     }
   }
-  if (!billing || !storage || !usage)
+  if (!billing || !storage)
     return <p role="status">Loading plans and usage…</p>;
   return (
     <AccountPlansContent
       billing={billing}
       storage={storage}
-      usage={usage}
       pending={pending}
       error={error}
       open={open}
@@ -52,25 +50,22 @@ export function AccountPlans() {
 export function AccountPlansContent({
   billing,
   storage,
-  usage,
   pending,
   error,
   open,
 }: {
   billing: FunctionReturnType<typeof api.webBilling.getAccountBilling>;
   storage: FunctionReturnType<typeof api.workspaceStorage.getUsage>;
-  usage: FunctionReturnType<typeof api.productApiUsage.getStatus>;
   pending: boolean;
   error: string | null;
-  open: (product: "workspace" | "api" | "portal") => Promise<void>;
+  open: (product: "workspace" | "portal") => Promise<void>;
 }) {
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-semibold">Plans and usage</h1>
         <p className="mt-2 text-zinc-600">
-          Scanning is free. Pay for longer cloud history or product API access
-          when you need it.
+          Scanning is free. Pay for longer cloud history when you need it.
         </p>
       </div>
       {error && (
@@ -84,7 +79,7 @@ export function AccountPlansContent({
           setup is completed.
         </p>
       )}
-      <div className="grid gap-5 md:grid-cols-2">
+      <div className="grid gap-5">
         <section className="rounded-2xl border border-zinc-200 bg-white p-6">
           <p className="text-sm text-emerald-700">
             {storage.tier === "workspace" ? "Workspace active" : "Free scanner"}
@@ -136,54 +131,6 @@ export function AccountPlansContent({
                 : "Coming soon"}
           </button>
         </section>
-        <section className="rounded-2xl border border-zinc-200 bg-white p-6">
-          <p className="text-sm text-emerald-700">
-            {usage.tier === "api" ? "API plan active" : "API evaluation"}
-          </p>
-          <h2 className="mt-2 text-xl font-semibold">
-            Product API · ${billing.offers.api.monthlyPriceUsd} / month
-          </h2>
-          <p className="mt-3 text-sm text-zinc-600">
-            {billing.offers.api.monthlyLimit.toLocaleString()} successful
-            requests per UTC calendar month. Evaluation includes{" "}
-            {billing.offers.api.evaluationLimit.toLocaleString()} successful
-            requests total. All your keys share the allowance.
-          </p>
-          <p className="mt-4 text-sm">
-            {usage.used.toLocaleString()} / {usage.limit.toLocaleString()}{" "}
-            requests · {usage.remaining.toLocaleString()} remaining
-          </p>
-          {usage.resetsAt && (
-            <p className="mt-2 text-sm text-zinc-500">
-              Resets {new Date(usage.resetsAt).toLocaleDateString()}
-            </p>
-          )}
-          {!usage.enforcementEnabled && (
-            <p className="mt-2 text-sm text-zinc-500">
-              Pilot mode: usage is tracked; the request allowance is not yet
-              enforced.
-            </p>
-          )}
-          <button
-            className={button}
-            disabled={
-              pending || !billing.api.checkoutEnabled || usage.tier === "api"
-            }
-            onClick={() => void open("api")}
-          >
-            {usage.tier === "api"
-              ? "API plan active"
-              : billing.api.checkoutEnabled
-                ? "Subscribe to API"
-                : "Coming soon"}
-          </button>
-          <a
-            href="/api-keys"
-            className="ml-4 text-sm text-emerald-700 underline"
-          >
-            Manage API keys
-          </a>
-        </section>
       </div>
       {billing.portalEnabled && (
         <button
@@ -195,8 +142,7 @@ export function AccountPlansContent({
         </button>
       )}
       <p className="text-sm text-zinc-500">
-        Plans apply to your account. API access is purchased separately. Paid
-        history is retained within storage limits; it is not permanent archival
+        Plans apply to your account. Paid history is retained within storage limits; it is not permanent archival
         storage.
       </p>
     </div>

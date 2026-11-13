@@ -42,7 +42,7 @@ Start with an [open issue](https://github.com/juanquenga/Volt/issues), or report
 | [apps/kiosk](apps/kiosk/README.md) | Customer-facing web catalog for store tablets. |
 | [apps/kiosk-ios](apps/kiosk-ios/README.md) | Separate native iPad portal app for Guided Access. |
 | `apps/web` | TanStack Start web app, product pages, and account tools. |
-| [convex](convex/README.md) | Account authorization, scanner workspace, cursor delivery, catalog data, and legacy signaling. |
+| [convex](convex/README.md) | Account authorization, scanner workspace, cursor delivery, and legacy signaling. |
 
 Convex stores capture metadata; private photo bytes go directly to Cloudflare R2 through short-lived signed URLs. The installed app keeps a durable local outbox, so capture does not depend on an online computer.
 

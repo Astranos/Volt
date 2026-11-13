@@ -21,19 +21,6 @@ export type ProductIdentity = {
   carrier: string | null;
 };
 
-export type AIScannerCatalogMatch = {
-  upc: string;
-  title: string;
-  platform: string | null;
-  edition: string | null;
-  brand: string | null;
-  model: string | null;
-  mpn: string | null;
-  color: string | null;
-  storage: string | null;
-  carrier: string | null;
-};
-
 export type PriceChartingVerificationOutcome =
   | "verified"
   | "invalid-candidate"
@@ -47,8 +34,8 @@ export type PriceChartingVerificationOutcome =
 export type AIScannerTraceEvent =
   | ({ stage: "identity"; outcome: "resolved"; elapsedMs: number } & ProductIdentity)
   | { stage: "identity"; outcome: "unresolved"; elapsedMs: number }
-  | { stage: "catalog"; outcome: "candidate"; source: "product-catalog" | "web-search"; upc: string; elapsedMs: number }
-  | { stage: "catalog"; outcome: "no-candidate"; source: "product-catalog" | "web-search"; elapsedMs: number }
+  | { stage: "catalog"; outcome: "candidate"; source: "web-search"; upc: string; elapsedMs: number }
+  | { stage: "catalog"; outcome: "no-candidate"; source: "web-search"; elapsedMs: number }
   | { stage: "verification"; outcome: PriceChartingVerificationOutcome; upc: string | null; destination: string | null; elapsedMs: number };
 
 export class AIScannerError extends Error {
@@ -353,64 +340,6 @@ function catalogTitleTokens(value: string): string[] {
     .filter((token) => token && !TITLE_NOISE_TOKENS.has(token));
 }
 
-export function catalogIdentityMatchScore(
-  identity: ProductIdentity,
-  candidate: Omit<AIScannerCatalogMatch, "upc">,
-): number | null {
-  const expectedTitle = catalogTitleTokens(identity.name);
-  const candidateTitle = catalogTitleTokens(candidate.title);
-  if (expectedTitle.length === 0 || candidateTitle.length === 0) return null;
-
-  if (identity.platform) {
-    const expectedPlatform = canonicalPlatform(identity.platform);
-    const candidatePlatform = canonicalPlatform([candidate.platform, candidate.title].filter(Boolean).join(" "));
-    if (expectedPlatform && candidatePlatform) {
-      if (expectedPlatform !== candidatePlatform) return null;
-    } else if (candidate.platform) {
-      const expectedPlatformText = compactCatalogText(identity.platform);
-      const candidatePlatformText = compactCatalogText(candidate.platform);
-      if (
-        expectedPlatformText !== candidatePlatformText
-        && !expectedPlatformText.includes(candidatePlatformText)
-        && !candidatePlatformText.includes(expectedPlatformText)
-      ) return null;
-    }
-  }
-
-  const expectedSet = new Set(expectedTitle);
-  const candidateSet = new Set(candidateTitle);
-  const matchingTokens = [...expectedSet].filter((token) => candidateSet.has(token)).length;
-  const expectedCoverage = matchingTokens / expectedSet.size;
-  const candidateCoverage = matchingTokens / candidateSet.size;
-  const exactTitle = compactCatalogText(identity.name) === compactCatalogText(candidate.title);
-  if (!exactTitle && expectedCoverage < 0.8) return null;
-
-  const details: ReadonlyArray<readonly [string | null, string | null, number]> = [
-    [identity.edition, candidate.edition, 8],
-    [identity.brand, candidate.brand, 10],
-    [identity.model, candidate.model, 18],
-    [identity.mpn, candidate.mpn, 40],
-    [identity.color, candidate.color, 8],
-    [identity.storage, candidate.storage, 12],
-    [identity.carrier, candidate.carrier, 10],
-  ];
-  let detailScore = 0;
-  for (const [expected, actual, weight] of details) {
-    if (!expected) continue;
-    const expectedText = compactCatalogText(expected);
-    const actualText = compactCatalogText(actual ?? candidate.title);
-    if (!expectedText || !actualText) continue;
-    if (!actualText.includes(expectedText) && !expectedText.includes(actualText)) return null;
-    detailScore += weight;
-  }
-
-  return (exactTitle ? 100 : 0)
-    + expectedCoverage * 20
-    + candidateCoverage * 5
-    + (identity.platform && candidate.platform ? 8 : 0)
-    + detailScore;
-}
-
 function titleMatchesProductSlug(name: string, productSlug: string): boolean {
   const expected = catalogTitleTokens(name);
   const actual = new Set(catalogTitleTokens(productSlug));
@@ -497,7 +426,6 @@ export async function requestOpenRouterAnalysis(
     apiKey?: string;
     fetchImpl?: typeof fetch;
     timeoutMs?: number;
-    catalogLookup?: (identity: ProductIdentity) => Promise<AIScannerCatalogMatch | null>;
     onTrace?: (event: AIScannerTraceEvent) => void;
   } = {},
 ): Promise<AIAnalysisResult> {
@@ -521,45 +449,6 @@ export async function requestOpenRouterAnalysis(
       return { mode, value: null, format: "upc_a", identifiedName: null, platform: null };
     }
     options.onTrace?.({ stage: "identity", outcome: "resolved", ...identity, elapsedMs: Date.now() - identityStartedAt });
-
-    if (options.catalogLookup) {
-      const productCatalogStartedAt = Date.now();
-      try {
-        const match = await options.catalogLookup(identity);
-        const catalogUPC = match && catalogIdentityMatchScore(identity, match) !== null
-          ? normalizeUPCA(match.upc)
-          : null;
-        if (match && catalogUPC) {
-          options.onTrace?.({
-            stage: "catalog",
-            outcome: "candidate",
-            source: "product-catalog",
-            upc: catalogUPC,
-            elapsedMs: Date.now() - productCatalogStartedAt,
-          });
-          return {
-            mode,
-            value: catalogUPC,
-            format: "upc_a",
-            identifiedName: match.title,
-            platform: match.platform,
-          };
-        }
-        options.onTrace?.({
-          stage: "catalog",
-          outcome: "no-candidate",
-          source: "product-catalog",
-          elapsedMs: Date.now() - productCatalogStartedAt,
-        });
-      } catch {
-        options.onTrace?.({
-          stage: "catalog",
-          outcome: "no-candidate",
-          source: "product-catalog",
-          elapsedMs: Date.now() - productCatalogStartedAt,
-        });
-      }
-    }
 
     const catalogStartedAt = Date.now();
     const catalogContent = await requestOpenRouterContent(

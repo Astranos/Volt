@@ -21,11 +21,6 @@ export function monetizationOfferLimits() {
       freeRetentionDays: 7,
       monthlyPriceUsd: 12,
     },
-    api: {
-      evaluationLimit: limit("PRODUCT_API_EVALUATION_LIMIT", 100),
-      monthlyLimit: limit("PRODUCT_API_MONTHLY_LIMIT", 5_000),
-      monthlyPriceUsd: 29,
-    },
   };
 }
 
@@ -37,34 +32,6 @@ function hasPaidAccess(row: Doc<"webSubscriptions">, now: number) {
     paidEnd(row) > now &&
     ["active", "past_due", "canceled"].includes(row.status)
   );
-}
-export async function apiPolicyForOwner(
-  ctx: Pick<QueryCtx, "db">,
-  ownerTokenIdentifier: string,
-  now = Date.now(),
-) {
-  const rows = await ctx.db
-    .query("webSubscriptions")
-    .withIndex("by_ownerTokenIdentifier_and_product", (q) =>
-      q.eq("ownerTokenIdentifier", ownerTokenIdentifier).eq("product", "api"),
-    )
-    .take(100);
-  const paid =
-    process.env.PRODUCT_API_COMMERCIAL_ENABLED === "true" &&
-    rows.some((row) => hasPaidAccess(row, now));
-  const date = new Date(now);
-  const offers = monetizationOfferLimits();
-  return {
-    tier: paid ? ("api" as const) : ("evaluation" as const),
-    limit: paid ? offers.api.monthlyLimit : offers.api.evaluationLimit,
-    periodKey: paid ? date.toISOString().slice(0, 7) : "evaluation",
-    resetsAt: paid
-      ? Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1)
-      : null,
-    paidThrough: paid
-      ? Math.max(...rows.filter((row) => hasPaidAccess(row, now)).map(paidEnd))
-      : null,
-  };
 }
 export async function accountPolicy(
   ctx: Pick<QueryCtx, "db">,

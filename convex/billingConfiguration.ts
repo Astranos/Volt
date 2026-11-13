@@ -17,7 +17,6 @@ export function billingConfiguration() {
     /* Missing or invalid configuration keeps checkout disabled. */
   }
   const workspacePrice = process.env.STRIPE_WORKSPACE_PRICE_ID;
-  const apiPrice = process.env.STRIPE_API_PRICE_ID;
   const billingEnabled =
     process.env.BILLING_ENABLED === "true" &&
     Boolean(
@@ -29,12 +28,7 @@ export function billingConfiguration() {
     appUrl,
     billingEnabled,
     workspacePrice,
-    apiPrice,
     workspaceEnabled:
       billingEnabled && Boolean(workspacePrice?.startsWith("price_")),
-    apiEnabled:
-      billingEnabled &&
-      process.env.PRODUCT_API_COMMERCIAL_ENABLED === "true" &&
-      Boolean(apiPrice?.startsWith("price_")),
   };
 }
