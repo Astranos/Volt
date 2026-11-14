@@ -34,7 +34,9 @@ function isRecord(value: unknown): value is MobilePhotoDownloadRecord {
 }
 
 export function isVoltPhotoDownloadFilename(filename: string) {
-  return filename === "Volt Photos" || filename.startsWith("Volt Photos/");
+  return ["Donut Photos", "Volt Photos"].some(
+    (folder) => filename === folder || filename.startsWith(`${folder}/`),
+  );
 }
 
 export function nextMidnightTimestamp(now = Date.now()) {

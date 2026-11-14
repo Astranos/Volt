@@ -247,7 +247,7 @@ export default function UnifiedSidepanel() {
       <div className="sidepanel-content-frame flex flex-1 flex-col overflow-hidden">
         <div className="sidepanel-tool-header">
           <div className="sidepanel-tool-row">
-            <div ref={toolTabsRef} className="sidepanel-tool-tabs" role="tablist" aria-label="Volt tools">
+            <div ref={toolTabsRef} className="sidepanel-tool-tabs" role="tablist" aria-label="Donut tools">
               <span
                 aria-hidden="true"
                 className="sidepanel-tool-tab-indicator"

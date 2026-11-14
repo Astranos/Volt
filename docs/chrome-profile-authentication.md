@@ -1,12 +1,12 @@
 # Chrome profile authentication
 
-Volt can use the Google account signed into the primary Chrome profile to sign into the existing linked Clerk account. Each computer receives its own Clerk session. The network does not determine identity or share sessions. Google can require consent on each browser; silent sign-in works only when Google permits it.
+Donut can use the Google account signed into the primary Chrome profile to sign into the existing linked Clerk account. Each computer receives its own Clerk session. The network does not determine identity or share sessions. Google can require consent on each browser; silent sign-in works only when Google permits it.
 
 The feature remains disabled when `WXT_GOOGLE_CHROME_EXTENSION_CLIENT_ID` is absent. Existing tab sign-in and cookie synchronization continue to work in that configuration.
 
 ## Configure the Google client
 
-1. In Google Cloud, configure the OAuth consent screen and create an OAuth client of type **Chrome Extension** for Volt's public extension ID: `bmgghhmlflbhlnomgnoodpidekpaaifk`.
+1. In Google Cloud, configure the OAuth consent screen and create an OAuth client of type **Chrome Extension** for Donut's public extension ID: `bmgghhmlflbhlnomgnoodpidekpaaifk`.
 2. Request only the `openid` and `email` scopes. If the consent application is in testing, add the intended store Google accounts as test users. Google Workspace policies can require administrator approval.
 3. Set the extension's build environment variable `WXT_GOOGLE_CHROME_EXTENSION_CLIENT_ID` to that client ID. Keep the existing stable extension public key. A development extension with a different extension ID needs its own matching OAuth client.
 4. Set Convex environment variables `GOOGLE_CHROME_EXTENSION_CLIENT_ID` to the same client ID, `CHROME_EXTENSION_ID` to the matching extension ID, and `CLERK_SECRET_KEY` to the server-side Clerk secret for the same instance as the extension's publishable key. Never put the secret in an extension variable.
@@ -33,8 +33,8 @@ Before release, verify in real Chrome using two separate computers/profiles:
 - MI01 and MI03 each resolve to their own linked Clerk user and Shopify audit connection.
 - The first click can complete Google consent; later permitted startup authorization is silent.
 - A profile without a Google login cannot use an account merely signed into a Google website.
-- Profile switching or signing out of Chrome clears the previous native Volt account.
-- Volt sign-out remains signed out after reload and worker restart.
+- Profile switching or signing out of Chrome clears the previous native Donut account.
+- Donut sign-out remains signed out after reload and worker restart.
 - Manual tab sign-in and Google-denied/MFA fallback still work.
 - The offscreen workspace refreshes its native session without keeping a side panel open.
 

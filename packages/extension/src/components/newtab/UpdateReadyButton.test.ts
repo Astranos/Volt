@@ -34,15 +34,15 @@ test("restarts without confirmation when only the current document is open", asy
 });
 
 test.each([
-  [[{ contextType: "TAB", tabId: 2, documentUrl: currentUrl }], "1 other Volt tab"],
-  [[{ contextType: "SIDE_PANEL", tabId: 1, documentUrl: "chrome-extension://volt/sidepanel.html" }], "the Volt side panel"],
-  [[{ contextType: "POPUP", tabId: -1, documentUrl: "chrome-extension://volt/popup.html" }], "a Volt popup"],
-  [[{ contextType: "TAB", tabId: 2, documentUrl: "chrome-extension://volt/handbook.html" }, { contextType: "TAB", tabId: 3, documentUrl: currentUrl }, { contextType: "SIDE_PANEL", tabId: -1, documentUrl: "chrome-extension://volt/sidepanel.html" }], "2 other Volt tabs and the Volt side panel"],
+  [[{ contextType: "TAB", tabId: 2, documentUrl: currentUrl }], "1 other Donut tab"],
+  [[{ contextType: "SIDE_PANEL", tabId: 1, documentUrl: "chrome-extension://volt/sidepanel.html" }], "the Donut side panel"],
+  [[{ contextType: "POPUP", tabId: -1, documentUrl: "chrome-extension://volt/popup.html" }], "a Donut popup"],
+  [[{ contextType: "TAB", tabId: 2, documentUrl: "chrome-extension://volt/handbook.html" }, { contextType: "TAB", tabId: 3, documentUrl: currentUrl }, { contextType: "SIDE_PANEL", tabId: -1, documentUrl: "chrome-extension://volt/sidepanel.html" }], "2 other Donut tabs and the Donut side panel"],
 ])("warns about the other extension contexts: %j", async (others, description) => {
   getContexts.mockResolvedValue([current, ...others]);
   confirm.mockReturnValue(false);
   await restartVoltForUpdate();
-  expect(confirm).toHaveBeenCalledWith(`Restarting Volt closes ${description}. Unsaved handbook edits there will be lost. Restart now?`);
+  expect(confirm).toHaveBeenCalledWith(`Restarting Donut closes ${description}. Unsaved handbook edits there will be lost. Restart now?`);
   expect(set).not.toHaveBeenCalled();
   expect(reload).not.toHaveBeenCalled();
 });

@@ -16,7 +16,7 @@ const sections: Array<{ href: string; title: string; body: string; icon: LucideI
   {
     href: "/settings",
     title: "Settings",
-    body: "Your account, how much capture storage you're using, and the Volt apps.",
+    body: "Your account, how much capture storage you're using, and the Donut apps.",
     icon: Settings,
   },
 ];

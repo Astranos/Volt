@@ -1,4 +1,4 @@
-# Volt iOS fastlane
+# Donut iOS fastlane
 
 This package owns the iOS fastlane setup for repeatable local builds, TestFlight uploads, and App Store screenshot capture. Archives are produced locally with Xcode/fastlane.
 

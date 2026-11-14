@@ -62,15 +62,15 @@ type View =
 export default function HandbookPage() {
   const signedIn = useSidepanelSignedIn();
   const { signInOpen, openSignIn } = useSidepanelSignIn();
-  useEffect(() => { document.title = "Volt Handbook"; }, []);
+  useEffect(() => { document.title = "Donut Handbook"; }, []);
 
   return (
     <div className="handbook-page sidepanel-shell">
       {signedIn === false ? (
         <div className="handbook-page-center">
           {signInOpen ? <SidepanelSignInCard page="/handbook.html" /> : (
-            <PageNotice icon={<LogIn />} title="Sign in to open the handbook" copy="Handbook entries are saved to your Volt account.">
-              <button type="button" className="handbook-button is-primary is-wide" onClick={openSignIn}>Sign in to Volt</button>
+            <PageNotice icon={<LogIn />} title="Sign in to open the handbook" copy="Handbook entries are saved to your Donut account.">
+              <button type="button" className="handbook-button is-primary is-wide" onClick={openSignIn}>Sign in to Donut</button>
             </PageNotice>
           )}
         </div>

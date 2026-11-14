@@ -83,7 +83,9 @@ test("next cleanup is scheduled for the next local midnight after noon", () => {
   );
 });
 
-test("only Volt photo download paths are accepted", () => {
+test("current and historical branded photo download paths are accepted", () => {
+  assert.equal(isVoltPhotoDownloadFilename("Donut Photos/photo.jpg"), true);
+  assert.equal(isVoltPhotoDownloadFilename("Donut Photos-old/photo.jpg"), false);
   assert.equal(
     isVoltPhotoDownloadFilename("Volt Photos/session/batch/photo.jpg"),
     true,
@@ -109,7 +111,7 @@ test("cleanup alarm runs daily", () => {
   );
 });
 
-test("recording a Volt photo download stores a 24 hour delete time", async () => {
+test("recording a Donut photo download stores a 24 hour delete time", async () => {
   const { chromeApi, storage } = createChromeStub();
   const cleanup = createMobilePhotoDownloadCleanup({
     chromeApi,
@@ -119,7 +121,7 @@ test("recording a Volt photo download stores a 24 hour delete time", async () =>
 
   const receipt = await cleanup.recordMobilePhotoDownload({
     downloadId: 42,
-    filename: "Volt Photos/session/batch/photo.jpg",
+    filename: "Donut Photos/session/batch/photo.jpg",
     downloadedAt,
   });
 
@@ -127,7 +129,7 @@ test("recording a Volt photo download stores a 24 hour delete time", async () =>
   assert.deepEqual(storage[MOBILE_PHOTO_DOWNLOADS_STORAGE_KEY], [
     {
       downloadId: 42,
-      filename: "Volt Photos/session/batch/photo.jpg",
+      filename: "Donut Photos/session/batch/photo.jpg",
       downloadedAt,
       deleteAfter: downloadedAt + DEFAULT_RETENTION_MS,
     },

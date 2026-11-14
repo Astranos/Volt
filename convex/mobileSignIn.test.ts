@@ -42,6 +42,7 @@ async function requestSignIn(t: ReturnType<typeof convexTest>, address = email) 
 
 function codeFrom(qrCodeUrl: string) {
   const url = new URL(qrCodeUrl);
+  // Distributed iOS binaries still trust this host; branding is served through the legacy web alias.
   expect(`${url.origin}${url.pathname}`).toBe("https://voltresale.app/app-sign-in");
   expect(url.search).toBe("");
   return new URLSearchParams(url.hash.slice(1)).get("code")!;

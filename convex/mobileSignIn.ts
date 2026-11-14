@@ -16,6 +16,7 @@ export const MOBILE_SIGN_IN_MAX_REQUESTS_PER_WINDOW = 3;
 export const MOBILE_SIGN_IN_GLOBAL_WINDOW_MS = 60 * 1000;
 export const MOBILE_SIGN_IN_GLOBAL_MAX_PER_WINDOW = 30;
 const RETAIN_CLOSED_REQUESTS_MS = 24 * 60 * 60 * 1000;
+// Keep QR links on the legacy host until updated iOS binaries and the Donut App Clip experience ship.
 export const MOBILE_SIGN_IN_QR_BASE_URL = "https://voltresale.app/app-sign-in";
 
 export function normalizedSignInEmail(value: string) {

@@ -228,7 +228,7 @@ export function ShopifyAuditSettings() {
     <section className="scroll-mt-20 space-y-4" id="shopify-audit">
       <div>
         <h2 className="text-2xl font-bold">Shopify product audit</h2>
-        <p className="text-muted-foreground">Connect your stores to search their inventory and review yesterday's new products from the Volt new tab page. Draft and unpublished products are included.</p>
+        <p className="text-muted-foreground">Connect your stores to search their inventory and review yesterday's new products from the Donut new tab page. Draft and unpublished products are included.</p>
       </div>
       <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
         {!stores.loaded ? <p className="text-sm text-muted-foreground">Checking Shopify connection…</p> : (
@@ -238,7 +238,7 @@ export function ShopifyAuditSettings() {
                 <div>
                   <p className="font-medium">{shops.length === 1 ? "Connected store" : `${shops.length} stores connected`}</p>
                   <p className="text-sm text-muted-foreground">
-                    Volt has read-only product access for your account.
+                    Donut has read-only product access for your account.
                     {shops.length > 1 && " This computer searches and audits the active store. Switch stores here or from the new tab's Shopify results."}
                   </p>
                 </div>
@@ -272,7 +272,7 @@ export function ShopifyAuditSettings() {
                       {availableShops.map((shop) => <option key={shop} value={shop}>{shop}</option>)}
                     </select>
                   </label>
-                ) : <p className="text-sm text-muted-foreground">Sign in to Shopify and choose {shops.length > 0 ? "the store to add" : "your store"}. Volt will detect it automatically.</p>}
+                ) : <p className="text-sm text-muted-foreground">Sign in to Shopify and choose {shops.length > 0 ? "the store to add" : "your store"}. Donut will detect it automatically.</p>}
                 <label className="block max-w-md space-y-1 text-sm font-medium">
                   <span>{availableShops.length > 0 ? "Or type a different store" : "Or type the store"}</span>
                   <input
@@ -292,7 +292,7 @@ export function ShopifyAuditSettings() {
                 </div>
                 {discoveryTabId !== null && <p className="text-sm text-muted-foreground">{skippedShop
                   ? `Shopify opened ${skippedShop}, which is already connected. Type the store above, or in that tab click the store name at the top, choose View all, and pick the store to add.`
-                  : "Choose your store in the Shopify tab. Volt will continue when its admin page opens."}</p>}
+                  : "Choose your store in the Shopify tab. Donut will continue when its admin page opens."}</p>}
                 {pendingShop && <p className="text-sm text-muted-foreground">Finish the approval in the Shopify tab. This page will update when {pendingShop} connects.</p>}
               </div>
             )}
@@ -333,7 +333,7 @@ export function ShopifyAuditSettings() {
             )}
           </div>
         )}
-        {shownError && <div className="mt-3 text-sm text-destructive" role="alert">{shownError} {shownError.toLowerCase().includes("sign in") && <button className="underline" onClick={() => void chrome.tabs.create({ url: CLERK_SIGN_IN_URL })} type="button">Sign in to Volt</button>}</div>}
+        {shownError && <div className="mt-3 text-sm text-destructive" role="alert">{shownError} {shownError.toLowerCase().includes("sign in") && <button className="underline" onClick={() => void chrome.tabs.create({ url: CLERK_SIGN_IN_URL })} type="button">Sign in to Donut</button>}</div>}
       </div>
     </section>
   );

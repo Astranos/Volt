@@ -171,7 +171,7 @@ enum MobileCloudError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .credentialRevoked: "Volt couldn't reconnect this iPhone. Try again."
+        case .credentialRevoked: "Donut couldn't reconnect this iPhone. Try again."
         case .cloudWorkspaceRequired: "Cloud workspace access is unavailable for this account. Try again later."
         case .httpStatus(let status): "Cloud sync failed with status \(status)."
         case .invalidResponse: "Cloud sync returned an invalid response."

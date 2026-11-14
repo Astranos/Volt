@@ -56,7 +56,7 @@ final class ClipScannerStore {
     var selectedTab: ClipTab = .text
     var activeCaptureMode: CaptureMode = .ocr
     var pairingURLText = ""
-    var statusText = "Scan the workspace QR from Volt in Chrome."
+    var statusText = "Scan the workspace QR from Donut in Chrome."
     var targetHint = "Not connected"
     var pairingLabel: String?
     var pairingFailureMessage: String?
@@ -105,7 +105,7 @@ final class ClipScannerStore {
     var lastSessionDisplayName: String? { nil }
 
     var connectionAttemptDisplayName: String {
-        activeConnectionAttemptLabel ?? pairingLabel ?? "Volt workspace"
+        activeConnectionAttemptLabel ?? pairingLabel ?? "Donut workspace"
     }
 
     var availableWorkspaceComputers: [AppClipWorkspaceComputer] {
@@ -143,7 +143,7 @@ final class ClipScannerStore {
 
     func pairFromText() {
         guard let url = PairingURLParser.pairingURL(in: pairingURLText) ?? URL(string: pairingURLText) else {
-            errorMessage = "Paste a Volt workspace URL from Chrome."
+            errorMessage = "Paste a Donut workspace URL from Chrome."
             return
         }
         handleIncomingURL(url)
@@ -184,7 +184,7 @@ final class ClipScannerStore {
             pairingFailureMessage = message
             errorMessage = message
             statusText = "Connection failed"
-            targetHint = "Scan a fresh Volt QR code"
+            targetHint = "Scan a fresh Donut QR code"
             pairingNotificationFeedback.notificationOccurred(.error)
         }
     }
@@ -238,7 +238,7 @@ final class ClipScannerStore {
 
     func pairFromScannedValue(_ value: String) -> Bool {
         guard !isPairing else { return true }
-        return handlePairingValue(value, invalidMessage: "That QR is not a Volt workspace QR.")
+        return handlePairingValue(value, invalidMessage: "That QR is not a Donut workspace QR.")
     }
 
     @discardableResult
@@ -626,7 +626,7 @@ final class ClipScannerStore {
 
     private func displayName(for session: PairingSession) -> String {
         let label = session.label?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return label.isEmpty ? "Volt workspace" : label
+        return label.isEmpty ? "Donut workspace" : label
     }
 
     private func updateCapture(_ id: UUID, status: String) {

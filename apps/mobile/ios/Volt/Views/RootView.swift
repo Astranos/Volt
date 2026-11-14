@@ -154,7 +154,7 @@ private struct AccountSwitchCaptureDecisionView: View {
                 Text("Captures from another account")
                     .font(.title2.bold())
 
-                Text("\(conflict.count) pending capture\(conflict.count == 1 ? "" : "s") will stay on this iPhone until you choose what to do. Volt will never upload them to the new account automatically.")
+                Text("\(conflict.count) pending capture\(conflict.count == 1 ? "" : "s") will stay on this iPhone until you choose what to do. Donut will never upload them to the new account automatically.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 

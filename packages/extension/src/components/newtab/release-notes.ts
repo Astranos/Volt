@@ -18,7 +18,7 @@ export const RELEASE_NOTES = [
   },
   {
     title: "Know when an update is ready",
-    description: "When Chrome has downloaded a new version of Volt, the new tab shows Update ready. Click it to restart Volt and get the update right away.",
+    description: "When Chrome has downloaded a new version of Donut, the new tab shows Update ready. Click it to restart Donut and get the update right away.",
   },
   {
     title: "Clearer logins, and several values per entry",
@@ -42,7 +42,7 @@ export const RELEASE_NOTES = [
   },
   {
     title: "Connect more than one Shopify store",
-    description: "Link up to five stores to one Volt account, then switch stores in new tab search, the audit, and settings.",
+    description: "Link up to five stores to one Donut account, then switch stores in new tab search, the audit, and settings.",
   },
   {
     title: "Faster scanner results",
@@ -50,7 +50,7 @@ export const RELEASE_NOTES = [
   },
   {
     title: "Shopify products in your new tab",
-    description: "Search your connected store without leaving Volt. In-stock products appear first, with photos, prices, SKU, and condition when available.",
+    description: "Search your connected store without leaving Donut. In-stock products appear first, with photos, prices, SKU, and condition when available.",
   },
   {
     title: "Review yesterday’s listings",
@@ -62,7 +62,7 @@ export const RELEASE_NOTES = [
   },
   {
     title: "Settings follow your account",
-    description: "Sign in with your Volt account to sync extension settings across computers.",
+    description: "Sign in with your Donut account to sync extension settings across computers.",
   },
 ] as const;
 

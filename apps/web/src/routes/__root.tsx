@@ -14,9 +14,9 @@ export const Route = createRootRoute({
       {
         name: "description",
         content:
-          "Volt combines a Chrome resale workflow with an iPhone scanner for fast research, capture, pricing, and listing prep.",
+          "Donut combines a Chrome resale workflow with an iPhone scanner for fast research, capture, pricing, and listing prep.",
       },
-      { title: "Volt - Chrome resale workflow with iPhone scanning" },
+      { title: "Donut - Chrome resale workflow with iPhone scanning" },
     ],
     links: [
       { rel: "manifest", href: "/manifest.webmanifest" },

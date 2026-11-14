@@ -486,7 +486,7 @@ export default defineContentScript({
       overlay.appendChild(pcTab);
       overlay.appendChild(ebayTab);
       overlay.setAttribute("role", "toolbar");
-      overlay.setAttribute("aria-label", "Volt product research");
+      overlay.setAttribute("aria-label", "Donut product research");
     };
 
     // Bounds of the label's visible text, wherever Shopify nests it.

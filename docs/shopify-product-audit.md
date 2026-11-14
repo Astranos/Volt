@@ -6,11 +6,11 @@ Use `pnpm deploy:backend` from the integrated release checkout. Convex deploymen
 
 The release command checks that the embedded Shopify routes exist locally, deploys Convex, then probes all three routes through both Convex and the public app origin. Each unauthenticated probe must return 401. A 404 means the backend route is missing and the release is incomplete. `pnpm check:shopify-backend` reruns these checks without deploying. Verify the authenticated audit and product search inside Shopify Admin after release.
 
-Volt Resale has a product audit inside Shopify Admin. After installation, the merchant opens **Volt Resale** in Shopify Admin to review products created yesterday in their local timezone and search the store catalog. Results link to the corresponding Shopify product pages. The Chrome extension has a separate, optional audit workflow that opens yesterday's products in a Chrome tab group.
+Donut Resale has a product audit inside Shopify Admin. After installation, the merchant opens **Donut Resale** in Shopify Admin to review products created yesterday in their local timezone and search the store catalog. Results link to the corresponding Shopify product pages. The Chrome extension has a separate, optional audit workflow that opens yesterday's products in a Chrome tab group.
 
 ## App configuration
 
-The checked-in `shopify.app.toml` configures the existing public **Volt Resale** app with `read_products`, an embedded app URL of `https://voltresale.app/shopify`, the legacy extension OAuth callback URLs, and production privacy and uninstall webhooks. The app is intended for limited App Store visibility: merchants install from a direct link after Shopify approval.
+The checked-in `shopify.app.toml` configures the existing public **Volt Resale** app with `read_products`, an embedded app URL of `https://donut.juanquenga.com/shopify`, the legacy extension OAuth callback URLs, and production privacy and uninstall webhooks. The app is intended for limited App Store visibility: merchants install from a direct link after Shopify approval.
 
 | Webhook topic | Production endpoint |
 | --- | --- |
@@ -19,15 +19,15 @@ The checked-in `shopify.app.toml` configures the existing public **Volt Resale**
 | `shop/redact` | `https://sincere-trout-414.convex.site/api/shopify/webhooks/shop/redact` |
 | `app/uninstalled` | `https://sincere-trout-414.convex.site/api/shopify/webhooks/app/uninstalled` |
 
-The webhook handlers verify Shopify's signature over the raw body. Shop redaction and app uninstall remove the embedded installation and any legacy extension connection for that shop. Customer callbacks acknowledge the request because Volt stores no Shopify customer data.
+The webhook handlers verify Shopify's signature over the raw body. Shop redaction and app uninstall remove the embedded installation and any legacy extension connection for that shop. Customer callbacks acknowledge the request because Donut stores no Shopify customer data.
 
 Validate the configuration with `pnpm dlx @shopify/cli app config validate`. Release a new app version with `pnpm dlx @shopify/cli app deploy` only after the web frontend and Convex backend are live and a Shopify development store installation passes a full audit check.
 
 ## Authentication and data
 
-The embedded screen loads App Bridge, requests a short-lived Shopify ID token for each API call, and sends it to the same-origin `/api/shopify/admin/*` endpoints. Vercel forwards those three endpoints to production Convex, so the browser does not need a cross-origin connection to Convex. Convex verifies the signature, audience, expiry, issuer, and shop domain before exchanging the ID token for an expiring offline `read_products` token. The access and refresh tokens are encrypted at rest and keyed by shop. Shopify product data is read on demand; the audit does not copy the catalog into Volt's database. No Volt account or Chrome extension is needed to use the Admin audit.
+The embedded screen loads App Bridge, requests a short-lived Shopify ID token for each API call, and sends it to the same-origin `/api/shopify/admin/*` endpoints. Vercel forwards those three endpoints to production Convex, so the browser does not need a cross-origin connection to Convex. Convex verifies the signature, audience, expiry, issuer, and shop domain before exchanging the ID token for an expiring offline `read_products` token. The access and refresh tokens are encrypted at rest and keyed by shop. Shopify product data is read on demand; the audit does not copy the catalog into Donut's database. No Donut account or Chrome extension is needed to use the Admin audit.
 
-The extension's existing connection is separate. It uses Clerk sign-in, the authorization code grant, and encrypted tokens keyed by the Volt account. Its connection screen and Chrome tab group audit continue to work independently of the embedded Admin screen.
+The extension's existing connection is separate. It uses Clerk sign-in, the authorization code grant, and encrypted tokens keyed by the Donut account. Its connection screen and Chrome tab group audit continue to work independently of the embedded Admin screen.
 
 ## Convex configuration
 
@@ -44,18 +44,18 @@ Enter secrets interactively with `pnpm exec convex env set NAME` (add `--prod` f
 ## Embedded Admin check
 
 1. Install the app on a Shopify development store from Shopify's installation flow.
-2. Open **Volt Resale** inside Shopify Admin. Confirm that the connection identifies the correct `.myshopify.com` store.
+2. Open **Donut Resale** inside Shopify Admin. Confirm that the connection identifies the correct `.myshopify.com` store.
 3. Create or find products with known titles. Check search results and product links.
 4. Create a product and check that it appears in the previous-day audit on the next local calendar day, or test with a controlled date and timezone.
 5. Uninstall the app. Confirm the installation record and any connection for that shop are removed.
 
 ## Chrome extension check
 
-1. Sign in to Volt with Clerk.
+1. Sign in to Donut with Clerk.
 2. Open extension settings and find **Shopify product audit**.
 3. Select **Connect Shopify**. Choose a store detected from an open Shopify admin tab, or sign in to Shopify and open your store's admin in the new tab.
 4. Approve read-only product access in Shopify. The settings page shows the connected store.
-5. On the new tab page, select **Audit**. Volt opens yesterday's products in one Chrome tab group.
+5. On the new tab page, select **Audit**. Donut opens yesterday's products in one Chrome tab group.
 
 Shopify's review requirements and listing preparation are tracked in `docs/shopify-app-store-submission.md`.
 

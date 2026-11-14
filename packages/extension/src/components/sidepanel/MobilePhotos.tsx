@@ -407,7 +407,7 @@ export default function MobilePhotos({
         <MobileToolHeader
           icon={<ImagePlus className="h-4 w-4" />}
           title="Mobile Photos"
-          subtitle="Capture from paired Volt app"
+          subtitle="Capture from paired Donut app"
           status={status}
           error={error}
         />
@@ -418,7 +418,7 @@ export default function MobilePhotos({
           <div className="mb-5">
             <QrPairingPanel
               qrDataUrl={qrDataUrl}
-              hint="Scan with Volt, then open the Photos tab on the phone."
+              hint="Scan with Donut, then open the Photos tab on the phone."
             />
           </div>
         ) : showConnectionControls && isCreating ? (

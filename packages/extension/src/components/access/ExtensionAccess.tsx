@@ -225,13 +225,13 @@ function statusCopy(status: ExtensionAccessStatus | null, isSignedIn: boolean) {
         status.freeSessionsRemaining === 1 ? "" : "s"
       } remaining`;
     case "subscription":
-      return "Volt Pro subscription active";
+      return "Donut Pro subscription active";
     case "exhausted":
       return status.requiresSignIn
         ? "Five free sessions used"
         : status.subscriptionStatus === "expired"
-          ? "Volt Pro subscription expired"
-          : "Volt Pro subscription required";
+          ? "Donut Pro subscription expired"
+          : "Donut Pro subscription required";
   }
 }
 
@@ -320,7 +320,7 @@ export function ExtensionAccessPanel({
         <ClerkLoading>
           <AccountAccessMessage
             surface={surface}
-            message="Connecting Volt account…"
+            message="Connecting Donut account…"
           />
         </ClerkLoading>
         <ClerkLoaded>
@@ -378,7 +378,7 @@ export function ExtensionAccountControl({
       <ClerkLoading>
         <span
           className={accountControlClassName(surface, "is-loading")}
-          aria-label="Loading Volt account"
+          aria-label="Loading Donut account"
         />
       </ClerkLoading>
       <ClerkLoaded>
@@ -423,7 +423,7 @@ function ClerkAccountControl({ surface }: { surface: AccountControlSurface }) {
       <AccountMenu
         surface={surface}
         imageUrl={user?.imageUrl}
-        name={user?.fullName ?? "Volt account"}
+        name={user?.fullName ?? "Donut account"}
         email={user?.primaryEmailAddress?.emailAddress ?? ""}
         onManageAccount={() => clerk.openUserProfile()}
         onSignOut={() => void (CHROME_PROFILE_AUTH_ENABLED ? chrome.runtime.sendMessage({ action: "chromeProfileSignOut" }) : clerk.signOut())}
@@ -439,7 +439,7 @@ function ClerkAccountControl({ surface }: { surface: AccountControlSurface }) {
       type="button"
       className={accountControlClassName(surface, "is-signed-out")}
       onClick={() => void chrome.tabs.create({ url: CLERK_SIGN_IN_URL })}
-      title="Sign in to Volt"
+      title="Sign in to Donut"
     >
       <LogIn />
       <span>Sign in</span>
@@ -449,8 +449,8 @@ function ClerkAccountControl({ surface }: { surface: AccountControlSurface }) {
 
 const profileSignInMessages: Record<string, string> = {
   chrome_profile_signed_out: "Sign into a Google account in this Chrome profile first.",
-  account_not_linked: "This Google account is not linked to a Volt account. Use another sign-in method to link it.",
-  account_not_allowed: "This Google account cannot access Volt.",
+  account_not_linked: "This Google account is not linked to a Donut account. Use another sign-in method to link it.",
+  account_not_allowed: "This Google account cannot access Donut.",
   mfa_required: "Use the standard sign-in to complete your account's security checks.",
   additional_sign_in_required: "Use the standard sign-in to finish signing in.",
 };
@@ -538,7 +538,7 @@ function AccountMenu({
     <div
       ref={rootRef}
       className={`extension-account-menu extension-account-menu--${surface}`}
-      title={`Volt account: ${name}`}
+      title={`Donut account: ${name}`}
     >
       <button
         type="button"
@@ -561,7 +561,7 @@ function AccountMenu({
         <div
           className="extension-account-popover"
           role="dialog"
-          aria-label="Volt account"
+          aria-label="Donut account"
         >
           <div className="extension-account-preview">
             {imageUrl ? (
@@ -708,7 +708,7 @@ function ClerkAccessPanel({ surface }: { surface: AccessSurface }) {
             type="button"
             onClick={openWebSignIn}
             className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-emerald-700"
-            title="Sign in to Volt in a browser tab"
+            title="Sign in to Donut in a browser tab"
           >
             Sign in
             <ExternalLink className="h-3 w-3" />
@@ -729,7 +729,7 @@ function ClerkAccessPanel({ surface }: { surface: AccessSurface }) {
         <div className="mt-1.5 flex items-center justify-between gap-2 border-t border-amber-500/20 pt-1.5">
           <p className="m-0 text-[10px] leading-tight text-amber-700 dark:text-amber-300">
             {status.requiresSignIn
-              ? "Sign in, then subscribe in Volt for iPhone if needed."
+              ? "Sign in, then subscribe in Donut for iPhone if needed."
               : "Checkout is available only in the full iPhone app."}
           </p>
           <button

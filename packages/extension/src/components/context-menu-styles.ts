@@ -8,7 +8,7 @@ export const styles = () => `
       .menu{position:absolute;box-sizing:border-box;width:min(296px,calc(100vw - 16px));max-height:calc(100vh - 16px);padding:6px;background:#fff;color:#0f172a;border:1px solid rgba(15,23,42,.08);border-radius:16px;box-shadow:0 24px 48px -12px rgba(15,23,42,.22),0 8px 16px -8px rgba(15,23,42,.12),0 0 0 1px rgba(15,23,42,.02);overflow-x:hidden;overflow-y:auto;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;transform-origin:top left;animation:volt-menu-enter 110ms cubic-bezier(.2,.9,.3,1)}
       .hdr{display:flex;justify-content:space-between;align-items:center;height:34px;padding:0 2px 0 8px}
       .brand{display:flex;align-items:center;gap:7px;color:#0f172a;font:700 13px/1 ui-sans-serif,system-ui,-apple-system;letter-spacing:-.01em}
-      .brand-mark{width:16px;height:16px;fill:#34c759}
+      .brand-mark{width:16px;height:16px;object-fit:contain}
       .dismiss-btn{display:flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0;background:none;border:none;border-radius:8px;color:#94a3b8;cursor:pointer;transition:background .12s,color .12s}
       .dismiss-btn:hover{background:#f1f5f9;color:#334155}
       .dismiss-btn:focus-visible,.icon-btn:focus-visible{outline:2px solid #22c55e;outline-offset:1px}

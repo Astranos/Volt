@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PairingSessionSetupContent: View {
-    private let webScannerURLText = "voltresale.app/clip"
+    private let webScannerURLText = "donut.juanquenga.com/clip"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -13,7 +13,7 @@ struct PairingSessionSetupContent: View {
             VStack(spacing: 10) {
                 PairingSessionSetupStep(
                     systemImage: "desktopcomputer",
-                    title: "Open Volt on your computer",
+                    title: "Open Donut on your computer",
                     detail: "Use the Chrome extension side panel, or enter the URL below."
                 )
                 PairingSessionSetupStep(

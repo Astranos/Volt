@@ -38,7 +38,7 @@ struct ClipCaptureView: View {
                 .padding(.bottom, 32)
             }
             .background(ScannerTabLayout.background)
-            .navigationTitle("Volt")
+            .navigationTitle("Donut")
             .toolbar(.hidden, for: .navigationBar)
             .fullScreenCover(
                 isPresented: $isCaptureSessionPresented,
@@ -230,7 +230,7 @@ struct ClipSettingsSheet: View {
             List {
                 Section("App Clip") {
                     Label("Guest workspace session", systemImage: "person.crop.circle")
-                    Text("Scan a Volt workspace QR to capture without signing in. Keep this App Clip open while uploads finish.")
+                    Text("Scan a Donut workspace QR to capture without signing in. Keep this App Clip open while uploads finish.")
                         .foregroundStyle(.secondary)
                 }
                 Section("Permissions") {

@@ -97,7 +97,7 @@ export function ScannerOverview({ batches }: { batches: CaptureBatch[] }) {
             Keep your desk and phone connected
           </h2>
           <p className="mt-2 max-w-md text-sm leading-6 text-zinc-600">
-            Capture in the Volt iPhone app with the same account. Your barcodes,
+            Capture in the Donut iPhone app with the same account. Your barcodes,
             text, and photos appear here automatically.
           </p>
         </div>

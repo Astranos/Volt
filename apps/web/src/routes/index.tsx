@@ -27,9 +27,10 @@ export const Route = createFileRoute("/")({
     meta: [
       {
         name: "apple-itunes-app",
-        content: "app-id=6771770148, app-argument=https://voltresale.app/",
+        content: "app-id=6771770148, app-argument=https://donut.juanquenga.com/",
       },
     ],
+    links: [{ rel: "canonical", href: "https://donut.juanquenga.com/" }],
   }),
   component: Home,
 });
@@ -189,7 +190,7 @@ export function HomePage({ header }: { header: ReactNode }) {
               className="mx-auto mt-5 max-w-3xl text-lg leading-8 text-zinc-600 sm:text-xl"
               variants={fadeUp}
             >
-              Volt is a set of tools that makes buying and reselling quicker by
+              Donut is a set of tools that makes buying and reselling quicker by
               streamlining the process of evaluating items, capturing details,
               and preparing listings.
             </motion.p>
@@ -365,7 +366,7 @@ function MobileFeatureCarousel() {
     <div
       ref={carouselRef}
       className="mobile-feature-carousel min-w-0 overflow-x-auto overflow-y-hidden py-1"
-      aria-label="Volt mobile capture screenshots"
+      aria-label="Donut mobile capture screenshots"
     >
       <div className="mobile-feature-track flex w-max">
         {[0, 1, 2].map((groupIndex) => (
@@ -411,7 +412,7 @@ function CaptureSection() {
             className="max-w-xl text-base leading-7 text-zinc-600"
             variants={fadeUp}
           >
-            Volt adds focused controls to the browser surfaces resellers already
+            Donut adds focused controls to the browser surfaces resellers already
             use: UPC pages, product pages, Shopify Admin, and eBay sold-listing
             checks.
           </motion.p>
@@ -443,7 +444,7 @@ function ChromeExtensionShowcase() {
           title="Context menu searches"
         />
         <ExtensionFeatureCard
-          body="When eBay is showing asking prices, Volt prompts you to switch to sold listings before pricing."
+          body="When eBay is showing asking prices, Donut prompts you to switch to sold listings before pricing."
           image={extensionScreenshots.activeWarning}
           imageClassName="h-[21rem] object-contain"
           mediaClassName="bg-zinc-100 p-4"
@@ -549,7 +550,7 @@ function BrowserWorkspaceMock() {
         </div>
         <div className="flex items-center gap-2 text-xs font-medium text-zinc-500">
           <Chrome size={14} />
-          Volt Chrome extension
+          Donut Chrome extension
         </div>
       </div>
       <div className="relative min-h-[44rem] overflow-hidden bg-gradient-to-b from-white to-zinc-100 px-5 py-5 sm:px-8 lg:px-12">
@@ -557,8 +558,8 @@ function BrowserWorkspaceMock() {
         <div className="relative mx-auto max-w-5xl">
           <div className="mb-8 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <img src="/favicon.svg" alt="" className="size-8" />
-              <h3 className="text-base font-semibold text-zinc-950">Volt</h3>
+              <img src="/brand/donut.svg" alt="" className="size-8" />
+              <h3 className="text-base font-semibold text-zinc-950">Donut</h3>
             </div>
             <PairingStatus status="paired" />
           </div>
@@ -641,8 +642,8 @@ function BrowserWorkspaceMock() {
                 </div>
                 <div className="space-y-1">
                   <RecentRow
-                    title="Volt - Chrome scanner session"
-                    url="voltresale.app/clip"
+                    title="Donut - Chrome scanner session"
+                    url="donut.juanquenga.com/clip"
                     active
                   />
                   <RecentRow
@@ -697,8 +698,8 @@ function MobileNewTabDemo() {
         <div className="relative">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <img src="/favicon.svg" alt="" className="size-7" />
-              <span className="text-sm font-semibold text-zinc-950">Volt</span>
+              <img src="/brand/donut.svg" alt="" className="size-7" />
+              <span className="text-sm font-semibold text-zinc-950">Donut</span>
             </div>
             <PairingStatus status="paired" />
           </div>

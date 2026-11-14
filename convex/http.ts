@@ -338,6 +338,7 @@ const appClipGrantCreateHandler = httpAction(async (ctx, request) => {
     clerkUserId: access.args.clerkUserId,
     ...(access.args.name ? { ownerName: access.args.name } : {}),
   });
+  // Keep QR links on the legacy host until updated iOS binaries and the Donut App Clip experience ship.
   const url = new URL("https://voltresale.app/clip");
   url.searchParams.set("guestCloudGrant", grant.guestCloudGrant);
   url.searchParams.set("guestCloudExpiresAt", String(grant.expiresAt));

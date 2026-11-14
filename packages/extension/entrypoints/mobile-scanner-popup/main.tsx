@@ -117,11 +117,11 @@ function MobileScannerPopup() {
           <div className="popup-qr-frame">
             <img
               src={qrDataUrl}
-              alt="Open this workspace in the Volt App Clip"
+              alt="Open this workspace in the Donut App Clip"
               className="popup-qr-image"
             />
           </div>
-          <p>Scan with your iPhone to open this workspace in the Volt App Clip.</p>
+          <p>Scan with your iPhone to open this workspace in the Donut App Clip.</p>
         </div>
       ) : (
         <div className="popup-message">

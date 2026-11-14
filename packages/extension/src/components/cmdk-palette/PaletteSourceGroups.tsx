@@ -103,7 +103,7 @@ export function PaletteSourceGroups({
             return (
               <React.Fragment key="quickLinks">
                 {csvLinksLoading && (
-                  <Command.Group heading="Volt Links" className="cmdk-group">
+                  <Command.Group heading="Donut Links" className="cmdk-group">
                     {[1, 2, 3].map((i) => (
                       <div key={i} className="cmdk-item px-4 py-3">
                         <div className="flex items-center gap-3">

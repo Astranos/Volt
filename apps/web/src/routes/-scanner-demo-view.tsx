@@ -18,7 +18,7 @@ export function ScannerDemoView({ captures, photos, reviewInputRef, reviewInputV
                   Scan to this browser.
                 </h1>
                 <p className="mt-3 max-w-xl text-sm leading-6 text-zinc-600">
-                  No Chrome extension needed. Pair Volt on iPhone with this tab,
+                  No Chrome extension needed. Pair Donut on iPhone with this tab,
                   then copy text results or download photo batches before
                   closing the session.
                 </p>

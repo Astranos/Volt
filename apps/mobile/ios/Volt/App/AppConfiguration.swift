@@ -2,7 +2,7 @@ import Foundation
 
 enum AppConfiguration {
     static let clerkPublishableKey = "pk_live_Y2xlcmsudm9sdHJlc2FsZS5hcHAk"
-    static let privacyPolicyURL = URL(string: "https://voltresale.app/privacy")!
+    static let privacyPolicyURL = URL(string: "https://donut.juanquenga.com/privacy")!
     static let termsOfUseURL = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!
     static let defaultStoreKitProductID = "com.volt.mobile.pro.monthly"
     static let defaultAppStoreID = "6771770148"
@@ -64,7 +64,7 @@ enum AppConfiguration {
 
     private static func requiredURL(_ value: String) -> URL {
         guard let url = URL(string: value) else {
-            fatalError("Invalid bundled Volt URL: \(value)")
+            fatalError("Invalid bundled Donut URL: \(value)")
         }
         return url
     }

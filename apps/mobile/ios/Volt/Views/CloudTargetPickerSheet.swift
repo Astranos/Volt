@@ -67,7 +67,7 @@ struct CloudTargetPickerSheet: View {
                 Section {
                     targetButton(
                         title: "This iPhone",
-                        subtitle: "Save to Volt without typing into a computer.",
+                        subtitle: "Save to Donut without typing into a computer.",
                         systemImage: "iphone",
                         deviceId: nil
                     )
@@ -78,7 +78,7 @@ struct CloudTargetPickerSheet: View {
                         ContentUnavailableView(
                             "No Computers Online",
                             systemImage: "desktopcomputer",
-                            description: Text("Open the Volt extension on a signed-in computer to make it available.")
+                            description: Text("Open the Donut extension on a signed-in computer to make it available.")
                         )
                     } else {
                         ForEach(store.cloudWorkspace.availableComputers) { computer in
@@ -101,7 +101,7 @@ struct CloudTargetPickerSheet: View {
                                     .frame(width: 28)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(computer.label)
-                                    Text("Open the Volt extension on this computer to reconnect.")
+                                    Text("Open the Donut extension on this computer to reconnect.")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }

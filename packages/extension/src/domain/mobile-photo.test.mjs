@@ -49,6 +49,6 @@ test("buildMobilePhotoDownloadFilename avoids disposable session and batch folde
       photoBatchId: "batch/456",
       sessionId: "abc/123",
     }),
-    "Volt Photos/photo-1-front-label.webp"
+    "Donut Photos/photo-1-front-label.webp"
   );
 });

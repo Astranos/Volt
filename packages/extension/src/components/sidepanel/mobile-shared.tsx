@@ -131,7 +131,7 @@ export function QrPairingPanel({
       <div className="liquid-glass concentric-xl relative w-full max-w-[280px] bg-white p-4 dark:bg-white">
         <img
           src={qrDataUrl}
-          alt="Scan this QR code with the Volt mobile app"
+          alt="Scan this QR code with the Donut mobile app"
           className="concentric-lg aspect-square w-full"
         />
         <div className="liquid-glass concentric-md absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center bg-white p-2 dark:bg-white">

@@ -35,7 +35,7 @@ const rise: Variants = {
 };
 
 /**
- * A split page: the dark half shows what Volt does, the light half hosts
+ * A split page: the dark half shows what Donut does, the light half hosts
  * whichever Clerk flow the route needs.
  */
 export function AuthPage({
@@ -57,8 +57,8 @@ export function AuthPage({
         <div className="pointer-events-none absolute -bottom-40 right-0 size-[28rem] rounded-full bg-emerald-400/10 blur-3xl" />
 
         <a href="/" className="relative flex w-fit items-center gap-2">
-          <img src="/favicon.svg" alt="" className="size-8" />
-          <span className="text-sm font-semibold">Volt</span>
+          <img src="/brand/donut.svg" alt="" className="size-8" />
+          <span className="text-sm font-semibold">Donut</span>
         </a>
 
         <motion.div
@@ -94,15 +94,15 @@ export function AuthPage({
         </motion.div>
 
         <p className="relative text-xs text-zinc-500">
-          Volt is an independent resale workflow project.
+          Donut is an independent resale workflow project.
         </p>
       </section>
 
       <section className="relative flex min-h-screen flex-col justify-center px-4 py-12 sm:px-8 lg:px-14">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_45%_at_50%_0%,rgba(16,185,129,0.10),transparent),radial-gradient(ellipse_50%_35%_at_100%_100%,rgba(16,185,129,0.06),transparent)]" />
         <a href="/" className="relative mb-10 flex items-center gap-2 lg:hidden">
-          <img src="/favicon.svg" alt="" className="size-8" />
-          <span className="text-sm font-semibold">Volt</span>
+          <img src="/brand/donut.svg" alt="" className="size-8" />
+          <span className="text-sm font-semibold">Donut</span>
         </a>
         <div className="relative mx-auto w-full max-w-[25rem]">
           {!authConfigured ? (

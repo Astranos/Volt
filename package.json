@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "icons:generate": "node scripts/generate-brand-assets.mjs",
+    "icons:check": "node scripts/generate-brand-assets.mjs --check",
     "dev:extension": "pnpm --filter @volt/extension dev",
     "dev:mobile:appclip": "pnpm --filter @volt/mobile ios:sim:appclip",
     "dev:mobile:appclip:device": "pnpm --filter @volt/mobile ios:device:appclip",

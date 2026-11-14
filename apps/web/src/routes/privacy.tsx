@@ -7,10 +7,10 @@ export const Route = createFileRoute("/privacy")({
     meta: [
       {
         name: "description",
-        content: "Privacy policy for the Volt Scanner app and Chrome extension.",
+        content: "Privacy policy for the Donut Scanner app and Chrome extension.",
       },
     ],
-    title: "Privacy Policy - Volt",
+    title: "Privacy Policy - Donut",
   }),
   component: PrivacyPage,
 });
@@ -21,7 +21,7 @@ function PrivacyPage() {
       <SiteHeader />
       <main className="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:py-24">
         <p className="text-sm font-semibold uppercase tracking-[0.18em] text-green-700">
-          Volt Scanner
+          Donut Scanner
         </p>
         <h1 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
           Privacy Policy
@@ -29,9 +29,9 @@ function PrivacyPage() {
         <p className="mt-4 text-sm text-zinc-500">Effective October 25, 2026</p>
 
         <div className="mt-12 space-y-10 text-base leading-7 text-zinc-700">
-          <PolicySection title="What Volt processes">
+          <PolicySection title="What Donut processes">
             <p>
-              Volt processes account and workspace identifiers supplied by Clerk,
+              Donut processes account and workspace identifiers supplied by Clerk,
               anonymous trial identifiers, scanner session metadata, subscription
               status, and the captures you choose to sync. Synced captures may
               include text, barcodes, dictated notes, and photos.
@@ -43,24 +43,24 @@ function PrivacyPage() {
               Information is used to authenticate you, pair the iPhone app or App
               Clip with the Chrome extension, synchronize your private scanner
               workspace, enforce service limits, restore purchases, prevent abuse,
-              and operate and improve Volt.
+              and operate and improve Donut.
             </p>
           </PolicySection>
 
           <PolicySection title="Shopify product audit">
             <p>
-              When you install Volt Resale on a Shopify store, Volt stores the
+              When you install Donut Resale on a Shopify store, Donut stores the
               store&apos;s permanent domain and encrypted Shopify access and refresh
-              tokens. Volt uses read-only product access to show products created
+              tokens. Donut uses read-only product access to show products created
               yesterday and to search the store&apos;s catalog. Results can include
               product names, status, prices, inventory, images, SKUs, and condition
-              details. Volt does not keep a copy of the product catalog in its
+              details. Donut does not keep a copy of the product catalog in its
               database or request Shopify customer data.
             </p>
             <p className="mt-3">
-              The Shopify Admin app works without a Volt account. If you separately
-              connect the Chrome extension, Volt stores that connection under your
-              signed-in Volt account. Uninstalling the Shopify app removes saved
+              The Shopify Admin app works without a Donut account. If you separately
+              connect the Chrome extension, Donut stores that connection under your
+              signed-in Donut account. Uninstalling the Shopify app removes saved
               access for that store. You can also disconnect from extension settings.
             </p>
           </PolicySection>
@@ -69,10 +69,10 @@ function PrivacyPage() {
             <p>
               The Chrome extension&apos;s handbook stores the entries you write,
               such as store phone numbers, addresses, setup guides, and logins
-              your team saves, in your signed-in Volt account&apos;s workspace.
+              your team saves, in your signed-in Donut account&apos;s workspace.
               Saved usernames and passwords are encrypted before they are stored,
               are hidden in lists and search, and are decrypted only when someone
-              signed in to that account reveals or copies one. Volt does not use
+              signed in to that account reveals or copies one. Donut does not use
               handbook entries for any other purpose. Deleting an entry removes it.
             </p>
           </PolicySection>
@@ -85,7 +85,7 @@ function PrivacyPage() {
               with Convex. Private cloud photos are stored
               in a non-public Cloudflare R2 bucket and are accessed through
               short-lived signed URLs. Apple processes App Store purchases, and
-              Vercel hosts Volt&apos;s public website. These providers process data
+              Vercel hosts Donut&apos;s public website. These providers process data
               under their own terms and privacy commitments.
             </p>
           </PolicySection>
@@ -93,7 +93,7 @@ function PrivacyPage() {
           <PolicySection title="Pairing and device access">
             <p>
               Live scanner control uses an encrypted WebRTC connection between
-              your devices. Volt&apos;s signaling service exchanges the limited
+              your devices. Donut&apos;s signaling service exchanges the limited
               connection metadata needed to establish that session. When cloud
               sync is enabled, captures you send are also copied to your authenticated
               workspace so they can appear on your other devices.
@@ -102,8 +102,8 @@ function PrivacyPage() {
 
           <PolicySection title="Sharing and sale of data">
             <p>
-              Volt does not sell your personal information. Information is shared
-              only with the service providers needed to operate Volt, when you direct
+              Donut does not sell your personal information. Information is shared
+              only with the service providers needed to operate Donut, when you direct
               us to share it, or when disclosure is required by law or necessary to
               protect the service and its users.
             </p>
@@ -111,8 +111,8 @@ function PrivacyPage() {
 
           <PolicySection title="Your choices">
             <p>
-              You control which captures are sent to Volt and can delete results
-              from the workspace interface. You can manage or cancel a Volt Pro
+              You control which captures are sent to Donut and can delete results
+              from the workspace interface. You can manage or cancel a Donut Pro
               subscription through your Apple Account. To request access to or
               deletion of account data, contact us through the support link below.
             </p>
@@ -120,7 +120,7 @@ function PrivacyPage() {
 
           <PolicySection title="Security and retention">
             <p>
-              Volt uses scoped credentials, authenticated workspace boundaries,
+              Donut uses scoped credentials, authenticated workspace boundaries,
               private object storage, and encrypted transport to protect data. Data
               is retained while needed to provide the service, resolve disputes,
               meet legal obligations, and maintain security. No system can guarantee
@@ -130,7 +130,7 @@ function PrivacyPage() {
 
           <PolicySection title="Children and changes">
             <p>
-              Volt is not directed to children under 13. We may update this policy
+              Donut is not directed to children under 13. We may update this policy
               as the service changes; the effective date above identifies the latest
               version.
             </p>
@@ -144,7 +144,7 @@ function PrivacyPage() {
               </a>
               . For other questions, visit{` `}
               <a className="font-semibold text-green-700 underline" href={supportUrl}>
-                Volt support
+                Donut support
               </a>.
             </p>
           </PolicySection>

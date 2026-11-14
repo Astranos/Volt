@@ -85,7 +85,7 @@ final class StoreKitSubscriptionStore {
                 }
                 try await synchronize(verification, using: clerk, finishesTransaction: true)
                 await accessStore.refresh(using: clerk)
-                noticeMessage = "Your purchase was verified. Volt access is up to date."
+                noticeMessage = "Your purchase was verified. Donut access is up to date."
             case .pending:
                 noticeMessage = "The purchase is pending App Store approval."
             case .userCancelled:
@@ -116,7 +116,7 @@ final class StoreKitSubscriptionStore {
             try await AppStore.sync()
             try await synchronizeCurrentEntitlements(using: clerk)
             await accessStore.refresh(using: clerk)
-            noticeMessage = "App Store purchases were restored and checked by Volt."
+            noticeMessage = "App Store purchases were restored and checked by Donut."
         } catch {
             errorMessage = error.localizedDescription
         }

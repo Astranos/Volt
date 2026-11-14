@@ -1,9 +1,9 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "bb8ca207d552d55ac6cab546f963f0af"
-application_url = "https://voltresale.app/shopify"
+application_url = "https://donut.juanquenga.com/shopify"
 embedded = true
-name = "Volt Resale"
+name = "Donut"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes

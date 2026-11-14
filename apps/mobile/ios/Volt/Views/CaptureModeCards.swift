@@ -93,7 +93,7 @@ struct ComputerAvailabilityCard: View {
     private var computerSubtitle: String {
         let onlineCount = store.cloudWorkspace.availableComputers.count
         if onlineCount == 0 {
-            return "No computers are online. Capture still works and syncs to Volt."
+            return "No computers are online. Capture still works and syncs to Donut."
         }
         return "\(onlineCount) computer\(onlineCount == 1 ? " is" : "s are") available"
     }

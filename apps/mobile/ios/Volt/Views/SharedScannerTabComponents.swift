@@ -328,7 +328,7 @@ struct ScannerHomeControls: View {
         .rootTabBarGlass(isSelected: false)
         .disabled(!isPhotoPickerEnabled)
         .accessibilityLabel("Add Photos")
-        .accessibilityHint("Imports photos from your library into Volt")
+        .accessibilityHint("Imports photos from your library into Donut")
     }
 
     private var scanButton: some View {
@@ -431,7 +431,7 @@ struct ScannerHomeHeader: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            Text("Volt")
+            Text("Donut")
                 .font(.largeTitle.bold())
                 .frame(maxWidth: .infinity, alignment: .leading)
             chip

@@ -83,7 +83,7 @@ export function CsvCacheSettings({
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = "volt-quicklinks-template.csv";
+      link.download = "donut-quicklinks-template.csv";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -132,7 +132,7 @@ export function CsvCacheSettings({
                 </button>
               </div>
               <p className="text-sm text-muted-foreground mb-4">
-                Enter a custom Google Sheets CSV URL to load your own Volt
+                Enter a custom Google Sheets CSV URL to load your own Donut
                 Links. Leave empty to use the default URL.
               </p>
               <input
@@ -169,7 +169,7 @@ export function CsvCacheSettings({
                   Cache Management
                 </h3>
                 <p className="text-sm text-muted-foreground mb-3">
-                  Volt Links are cached for 30 minutes to improve performance.
+                  Donut Links are cached for 30 minutes to improve performance.
                   Use these options to manage your CSV cache.
                 </p>
                 <div className="text-xs text-muted-foreground space-y-1">

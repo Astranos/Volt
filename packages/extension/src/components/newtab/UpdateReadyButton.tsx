@@ -4,7 +4,7 @@ import { REOPEN_NEW_TAB_AFTER_UPDATE_KEY, UPDATE_AVAILABLE_VERSION_KEY } from ".
 import { compareVersions } from "./release-notes";
 
 export async function restartVoltForUpdate() {
-  let message = "Restarting Volt closes other Volt tabs, side panels, and popups. Unsaved handbook edits there will be lost. Restart now?";
+  let message = "Restarting Donut closes other Donut tabs, side panels, and popups. Unsaved handbook edits there will be lost. Restart now?";
   if (typeof chrome.runtime.getContexts === "function") {
     try {
       const [contexts, currentTab] = await Promise.all([
@@ -19,11 +19,11 @@ export async function restartVoltForUpdate() {
         const panels = others.filter((context) => context.contextType === "SIDE_PANEL").length;
         const popups = others.filter((context) => context.contextType === "POPUP").length;
         const closing = [
-          tabs ? `${tabs} other Volt ${tabs === 1 ? "tab" : "tabs"}` : "",
-          panels ? panels === 1 ? "the Volt side panel" : `${panels} Volt side panels` : "",
-          popups ? popups === 1 ? "a Volt popup" : `${popups} Volt popups` : "",
+          tabs ? `${tabs} other Donut ${tabs === 1 ? "tab" : "tabs"}` : "",
+          panels ? panels === 1 ? "the Donut side panel" : `${panels} Donut side panels` : "",
+          popups ? popups === 1 ? "a Donut popup" : `${popups} Donut popups` : "",
         ].filter(Boolean);
-        message = closing.length ? `Restarting Volt closes ${closing.join(" and ")}. Unsaved handbook edits there will be lost. Restart now?` : "";
+        message = closing.length ? `Restarting Donut closes ${closing.join(" and ")}. Unsaved handbook edits there will be lost. Restart now?` : "";
       }
     } catch {
       // If the open pages can't be checked, keep the generic confirmation.
@@ -34,7 +34,7 @@ export async function restartVoltForUpdate() {
   chrome.runtime.reload();
 }
 
-/** Shown once Chrome has downloaded a newer Volt that's waiting for a restart. */
+/** Shown once Chrome has downloaded a newer Donut that's waiting for a restart. */
 export function UpdateReadyButton() {
   const [ready, setReady] = useState<string | null>(null);
 
@@ -55,9 +55,9 @@ export function UpdateReadyButton() {
   const restart = () => void restartVoltForUpdate();
 
   return <button
-    aria-label={`Restart Volt to install version ${ready}`}
+    aria-label={`Restart Donut to install version ${ready}`}
     className="newtab-settings-button newtab-update-button"
-    data-tooltip={`Restart Volt to install ${ready}`}
+    data-tooltip={`Restart Donut to install ${ready}`}
     onClick={restart}
     type="button"
   >

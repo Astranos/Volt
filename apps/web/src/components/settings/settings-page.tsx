@@ -44,7 +44,7 @@ export function SettingsContent({
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-950">Settings</h1>
-        <p className="mt-1 text-sm leading-6 text-zinc-500">Your account, capture storage, and the Volt apps.</p>
+        <p className="mt-1 text-sm leading-6 text-zinc-500">Your account, capture storage, and the Donut apps.</p>
       </header>
 
       <Section title="Account" description="The account your phone and Chrome sign in with.">
@@ -85,14 +85,14 @@ export function SettingsContent({
         <div className="divide-y divide-zinc-100">
           <AppRow
             icon={<Smartphone className="size-5" aria-hidden="true" />}
-            title="Volt for iPhone"
+            title="Donut for iPhone"
             body="Scan barcodes, read labels, and take listing photos. Sign in with this account."
             href={mobileAppDownloadUrl}
             cta="App Store"
           />
           <AppRow
             icon={<Chrome className="size-5" aria-hidden="true" />}
-            title="Volt for Chrome"
+            title="Donut for Chrome"
             body="Search, offers, and the handbook in your browser. Captures appear there too."
             href={chromeExtensionDownloadUrl}
             cta="Chrome Web Store"

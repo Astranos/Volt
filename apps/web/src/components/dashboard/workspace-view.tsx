@@ -174,7 +174,7 @@ export function WorkspaceContent({
           );
           const anchor = document.createElement("a");
           anchor.href = url;
-          anchor.download = `volt-captures-${new Date().toISOString().slice(0, 10)}.csv`;
+          anchor.download = `donut-captures-${new Date().toISOString().slice(0, 10)}.csv`;
           anchor.click();
           setTimeout(() => URL.revokeObjectURL(url), 1000);
         }}
@@ -576,7 +576,7 @@ function FirstCaptureCard() {
             Your workspace is ready and waiting for its first scan.
           </h2>
           <p className="mt-4 text-sm leading-7 text-zinc-600">
-            Sign in to the Volt app on your iPhone with this same account, then
+            Sign in to the Donut app on your iPhone with this same account, then
             scan a barcode, read a label, or shoot a listing photo. Captures
             land here as soon as the phone accepts them — no pairing, no QR
             code, and this page updates while you shoot.
@@ -592,7 +592,7 @@ function FirstCaptureCard() {
         <div className="hidden w-56 shrink-0 overflow-hidden rounded-[1.2rem] border border-zinc-200 lg:block">
           <img
             src="/assets/product/mobile-07-capture-results.png"
-            alt="Capture results in the Volt iPhone app"
+            alt="Capture results in the Donut iPhone app"
             className="w-full object-contain"
           />
         </div>

@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 const read = (path) => readFileSync(new URL(`../ios/${path}`, import.meta.url), "utf8");
@@ -7,6 +10,57 @@ const store = read("Volt/Services/QRSignInStore.swift");
 const app = read("Volt/App/VoltApp.swift");
 const landing = read("Volt/Views/AuthenticationLandingView.swift");
 const project = read("Volt.xcodeproj/project.pbxproj");
+
+test("Donut and legacy sign-in links validate through the native URL parser", {
+  skip: process.platform !== "darwin" && "requires Swift on macOS",
+}, () => {
+  const hosts = store.match(/static let signInHosts[^\n]+/)[0];
+  const path = store.match(/static let signInPath[^\n]+/)[0];
+  const methods = store.slice(store.indexOf("static func signInCode("), store.indexOf("private static func message("));
+  const stringExtension = store.slice(store.indexOf("private extension String {"), store.indexOf("enum MobileSignInAPIError:"));
+  const directory = mkdtempSync(join(tmpdir(), "donut-sign-in-links-"));
+  try {
+    const fixture = join(directory, "main.swift");
+    writeFileSync(fixture, `
+import Foundation
+enum QRSignInStore {
+  ${hosts}
+  ${path}
+  ${methods}
+}
+${stringExtension}
+for host in ["donut.juanquenga.com", "voltresale.app", "DONUT.JUANQUENGA.COM"] {
+  precondition(QRSignInStore.signInCode(from: URL(string: "https://\\(host)/app-sign-in#code=one-use")!) == "one-use")
+  precondition(QRSignInStore.signInCode(from: URL(string: "https://\\(host)/app-sign-in/#code=one-use")!) == "one-use")
+  precondition(QRSignInStore.isAppClipURL(URL(string: "https://\\(host)/clip?guestCloudGrant=grant")!))
+}
+for value in [
+  "https://donut.juanquenga.com.evil.test/app-sign-in#code=one-use",
+  "https://evil.test/app-sign-in#code=one-use",
+  "http://donut.juanquenga.com/app-sign-in#code=one-use",
+  "https://donut.juanquenga.com/other#code=one-use",
+  "https://donut.juanquenga.com/app-sign-in?code=one-use",
+  "https://donut.juanquenga.com/app-sign-in#code=",
+] {
+  precondition(QRSignInStore.signInCode(from: URL(string: value)!) == nil, value)
+}
+precondition(!QRSignInStore.isAppClipURL(URL(string: "https://donut.juanquenga.com.evil.test/clip")!))
+`);
+    execFileSync("xcrun", ["swift", "-swift-version", "6", fixture], { stdio: "pipe" });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("the full app and App Clip associate both Donut and legacy domains", () => {
+  for (const path of ["Volt/Volt.entitlements", "VoltClip/VoltClip.entitlements"]) {
+    const source = read(path);
+    for (const host of ["donut.juanquenga.com", "voltresale.app"]) {
+      assert.ok(source.includes(`<string>appclips:${host}</string>`));
+      assert.ok(source.includes(`<string>applinks:${host}</string>`));
+    }
+  }
+});
 
 test("sign-in links are handled before Clerk and never switch a signed-in account", () => {
   const handler = app.slice(app.indexOf("private func handleIncomingURL"));

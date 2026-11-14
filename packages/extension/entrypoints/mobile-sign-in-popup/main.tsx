@@ -108,9 +108,9 @@ function MobileSignInPopup() {
         <div className="popup-qr-stack">
           <h1 className="sign-in-title">Scan with your iPhone</h1>
           <div className="popup-qr-frame">
-            <img src={state.qrDataUrl} alt="QR code that signs in the Volt iPhone app" className="popup-qr-image" />
+            <img src={state.qrDataUrl} alt="QR code that signs in the Donut iPhone app" className="popup-qr-image" />
           </div>
-          <p>Scan this with the Volt app on the iPhone that asked to sign in. It only works on that iPhone.</p>
+          <p>Scan this with the Donut app on the iPhone that asked to sign in. It only works on that iPhone.</p>
           <span className="sign-in-expiry">Expires in {formatRemaining(state.expiresAt - now)}</span>
           <button className="sign-in-dismiss" onClick={() => void dismiss()} disabled={dismissing}>
             I didn't ask for this

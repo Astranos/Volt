@@ -45,8 +45,8 @@ export default function HandbookPanel(_props: { onClose?: () => void }) {
         <HandbookNotice
           icon={<LogIn />}
           title="Sign in to see the handbook"
-          copy="Store info, logins, and setup guides are saved to your Volt account."
-          action={{ label: "Sign in to Volt", onClick: openSignIn }}
+          copy="Store info, logins, and setup guides are saved to your Donut account."
+          action={{ label: "Sign in to Donut", onClick: openSignIn }}
         />
       </div>
     );

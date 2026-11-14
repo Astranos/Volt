@@ -345,7 +345,7 @@ private struct GalleryPage: View {
                 ContentUnavailableView(
                     "Not on this iPhone",
                     systemImage: "photo",
-                    description: Text("This photo was uploaded before Volt kept copies on the phone. It was already delivered to your workspace.")
+                    description: Text("This photo was uploaded before Donut kept copies on the phone. It was already delivered to your workspace.")
                 )
                 .foregroundStyle(.white)
             }

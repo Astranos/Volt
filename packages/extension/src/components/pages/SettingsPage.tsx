@@ -64,19 +64,19 @@ export default function SettingsPage() {
         <div className="flex h-16 items-center px-6">
           <div className="flex items-center gap-3">
             <img
-              src="/assets/icons/volt.webp"
-              alt="Volt"
+              src="/assets/icons/logo-hd.svg"
+              alt="Donut"
               className="w-10 h-10"
             />
             <div>
-              <h1 className="text-lg font-bold">Volt Settings</h1>
+              <h1 className="text-lg font-bold">Donut Settings</h1>
               {version && (
                 <p className="text-xs text-muted-foreground">
                   Version {version}
                 </p>
               )}
               <p className="text-xs text-muted-foreground">
-                Sign in from the Volt side panel to sync settings across computers.
+                Sign in from the Donut side panel to sync settings across computers.
               </p>
             </div>
           </div>

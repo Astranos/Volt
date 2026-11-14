@@ -54,7 +54,7 @@ export default function NewTab() {
   }, []);
 
   useEffect(() => {
-    document.title = "Volt";
+    document.title = "Donut";
   }, []);
 
   // Height that reaches the bottom of the viewport, used when Shopify results
@@ -129,7 +129,7 @@ export default function NewTab() {
     try {
       const connection = await getShopifyAuditConnection();
       if (!connection) {
-        setAuditNotice("Connect your Shopify store in Volt settings first.");
+        setAuditNotice("Connect your Shopify store in Donut settings first.");
         await chrome.tabs.create({ url: chrome.runtime.getURL("/options.html#shopify-audit"), active: true });
         return;
       }
@@ -170,7 +170,7 @@ export default function NewTab() {
               alt=""
               className="newtab-header-logo"
             />
-            <h1 className="newtab-header-title">Volt</h1>
+            <h1 className="newtab-header-title">Donut</h1>
           </div>
           <div className="newtab-header-actions">
             <UpdateReadyButton />
@@ -224,8 +224,8 @@ export default function NewTab() {
               onClick={() =>
                 void chrome.runtime.sendMessage({ action: "openMobileCapturePopup" })
               }
-              aria-label="Open Volt App Clip QR code"
-              data-tooltip="Connect Volt App Clip"
+              aria-label="Open Donut App Clip QR code"
+              data-tooltip="Connect Donut App Clip"
             >
               <AppClipQrIcon />
             </button>
@@ -233,7 +233,7 @@ export default function NewTab() {
               type="button"
               className="newtab-settings-button"
               onClick={() => void chrome.runtime.sendMessage({ action: "open-settings" })}
-              aria-label="Open Volt settings"
+              aria-label="Open Donut settings"
               data-tooltip="Settings"
             >
               <Settings />
@@ -271,7 +271,7 @@ export default function NewTab() {
         <footer className="newtab-footer">
           <button className="newtab-whats-new-link" onClick={whatsNew.show} type="button">
             {whatsNew.unread && <span className="newtab-whats-new-unread" aria-label="Unread" />}
-            What’s new in Volt
+            What’s new in Donut
           </button>
         </footer>
       </div>

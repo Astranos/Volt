@@ -1,8 +1,8 @@
-Volt turns your iPhone into a fast companion scanner for resale and inventory workflows.
+Donut turns your iPhone into a fast companion scanner for resale and inventory workflows.
 
-Sign in with the same Volt account on iPhone and Chrome, then capture the product details that slow down listing work. Results save on your phone, sync to your private Volt workspace, and can be inserted into the computer you select.
+Sign in with the same Donut account on iPhone and Chrome, then capture the product details that slow down listing work. Results save on your phone, sync to your private Donut workspace, and can be inserted into the computer you select.
 
-Use Volt Scanner to:
+Use Donut Scanner to:
 - Scan product barcodes from your phone
 - Extract and review text with on-device OCR
 - Capture product photos or upload existing images
@@ -12,6 +12,6 @@ Use Volt Scanner to:
 
 Built for resale and inventory workflows where speed, accuracy, and fewer manual steps matter.
 
-Volt Scanner is free. Sign in to scan, keep your history, sync captures to your private Volt workspace, and connect your computers. Existing App Store subscribers can restore earlier purchases from Settings.
+Donut Scanner is free. Sign in to scan, keep your history, sync captures to your private Donut workspace, and connect your computers. Existing App Store subscribers can restore earlier purchases from Settings.
 
 Terms of Use: https://www.apple.com/legal/internet-services/itunes/dev/stdeula/

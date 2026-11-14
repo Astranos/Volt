@@ -104,7 +104,7 @@ export function ShopifyAuditApp() {
           <div className="flex items-center gap-3">
             <img src="/app-icon-192.png" alt="" className="size-10 rounded-xl" aria-hidden="true" />
             <div>
-              <p className="text-sm font-bold leading-5">Volt Resale</p>
+              <p className="text-sm font-bold leading-5">Donut Resale</p>
               <p className="text-xs text-zinc-500">Shopify product audit</p>
             </div>
           </div>
@@ -175,9 +175,9 @@ export function ShopifyAuditApp() {
         </section>
       </main>
       <footer className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-5 pb-8 text-xs text-zinc-500 sm:px-8">
-        <span>Use Volt Resale with your Shopify store session.</span>
+        <span>Use Donut Resale with your Shopify store session.</span>
         <nav className="flex gap-5" aria-label="Help and policies">
-          <a className="hover:text-zinc-900 hover:underline" href="https://voltresale.app/privacy" target="_blank" rel="noopener noreferrer">Privacy</a>
+          <a className="hover:text-zinc-900 hover:underline" href="https://donut.juanquenga.com/privacy" target="_blank" rel="noopener noreferrer">Privacy</a>
           <a className="hover:text-zinc-900 hover:underline" href="mailto:juanquenga@gmail.com">Support</a>
         </nav>
       </footer>
@@ -245,7 +245,7 @@ export function ErrorNotice({ message, onRetry }: { message: string; onRetry: ()
 export function formatErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : "";
   if (/^(failed to fetch|networkerror when attempting to fetch resource\.?|load failed)$/i.test(message.trim())) {
-    return "Couldn’t reach Volt’s Shopify service. Check your connection and try again.";
+    return "Couldn’t reach Donut’s Shopify service. Check your connection and try again.";
   }
   return message || "Something went wrong. Please retry.";
 }

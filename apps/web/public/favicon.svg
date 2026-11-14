@@ -1,4 +1,19 @@
-<svg width="1024" height="1024" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
-  <path d="M18 42H43L60 80 49 100Z" fill="#34C759" />
-  <path d="M104 2 61 53h17l-27 51 11 22 49-89H94L104 2Z" fill="#34C759" />
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 64 64" fill="none" role="img" aria-label="Donut">
+  <rect width="64" height="64" rx="14" fill="#09090B"/>
+  <g transform="translate(32 32) scale(1.12) translate(-32 -32)">
+  <defs>
+    <clipPath id="donut">
+      <path clip-rule="evenodd" d="M27.5 8.43A24 24 0 1 1 8.96 25.27C9.46 23.53 10.42 23 12.15 23C16.37 23 19.02 20.44 19.02 17.3C22.8 17.3 25.8 14.9 25.8 11.3C25.8 9.77 26.2 8.74 27.5 8.43ZM40.5 32a8.5 8.5 0 1 0-17 0 8.5 8.5 0 1 0 17 0Z"/>
+    </clipPath>
+  </defs>
+  <path fill="#DDA15F" fill-rule="evenodd" d="M27.5 8.43A24 24 0 1 1 8.96 25.27C9.46 23.53 10.42 23 12.15 23C16.37 23 19.02 20.44 19.02 17.3C22.8 17.3 25.8 14.9 25.8 11.3C25.8 9.77 26.2 8.74 27.5 8.43ZM40.5 32a8.5 8.5 0 1 0-17 0 8.5 8.5 0 1 0 17 0Z"/>
+  <g clip-path="url(#donut)">
+    <path fill="#EF7DA6" fill-rule="evenodd" d="M28.5 11.5C40.5 9.2 51.8 19 52 30C52 32 54 34 52 37C51 39 48.5 39.4 49 42C49.7 46 45.4 49.5 42.5 48C40.5 47 39.5 52 35.5 52.5C32 53.2 31.3 50 28.8 50.3C24.5 51 22.5 52 20 49C18.2 46.4 15.5 47 14 43.8C12.8 41 15.3 39.7 13 37C10.5 34 11 31 12.6 28.3C17.3 28.8 22.3 24.7 22 20.5C26 19.8 28.6 16.6 28.5 11.5ZM42 32a10 10 0 1 0-20 0 10 10 0 1 0 20 0Z"/>
+    <g stroke-width="2.2" stroke-linecap="round">
+      <path d="m34 15 3 1.5m10 16 3 1.3m-22 12.7 3 1" stroke="#FFF1B8"/>
+      <path d="m44 21-1.5 3M17 33l1.5 3" stroke="#55C6CA"/>
+      <path d="m42 43 2-2M21 43l-2 1.5M27 19l3-1" stroke="#7250A5"/>
+    </g>
+  </g>
+</g>
 </svg>

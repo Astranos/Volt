@@ -74,7 +74,7 @@ const entrySummaryFields = {
 const entryValidator = v.object({ ...entrySummaryFields, kind: handbookKindValidator, comment: v.optional(v.string()) });
 
 function authorName(identity: { name?: string; givenName?: string; email?: string }) {
-  return identity.name ?? identity.givenName ?? identity.email ?? "Volt user";
+  return identity.name ?? identity.givenName ?? identity.email ?? "Donut user";
 }
 
 function text(value: string | undefined, max: number, field: string, required = false) {

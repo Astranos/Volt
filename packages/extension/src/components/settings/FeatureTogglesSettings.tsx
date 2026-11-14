@@ -161,7 +161,7 @@ export function FeatureTogglesSettings({
       <ToggleSection
         id="selection-suggestions"
         title="Selection Suggestions"
-        description="Choose whether Volt offers actions beside selected page text."
+        description="Choose whether Donut offers actions beside selected page text."
         itemTitle="Show Selection Suggestions"
         itemDescription="Shows your selected actions after highlighting non-editable text on a page."
         enabled={settings.contextMenu?.selectionSuggestionsEnabled ?? true}
@@ -210,7 +210,7 @@ export function FeatureTogglesSettings({
                   )}
                 </div>
                 <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-                  Deletes Volt-created files in the Volt Photos download folder after the retention window. Cleanup runs at local midnight.
+                  Deletes Donut-created files in the Donut Photos download folder after the retention window. Cleanup runs at local midnight.
                 </p>
               </div>
               <ToggleSwitch

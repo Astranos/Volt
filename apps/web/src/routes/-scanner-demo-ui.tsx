@@ -40,10 +40,10 @@ export function PairingDialog({
         <div className="flex items-start justify-between gap-4 border-b border-zinc-200 px-4 py-3">
           <div>
             <h2 id="pairing-dialog-title" className="text-base font-semibold text-zinc-950">
-              Pair Volt on iPhone
+              Pair Donut on iPhone
             </h2>
             <p className="mt-1 text-sm leading-5 text-zinc-600">
-              Scan this QR from the Volt app. This window closes when the phone starts connecting.
+              Scan this QR from the Donut app. This window closes when the phone starts connecting.
             </p>
           </div>
           <button
@@ -57,7 +57,7 @@ export function PairingDialog({
         <div className="p-4">
           <div className="grid aspect-square place-items-center rounded-[0.95rem] border border-zinc-200 bg-zinc-50 p-3">
             {qrDataUrl ? (
-              <img src={qrDataUrl} alt="Volt scanner pairing QR code" className="h-full w-full object-contain" />
+              <img src={qrDataUrl} alt="Donut scanner pairing QR code" className="h-full w-full object-contain" />
             ) : (
               <Camera size={42} className="text-zinc-300" />
             )}
@@ -106,7 +106,7 @@ function copyText(value: string) {
 function downloadUrl(url: string, filename: string) {
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = filename || "volt-photo.jpg";
+  anchor.download = filename || "donut-photo.jpg";
   document.body.append(anchor);
   anchor.click();
   anchor.remove();

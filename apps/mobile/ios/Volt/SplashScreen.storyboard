@@ -16,9 +16,21 @@
                     <view key="view" userInteractionEnabled="NO" contentMode="scaleToFill" insetsLayoutMarginsFromSafeArea="NO" id="VOLT-ContainerView" userLabel="ContainerView">
                         <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
-                        <subviews/>
+                        <subviews>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" image="VoltLogo" translatesAutoresizingMaskIntoConstraints="NO" id="Donut-LaunchLogo">
+                                <rect key="frame" x="154.5" y="384" width="84" height="84"/>
+                                <constraints>
+                                    <constraint firstAttribute="width" constant="84" id="Donut-LogoWidth"/>
+                                    <constraint firstAttribute="height" constant="84" id="Donut-LogoHeight"/>
+                                </constraints>
+                            </imageView>
+                        </subviews>
                         <viewLayoutGuide key="safeArea" id="Rmq-lb-GrQ"/>
                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                        <constraints>
+                            <constraint firstItem="Donut-LaunchLogo" firstAttribute="centerX" secondItem="VOLT-ContainerView" secondAttribute="centerX" id="Donut-LogoCenterX"/>
+                            <constraint firstItem="Donut-LaunchLogo" firstAttribute="centerY" secondItem="VOLT-ContainerView" secondAttribute="centerY" id="Donut-LogoCenterY"/>
+                        </constraints>
                     </view>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="VOLT-PLACEHOLDER-1" userLabel="First Responder" sceneMemberID="firstResponder"/>
@@ -27,7 +39,7 @@
         </scene>
     </scenes>
     <resources>
-        <image name="SplashScreenLogo" width="100" height="90.333335876464844"/>
+        <image name="VoltLogo" width="84" height="84"/>
         <systemColor name="systemBackgroundColor">
             <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
         </systemColor>

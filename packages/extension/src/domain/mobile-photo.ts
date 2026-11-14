@@ -70,7 +70,7 @@ export function sanitizeDownloadPathSegment(value: unknown, fallback: string) {
 }
 
 export function normalizeImageFilename(filename: string, mimeType: string) {
-  const cleanName = filename.trim().replace(/[^\w.\-]+/g, "-") || "volt-photo";
+  const cleanName = filename.trim().replace(/[^\w.\-]+/g, "-") || "donut-photo";
   const extension = extensionForMimeType(mimeType);
   if (IMAGE_FILE_EXTENSIONS.test(cleanName)) {
     return cleanName.replace(IMAGE_FILE_EXTENSIONS, `.${extension}`);
@@ -106,7 +106,7 @@ export function normalizeMobilePhoto(photo: unknown): MobilePhoto | null {
     name:
       typeof source.name === "string" && source.name
         ? normalizeImageFilename(clampString(source.name, 120), mimeType)
-        : `volt-photo-${id}.${extensionForMimeType(mimeType)}`,
+        : `donut-photo-${id}.${extensionForMimeType(mimeType)}`,
     mimeType: clampString(mimeType, 64),
     dataUrl: source.dataUrl,
     contributorId: typeof source.contributorId === "string" ? clampString(source.contributorId, 120) : undefined,
@@ -138,10 +138,10 @@ export function normalizeMobilePhoto(photo: unknown): MobilePhoto | null {
 export function buildMobilePhotoDownloadFilename(
   photo: Pick<MobilePhoto, "id" | "mimeType" | "name">,
 ) {
-  const photoId = sanitizeDownloadPathSegment(photo.id, "volt-photo");
+  const photoId = sanitizeDownloadPathSegment(photo.id, "donut-photo");
   const filename = normalizeImageFilename(
-    photo.name || photo.id || "volt-photo",
+    photo.name || photo.id || "donut-photo",
     photo.mimeType,
   );
-  return `Volt Photos/${photoId}-${filename}`;
+  return `Donut Photos/${photoId}-${filename}`;
 }

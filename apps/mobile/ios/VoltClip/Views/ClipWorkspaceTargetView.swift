@@ -39,7 +39,7 @@ struct ClipWorkspaceTargetPickerSheet: View {
                         ContentUnavailableView(
                             "No Computers Online",
                             systemImage: "desktopcomputer",
-                            description: Text("Open the signed-in Volt extension on a computer to make it available.")
+                            description: Text("Open the signed-in Donut extension on a computer to make it available.")
                         )
                     } else {
                         ForEach(store.availableWorkspaceComputers) { computer in

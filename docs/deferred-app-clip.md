@@ -1,6 +1,6 @@
 # Historical: Deferred App Clip Photo Capture
 
-This proposal is not part of the active mobile scanner architecture. Volt now
+This proposal is not part of the active mobile scanner architecture. Donut now
 ships a checkout-free App Clip that redeems a short-lived guest grant into the
 same Clerk/Convex workspace as Chrome. It sends captures through Convex/R2,
 can target any online computer in that workspace, and contains neither WebRTC

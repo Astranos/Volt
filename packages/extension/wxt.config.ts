@@ -61,9 +61,9 @@ export default defineConfig({
         run_at: "document_start",
       },
     ],
-    name: "Volt",
+    name: "Donut",
     description:
-      "A versatile Chrome extension with command palette, mobile scanner pairing, and multi-provider search capabilities.",
+      "Donut brings resale research, mobile scanner pairing, and browser tools into one workspace.",
     permissions: [
       ...(process.env.WXT_GOOGLE_CHROME_EXTENSION_CLIENT_ID ? ["identity", "identity.email"] : []),
       "storage",
@@ -101,6 +101,7 @@ export default defineConfig({
       128: "assets/icons/logo-128.png",
     },
     action: {
+      default_title: "Donut",
       default_icon: {
         16: "assets/icons/logo-16.png",
         32: "assets/icons/logo-32.png",
@@ -136,7 +137,7 @@ export default defineConfig({
           default: "Ctrl+Shift+O",
           mac: "Command+Shift+O",
         },
-        description: "Open Volt Web Extension Options",
+        description: "Open Donut Web Extension Options",
       },
       "reopen-last-tab": {
         suggested_key: {

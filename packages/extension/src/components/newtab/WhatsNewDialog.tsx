@@ -82,7 +82,7 @@ export function WhatsNewDialog({ version, onClose }: { version: string; onClose:
       <span className="newtab-whats-new-icon"><Sparkles aria-hidden="true" size={16} /></span>
       <div>
         <h2 id="whats-new-title">What’s new</h2>
-        <p>Volt {version}</p>
+        <p>Donut {version}</p>
       </div>
       <button aria-label="Close what’s new" className="newtab-whats-new-close" onClick={onClose} type="button"><X size={16} /></button>
     </header>

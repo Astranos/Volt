@@ -118,7 +118,7 @@ export function EmptyHistory({
         </p>
         <p className="mt-1 max-w-[260px] text-xs text-stone-500 dark:text-stone-400">
           {signedOut
-            ? "Sign in to Volt here and captures from your phone on the same account appear automatically."
+            ? "Sign in to Donut here and captures from your phone on the same account appear automatically."
             : "Text captures, barcodes, and fully received photos appear in this timeline."}
         </p>
       </div>
@@ -129,7 +129,7 @@ export function EmptyHistory({
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500 active:bg-emerald-700"
         >
           <LogIn className="h-4 w-4" />
-          Sign in to Volt
+          Sign in to Donut
         </button>
       ) : null}
     </div>

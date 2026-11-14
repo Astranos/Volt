@@ -323,7 +323,7 @@ test("app clip connection sheets use opaque backgrounds and large system actions
 
 test("app clip connecting sheet can cancel or switch to QR scanning", () => {
   assert.match(clipScannerStoreSwiftSource, /private var activeConnectionAttemptLabel: String\?/);
-  assert.match(clipScannerStoreSwiftSource, /var connectionAttemptDisplayName: String \{[\s\S]*activeConnectionAttemptLabel \?\? pairingLabel \?\? "Volt workspace"[\s\S]*\}/);
+  assert.match(clipScannerStoreSwiftSource, /var connectionAttemptDisplayName: String \{[\s\S]*activeConnectionAttemptLabel \?\? pairingLabel \?\? "Donut workspace"[\s\S]*\}/);
   assert.match(clipScannerStoreSwiftSource, /func cancelConnectionAttempt\(\) \{[\s\S]*statusText = "Connection canceled"/);
   assert.match(clipViewsSwiftSource, /@State private var isConnectionSheetPresented = false/);
   assert.match(clipViewsSwiftSource, /\.onChange\(of: store\.isPairing\) \{ _, isPairing in\s*if isPairing \{\s*isConnectionSheetPresented = true\s*\}\s*\}/);
@@ -348,7 +348,7 @@ test("app clip pairing and failure reuse one connection sheet", () => {
 
 test("app clip fresh qr connection uses the workspace label", () => {
   assert.match(clipScannerStoreSwiftSource, /private func preparePairing\(session: PairingSession, url: URL\) \{[\s\S]*pairingLabel = session\.label[\s\S]*activeConnectionAttemptLabel = displayName\(for: session\)/);
-  assert.match(clipScannerStoreSwiftSource, /private func displayName\(for session: PairingSession\) -> String \{\s*let label = session\.label\?\.trimmingCharacters\(in: \.whitespacesAndNewlines\) \?\? ""\s*return label\.isEmpty \? "Volt workspace" : label\s*\}/);
+  assert.match(clipScannerStoreSwiftSource, /private func displayName\(for session: PairingSession\) -> String \{\s*let label = session\.label\?\.trimmingCharacters\(in: \.whitespacesAndNewlines\) \?\? ""\s*return label\.isEmpty \? "Donut workspace" : label\s*\}/);
   assert.doesNotMatch(clipScannerStoreSwiftSource, /session\.label \?\? session\.sessionId/);
   assert.doesNotMatch(clipScannerStoreSwiftSource, /pairingLabel = session\.label \?\? pairingLabel/);
 });

@@ -53,7 +53,7 @@ test("a Shopify request right after signing in waits for the session instead of 
 test("a signed-out user still gets the sign-in message", async () => {
   const { CloudWorkspaceSubscriptions } = await import("./cloud-workspace-subscriptions");
   const workspace = new CloudWorkspaceSubscriptions();
-  await expect(workspace.getShopifyConnection()).rejects.toThrow("Sign in to Volt before connecting Shopify.");
+  await expect(workspace.getShopifyConnection()).rejects.toThrow("Sign in to Donut before connecting Shopify.");
 });
 
 test("after signing out, Shopify calls refuse instead of running as the previous account", async () => {
@@ -62,7 +62,7 @@ test("after signing out, Shopify calls refuse instead of running as the previous
   const workspace = new CloudWorkspaceSubscriptions();
   await expect(workspace.getShopifyConnection()).resolves.toEqual({ shop: "sample.myshopify.com" });
   clerkState.token = null;
-  await expect(workspace.getShopifyConnection()).rejects.toThrow("Sign in to Volt before connecting Shopify.");
+  await expect(workspace.getShopifyConnection()).rejects.toThrow("Sign in to Donut before connecting Shopify.");
 });
 
 test("after switching accounts, Shopify calls wait for the new account", async () => {
@@ -79,7 +79,7 @@ test("after switching accounts, Shopify calls wait for the new account", async (
 test("handbook calls refuse when signed out", async () => {
   const { CloudWorkspaceSubscriptions } = await import("./cloud-workspace-subscriptions");
   const workspace = new CloudWorkspaceSubscriptions();
-  await expect(workspace.listHandbook("epoch-1")).rejects.toThrow("Sign in to Volt to use the handbook.");
+  await expect(workspace.listHandbook("epoch-1")).rejects.toThrow("Sign in to Donut to use the handbook.");
 });
 
 test("a handbook call tagged with a newer account epoch runs as the new account", async () => {

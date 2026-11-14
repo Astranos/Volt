@@ -21,7 +21,7 @@ export function ShopifyComparePage() {
   const [onlyDifferences, setOnlyDifferences] = useState(false);
 
   useEffect(() => {
-    document.title = "Compare · Volt";
+    document.title = "Compare · Donut";
   }, []);
 
   useEffect(() => {

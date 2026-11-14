@@ -69,10 +69,10 @@ export function SiteHeaderFrame({
         <a
           href={anchorPrefix === "" ? "#top" : "/"}
           className="flex items-center gap-2"
-          aria-label="Volt home"
+          aria-label="Donut home"
         >
-          <img src="/favicon.svg" alt="" className="size-8" />
-          <span className="hidden text-sm font-semibold sm:inline">Volt</span>
+          <img src="/brand/donut.svg" alt="" className="size-8" />
+          <span className="hidden text-sm font-semibold sm:inline">Donut</span>
         </a>
         {isScanner ? (
           <nav
@@ -104,8 +104,7 @@ export function SiteHeaderFrame({
 }
 
 /**
- * Splitting on `authConfigured` — a build-time constant — keeps the Clerk hook
- * out of builds that have no publishable key and therefore no provider.
+ * Keep Clerk hooks behind the same domain/key check as the provider.
  */
 function AccountLink() {
   return authConfigured ? (
@@ -154,17 +153,17 @@ export function SiteFooter() {
             <a
               href="/"
               className="inline-flex items-center gap-2"
-              aria-label="Volt home"
+              aria-label="Donut home"
             >
-              <img src="/favicon.svg" alt="" className="size-9" />
-              <span className="text-base font-semibold">Volt</span>
+              <img src="/brand/donut.svg" alt="" className="size-9" />
+              <span className="text-base font-semibold">Donut</span>
             </a>
             <p className="mt-5 text-sm leading-6 text-zinc-300">
-              Volt is an independent resale workflow project for pairing a
+              Donut is an independent resale workflow project for pairing a
               Chrome extension with a companion mobile capture app.
             </p>
             <p className="mt-4 text-sm leading-6 text-zinc-400">
-              Volt is not affiliated with, endorsed by, or sponsored by Volt
+              Donut is not affiliated with, endorsed by, or sponsored by Volt
               Resale or Paymore Electronics.
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
@@ -211,7 +210,7 @@ export function SiteFooter() {
           className="mt-10 flex flex-col gap-3 border-t border-white/10 pt-6 text-xs text-zinc-500 sm:flex-row sm:items-center sm:justify-between"
           variants={fadeUp}
         >
-          <p>Copyright {new Date().getFullYear()} Volt Scanner</p>
+          <p>Copyright {new Date().getFullYear()} Donut Scanner</p>
           <p className="inline-flex items-center gap-1.5">
             Open source on
             <a

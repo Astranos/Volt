@@ -31,7 +31,7 @@ export function createHandbookController({
   async function forward(action: string, extra: Record<string, unknown> = {}) {
     const epoch = accountEpoch();
     const value = offscreenValue(await sendOffscreenMessage({ action, accountEpoch: epoch, ...extra }));
-    if (accountEpoch() !== epoch) throw new Error("Volt account changed. Try again.");
+    if (accountEpoch() !== epoch) throw new Error("Donut account changed. Try again.");
     return value;
   }
 

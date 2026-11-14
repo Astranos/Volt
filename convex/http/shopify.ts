@@ -27,8 +27,8 @@ export const shopifyCallback = httpAction(async (ctx, request) => {
       expiresAt: tokens.expiresAt, refreshExpiresAt: tokens.refreshExpiresAt,
     });
     if (!connected) throw new Error("Shopify connection was canceled.");
-    return new Response("<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Shopify connected</title><h1>Shopify connected</h1><p>You can close this tab and return to Volt.</p></html>", { headers });
+    return new Response("<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Shopify connected</title><h1>Shopify connected</h1><p>You can close this tab and return to Donut.</p></html>", { headers });
   } catch {
-    return new Response("<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Shopify connection failed</title><h1>Shopify connection failed</h1><p>Return to Volt and connect your store again. Check that the app has product read access.</p></html>", { status: 400, headers });
+    return new Response("<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Shopify connection failed</title><h1>Shopify connection failed</h1><p>Return to Donut and connect your store again. Check that the app has product read access.</p></html>", { status: 400, headers });
   }
 });

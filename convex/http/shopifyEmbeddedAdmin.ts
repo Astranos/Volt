@@ -18,7 +18,7 @@ class AdminApiError extends Error {
 function corsHeaders(request: Request): Headers {
   const headers = new Headers({ "Cache-Control": "no-store", "Vary": "Origin" });
   const origin = request.headers.get("Origin");
-  if (origin && (origin === "https://voltresale.app" || /^http:\/\/localhost:(?:3000|4173|5173)$/.test(origin))) {
+  if (origin && (origin === "https://donut.juanquenga.com" || origin === "https://voltresale.app" || /^http:\/\/localhost:(?:3000|4173|5173)$/.test(origin))) {
     headers.set("Access-Control-Allow-Origin", origin);
     headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
     headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type");

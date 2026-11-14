@@ -77,7 +77,7 @@ struct ClipConnectChoicesView: View {
                         .padding(14)
                         .background(.background.secondary, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     } else {
-                        Text("Scan the Volt App Clip QR from Chrome to open its workspace.")
+                        Text("Scan the Donut App Clip QR from Chrome to open its workspace.")
                             .font(.body)
                             .foregroundStyle(.primary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -130,7 +130,7 @@ struct ClipConnectChoicesView: View {
                         if store.pairFromScannedValue(value) {
                             manualPairingError = nil
                         } else {
-                            manualPairingError = "Use a Volt workspace pairing URL from the Chrome extension."
+                            manualPairingError = "Use a Donut workspace pairing URL from the Chrome extension."
                         }
                     }
                     .disabled(pairingURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -140,7 +140,7 @@ struct ClipConnectChoicesView: View {
                 } header: {
                     Text("Pair with a link")
                 } footer: {
-                    Text("Scan the QR code or paste its pairing URL from the Volt Chrome extension. No account sign-in is required.")
+                    Text("Scan the QR code or paste its pairing URL from the Donut Chrome extension. No account sign-in is required.")
                 }
             }
             .navigationTitle(store.isConnected ? "Type to Computer" : "Connect Workspace")
@@ -236,7 +236,7 @@ struct ClipPairingFailureView: View {
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text("Retry can help if the network was slow. If the QR expired or opened the wrong workspace, create and scan a fresh Volt QR code.")
+                Text("Retry can help if the network was slow. If the QR expired or opened the wrong workspace, create and scan a fresh Donut QR code.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

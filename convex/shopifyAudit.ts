@@ -151,7 +151,7 @@ export const setProductHidden = mutation({
   },
 });
 
-const notConnected = (shop: string | undefined) => shop === undefined ? "Connect your Shopify store first." : `${shopDomain(shop)} isn't connected to Volt. Connect it in Volt settings.`;
+const notConnected = (shop: string | undefined) => shop === undefined ? "Connect your Shopify store first." : `${shopDomain(shop)} isn't connected to Donut. Connect it in Donut settings.`;
 
 async function withShopifyAccess<T>(ctx: ActionCtx, requestedShop: string | undefined, load: (shop: string, access: string, owner: string) => Promise<T>): Promise<T> {
   const identity = await ctx.auth.getUserIdentity();

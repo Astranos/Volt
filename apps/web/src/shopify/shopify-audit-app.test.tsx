@@ -14,11 +14,11 @@ describe("Shopify audit error recovery", () => {
 
   test("error notice includes a retry action", () => {
     const html = renderToStaticMarkup(
-      <ErrorNotice message="Couldn’t reach Volt’s Shopify service." onRetry={() => {}} />,
+      <ErrorNotice message="Couldn’t reach Donut’s Shopify service." onRetry={() => {}} />,
     );
 
     expect(html).toContain('role="alert"');
-    expect(html).toContain("Couldn’t reach Volt’s Shopify service.");
+    expect(html).toContain("Couldn’t reach Donut’s Shopify service.");
     expect(html).toContain('type="button"');
     expect(html).toContain("Try again");
   });

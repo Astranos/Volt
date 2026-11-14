@@ -61,7 +61,7 @@ export function installChromeStub() {
     "storage.session": () => storage.session,
     "runtime.id": () => "volt-preview",
     "runtime.lastError": () => undefined,
-    "runtime.getManifest": () => () => ({ manifest_version: 3, name: "Volt", version: packageJson.version }),
+    "runtime.getManifest": () => () => ({ manifest_version: 3, name: "Donut", version: packageJson.version }),
     "runtime.getURL": () => (path: string) => new URL(path.replace(/^\/?/, "/"), location.origin).href,
     "runtime.sendMessage": () => (...args: unknown[]) => {
       const message = args.find((arg): arg is Json => !!arg && typeof arg === "object") ?? {};

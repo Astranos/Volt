@@ -127,7 +127,7 @@ export function installPhotoDropBridge(dropMime: string) {
 
   const normalizeImageFilenameInPage = (filename: string, mimeType: string) => {
     const cleanName =
-      filename.trim().replace(/[^\w.\-]+/g, "-") || "volt-photo";
+      filename.trim().replace(/[^\w.\-]+/g, "-") || "donut-photo";
     const extension = extensionForMimeTypeInPage(mimeType);
     if (/\.(avif|gif|heic|heif|jpe?g|png|webp)$/i.test(cleanName)) {
       return cleanName.replace(
@@ -468,7 +468,7 @@ export async function insertPhotosIntoPage(
 
   const normalizeImageFilenameInPage = (filename: string, mimeType: string) => {
     const cleanName =
-      filename.trim().replace(/[^\w.\-]+/g, "-") || "volt-photo";
+      filename.trim().replace(/[^\w.\-]+/g, "-") || "donut-photo";
     const extension = extensionForMimeTypeInPage(mimeType);
     if (/\.(avif|gif|heic|heif|jpe?g|png|webp)$/i.test(cleanName)) {
       return cleanName.replace(

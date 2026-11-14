@@ -150,14 +150,11 @@ export function ContextMenu({ actions, selectionActionCount, quickActions, lastS
       >
         <div className="hdr">
           <span className="brand">
-            <svg aria-hidden="true" className="brand-mark" viewBox="0 0 128 128">
-              <path d="M18 42H43L60 80 49 100Z" />
-              <path d="M104 2 61 53h17l-27 51 11 22 49-89H94L104 2Z" />
-            </svg>
-            Volt
+            <img alt="" className="brand-mark" src={chrome.runtime.getURL("/assets/icons/logo-hd.svg")} />
+            Donut
           </span>
           <button
-            aria-label="Dismiss Volt menu until this page reloads"
+            aria-label="Dismiss Donut menu until this page reloads"
             className="dismiss-btn"
             onClick={onDismiss}
             title="Use the browser menu until this page reloads"

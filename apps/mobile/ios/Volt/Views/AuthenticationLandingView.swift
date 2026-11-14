@@ -89,7 +89,7 @@ struct AuthenticationLandingView: View {
                 .scaleEffect(didAppear ? 1 : 0.92)
 
             VStack(spacing: 12) {
-                Text("Volt")
+                Text("Donut")
                     .font(.largeTitle.bold())
                     .foregroundStyle(VoltBrand.ink)
                     .accessibilityAddTraits(.isHeader)
@@ -126,7 +126,7 @@ struct AuthenticationLandingView: View {
             .buttonStyle(.glass)
             .accessibilityIdentifier("volt-qr-sign-in-button")
 
-            Text("Use the same account as Volt on Chrome.")
+            Text("Use the same account as Donut on Chrome.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

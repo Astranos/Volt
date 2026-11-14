@@ -18,5 +18,5 @@ if (isShopifyAdminProductUrl(target)) {
 } else {
   if (heading) heading.textContent = "This audit link is invalid.";
   const status = document.getElementById("status");
-  if (status) status.textContent = "Start the audit again from the Volt new tab.";
+  if (status) status.textContent = "Start the audit again from the Donut new tab.";
 }

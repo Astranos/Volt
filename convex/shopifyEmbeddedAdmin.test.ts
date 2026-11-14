@@ -94,6 +94,28 @@ test("status stores a per-shop encrypted installation and search uses only its s
   expect((await t.fetch(statusPath, adminRequest(first, {}, "https://evil.test"))).status).toBe(403);
 });
 
+test("embedded admin CORS accepts Donut and existing origins while rejecting lookalike domains", async () => {
+  const fetched = mockShopify();
+  const t = convexTest(schema, modules);
+  const path = "/api/shopify/admin/status";
+  for (const origin of ["https://donut.juanquenga.com", "https://voltresale.app", "http://localhost:5173"]) {
+    const preflight = await t.fetch(path, { method: "OPTIONS", headers: { Origin: origin } });
+    expect(preflight.headers.get("Access-Control-Allow-Origin")).toBe(origin);
+    const response = await t.fetch(path, adminRequest(idToken(), {}, origin));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe(origin);
+  }
+  const callsBefore = fetched.mock.calls.length;
+  for (const origin of ["https://donut.juanquenga.com.evil.test", "http://donut.juanquenga.com", "https://evil.test"]) {
+    const preflight = await t.fetch(path, { method: "OPTIONS", headers: { Origin: origin } });
+    expect(preflight.headers.get("Access-Control-Allow-Origin")).toBeNull();
+    const response = await t.fetch(path, adminRequest(idToken(), {}, origin));
+    expect(response.status).toBe(403);
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBeNull();
+  }
+  expect(fetched.mock.calls.length).toBe(callsBefore);
+});
+
 test("verified uninstall removes only that shop's embedded credential", async () => {
   mockShopify();
   const t = convexTest(schema, modules);

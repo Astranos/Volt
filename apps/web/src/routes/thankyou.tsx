@@ -29,9 +29,9 @@ type Workflow = {
 
 const workflows: Workflow[] = [
   {
-    title: "Volt new tab",
+    title: "Donut new tab",
     description:
-      "Start resale work from the Volt dashboard with provider search, saved links, and recently closed tabs.",
+      "Start resale work from the Donut dashboard with provider search, saved links, and recently closed tabs.",
     icon: LayoutDashboard,
   },
   {
@@ -49,7 +49,7 @@ const workflows: Workflow[] = [
   {
     title: "eBay sold-listing warning",
     description:
-      "Volt shows a small warning on active or completed eBay result pages so pricing work uses sold listings instead of asking prices.",
+      "Donut shows a small warning on active or completed eBay result pages so pricing work uses sold listings instead of asking prices.",
     icon: AlertTriangle,
     accent: "warning",
   },
@@ -62,12 +62,12 @@ function Install() {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4">
           <div className="flex items-center gap-3">
             <img
-              src="/favicon.svg"
-              alt="Volt"
+              src="/brand/donut.svg"
+              alt="Donut"
               className="h-10 w-10"
             />
             <div>
-              <p className="text-sm font-semibold leading-5">Volt</p>
+              <p className="text-sm font-semibold leading-5">Donut</p>
               <p className="text-xs text-slate-500">Chrome workflow + iPhone scanner</p>
             </div>
           </div>
@@ -87,14 +87,14 @@ function Install() {
                 Ready to use
               </p>
               <h1 className="max-w-2xl text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">
-                Set up the browser side of Volt.
+                Set up the browser side of Donut.
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
                 Pin the extension, keep the dashboard, and open the side panel when you want to pair the iPhone scanner for barcode, OCR, dictation, and photo capture.
               </p>
             </div>
             <img
-              src="/favicon.svg"
+              src="/brand/donut.svg"
               alt=""
               className="hidden h-16 w-16 md:block"
             />
@@ -103,12 +103,12 @@ function Install() {
           <div className="grid gap-3">
             <SetupStep
               icon={Pin}
-              title="Pin Volt"
-              body="Click Chrome's extensions button, find Volt, then pin it so the toolbar action is always visible."
+              title="Pin Donut"
+              body="Click Chrome's extensions button, find Donut, then pin it so the toolbar action is always visible."
             />
             <SetupStep
               icon={LayoutDashboard}
-              title="Keep the Volt new tab"
+              title="Keep the Donut new tab"
               body='If Chrome asks about the new tab page, choose "Keep it" to keep the dashboard enabled.'
             />
             <SetupStep
@@ -124,7 +124,7 @@ function Install() {
               className="inline-flex items-center gap-2 rounded-[0.85rem] border border-slate-950 bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
             >
               <LayoutDashboard className="h-4 w-4 text-emerald-300" />
-              Continue to Volt
+              Continue to Donut
               <ExternalLink className="h-3.5 w-3.5 text-slate-300" />
             </a>
             <a
@@ -155,8 +155,8 @@ function Install() {
             <div className="rounded-[0.75rem] bg-white p-3 text-slate-950">
               <div className="mb-3 flex items-center justify-between border-b border-slate-200 pb-2">
                 <div className="flex items-center gap-2 text-xs font-semibold">
-                  <img src="/favicon.svg" alt="" className="h-5 w-5" />
-                  Volt
+                  <img src="/brand/donut.svg" alt="" className="h-5 w-5" />
+                  Donut
                 </div>
                 <LayoutDashboard className="h-4 w-4 text-slate-500" />
               </div>
@@ -218,7 +218,7 @@ function Install() {
         <UtilityCard
           icon={Settings}
           title="Local settings"
-          body="Tune providers, new-tab behavior, scanner settings, and Volt links from the options page."
+          body="Tune providers, new-tab behavior, scanner settings, and Donut links from the options page."
         />
       </section>
     </main>

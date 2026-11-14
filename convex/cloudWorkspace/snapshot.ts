@@ -115,7 +115,7 @@ export async function workspaceSnapshotHandler(ctx: QueryCtx) {
       count += 1;
       bytes += new TextEncoder().encode(JSON.stringify(row)).byteLength;
       if (count > SNAPSHOT_PAGE_DOCUMENTS || bytes > SNAPSHOT_PAGE_READ_BYTES) {
-        throw new ConvexError("Workspace requires pagination. Update Volt or use workspaceSnapshotPage.");
+        throw new ConvexError("Workspace requires pagination. Update Donut or use workspaceSnapshotPage.");
       }
       rows.push(row);
     }

@@ -57,7 +57,7 @@ struct StoreSetupView: View {
                     Text("Store setup and staff requests are hidden while Guided Access is active.")
                         .foregroundStyle(.secondary)
                     Divider()
-                    Text("Volt Kiosk is an independent tool for participating stores. It is not affiliated with, sponsored by, or endorsed by PayMore.")
+                    Text("Donut Kiosk is an independent tool for participating stores. It is not affiliated with, sponsored by, or endorsed by PayMore.")
                         .font(.footnote).foregroundStyle(.secondary)
                     Button("Privacy policy") { showingPrivacy = true }
                         .frame(minHeight: 44)

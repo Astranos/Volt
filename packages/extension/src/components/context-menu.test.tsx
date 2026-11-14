@@ -1,7 +1,13 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { ContextMenu, type MenuAction, type OpenMode } from "./context-menu";
+
+beforeEach(() => {
+  vi.stubGlobal("chrome", { runtime: { getURL: (path: string) => `chrome-extension://extension${path}` } });
+});
+
+afterEach(() => vi.unstubAllGlobals());
 
 const actions: MenuAction[] = [
   { id: "search", label: "Search text", requiresSelection: true, opensUrl: true, onInvoke: vi.fn() },
@@ -22,6 +28,8 @@ test("without a selection, disables search while retaining general actions", () 
   expect(html).toContain("Select text on the page first");
   expect(html).not.toContain('role="radiogroup"');
   expect(html).toContain("Settings");
+  expect(html).toContain("Donut");
+  expect(html).toContain('src="chrome-extension://extension/assets/icons/logo-hd.svg"');
   expect(html).not.toContain("Open link");
 });
 

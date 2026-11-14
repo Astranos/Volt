@@ -211,7 +211,7 @@ def project_build_number
   match[1]
 end
 
-# Volt gates everything behind a Clerk sign-in, so App Review cannot get past the
+# Donut gates everything behind a Clerk sign-in, so App Review cannot get past the
 # first screen without an account. Google OAuth and email one-time codes are both
 # unusable for a reviewer, so the production Clerk instance also accepts a
 # password as a first factor purely for this demo account. Supply it here or the
@@ -251,7 +251,7 @@ end
 
 # deliver's review_information always writes demo_account_required, and sets it to
 # false whenever the demo credentials are absent - even when it is only uploading
-# review notes. Volt gates every screen behind a Clerk sign-in, so that silently
+# review notes. Donut gates every screen behind a Clerk sign-in, so that silently
 # tells App Review no account is needed and the reviewer stops at the first screen
 # with the stored credentials hidden from them. Fail loudly instead.
 def require_demo_account_for_review_information!
@@ -374,7 +374,7 @@ def write_screenshot_report(output_directory)
         <head>
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">
-          <title>Volt screenshots</title>
+          <title>Donut screenshots</title>
           <style>
             body { margin: 0; padding: 32px; background: #f6f7f8; color: #171717; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
             h1 { margin: 0 0 24px; font-size: 28px; font-weight: 700; }
@@ -385,7 +385,7 @@ def write_screenshot_report(output_directory)
           </style>
         </head>
         <body>
-          <h1>Volt screenshots</h1>
+          <h1>Donut screenshots</h1>
           <main class="grid">
             #{rows.join("\n        ")}
           </main>

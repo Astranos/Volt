@@ -184,7 +184,7 @@ test("cloud cursor target and per-result delivery are optional downstream work",
   assert.match(workspaceSource, /state == \.uploaded/);
   assert.match(workspaceSource, /clientCreatedAt: Date\.now\.timeIntervalSince1970 \* 1_000/);
   assert.match(workspaceSource, /for attempt in 0\.\.<3/);
-  assert.match(captureModeCardsSource, /No computers are online\. Capture still works and syncs to Volt\./);
+  assert.match(captureModeCardsSource, /No computers are online\. Capture still works and syncs to Donut\./);
 });
 
 test("queued cursor deliveries are tracked and resolved via a live Convex subscription", () => {

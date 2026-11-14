@@ -49,8 +49,8 @@ describe("workspace access gate", () => {
       <WorkspaceAccessContent state={{ status: "locked" }} retry={() => {}} />,
     );
     expect(html).toContain("Cloud workspace unavailable");
-    expect(html).not.toContain("Volt Pro");
-    expect(html).not.toContain("Get Volt for iPhone");
+    expect(html).not.toContain("Donut Pro");
+    expect(html).not.toContain("Get Donut for iPhone");
     expect(html).toContain("Check access again");
     expect(html).not.toContain("ConvexError");
   });

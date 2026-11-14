@@ -68,7 +68,7 @@ test("Clip pairing choices offer QR and validated manual links with retry and pr
   assert.match(choices, /TextField\("Paste workspace pairing URL", text: \$pairingURL\)/);
   assert.match(choices, /store\.pairFromScannedValue\(value\)/);
   assert.match(choices, /\.disabled\(pairingURL\.trimmingCharacters\(in: \.whitespacesAndNewlines\)\.isEmpty\)/);
-  assert.match(choices, /manualPairingError = "Use a Volt workspace pairing URL/);
+  assert.match(choices, /manualPairingError = "Use a Donut workspace pairing URL/);
   assert.match(choices, /store\.isConnected \? "Type to Computer" : "Connect Workspace"/);
   assert.match(source, /ClipConnectionProgressView\(/);
   assert.match(source, /ClipPairingFailureView\(store: store, onScanQRCode: onScanQRCode\)/);

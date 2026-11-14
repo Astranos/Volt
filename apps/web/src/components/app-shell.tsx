@@ -147,7 +147,7 @@ export function AppLayout({ current, children, account }: AppLayoutProps) {
                   <Dialog.Backdrop className="fixed inset-0 z-[60] bg-zinc-950/60 backdrop-blur-sm" />
                   <Dialog.Popup className="fixed inset-y-0 left-0 z-[61] flex w-72 max-w-[calc(100vw-2rem)] flex-col overflow-y-auto bg-zinc-950 text-zinc-100 shadow-2xl outline-none">
                     <Dialog.Title className="sr-only">
-                      Volt navigation
+                      Donut navigation
                     </Dialog.Title>
                     <Dialog.Close
                       aria-label="Close navigation"
@@ -201,12 +201,12 @@ function Sidebar({
       <a
         href="/dashboard"
         onClick={onNavigate}
-        aria-label="Volt dashboard"
+        aria-label="Donut dashboard"
         className="flex h-20 shrink-0 items-center gap-3 px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-400"
       >
-        <img src="/favicon.svg" alt="" className="size-9" />
+        <img src="/brand/donut.svg" alt="" className="size-9" />
         <span className="text-xl font-bold tracking-tight">
-          Volt<span className="ml-1 text-emerald-400">.</span>
+          Donut
         </span>
       </a>
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-4">
@@ -270,7 +270,7 @@ function Sidebar({
             </div>
           </div>
           <div className="mt-4 flex items-center justify-between px-3 text-[11px] text-zinc-500">
-            <span>Volt workspace</span>
+            <span>Donut workspace</span>
             <a
               href="/privacy"
               onClick={onNavigate}

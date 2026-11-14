@@ -1,5 +1,15 @@
 # Move Volt to voltresale.app
 
+This document records the September 2026 migration. Donut's current public marketing and privacy URLs are `https://donut.juanquenga.com` and `https://donut.juanquenga.com/privacy`. The service domains and verified rollout details below describe that earlier migration.
+
+## Donut branding rollout — November 2026
+
+The public site uses `donut.juanquenga.com`. Account routes on that host temporarily redirect to the same path on `voltresale.app`, preserving query parameters. Public pages on the Donut host do not initialize Clerk. Login, dashboard, Chrome authentication, native Clerk keys, the production JWT issuer, and generated iOS QR/App Clip URLs retain their existing domains. Keep the legacy Vercel aliases and Clerk DNS records active until a separate authentication and native-release migration is verified.
+
+Brand artwork lives in `assets/brand/`; run `pnpm icons:generate` to update the web, Chrome, and native assets together, and `pnpm icons:check` to verify them. The native Icon Composer document retains separate dough, frosting, and sprinkles layers. Chrome Web Store and App Store branding changes require their normal releases; a web deployment does not publish them.
+
+## September migration record
+
 The source tree uses `https://voltresale.app` for public links, QR links, canonical URLs, and iOS associated domains. The intended Clerk endpoints are `https://clerk.voltresale.app` and `https://accounts.voltresale.app`.
 
 ## Verified before cutover

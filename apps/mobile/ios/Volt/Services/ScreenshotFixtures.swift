@@ -48,14 +48,14 @@ struct FreeWorkspaceScreenshotView: View {
                     LabeledContent("Workspace", value: "Personal")
                 }
 
-                Section("Volt access") {
+                Section("Donut access") {
                     LabeledContent("Scanner", value: "Free")
                     LabeledContent("Cloud workspace", value: "Included")
                     Label("Scan and sync across devices at no cost during the pilot.", systemImage: "icloud.fill")
                         .foregroundStyle(.secondary)
                 }
             }
-            .navigationTitle("Volt Access")
+            .navigationTitle("Donut Access")
         }
         .tint(.green)
     }
@@ -78,7 +78,7 @@ extension ScannerStore {
         guard let scenario = ScreenshotScenario.current else { return }
 
         statusText = "Ready to capture"
-        targetHint = "Captures save on this iPhone and sync to your Volt workspace when signed in."
+        targetHint = "Captures save on this iPhone and sync to your Donut workspace when signed in."
         selectedSection = scenario.initialSection
         activeMode = scenario.initialCaptureMode
 

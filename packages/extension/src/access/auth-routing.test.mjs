@@ -166,7 +166,7 @@ test("new tab has compact calculator, Scanner, App Clip, settings, and account c
   assert.ok(newTabSource.indexOf("<Calculator />") < newTabSource.indexOf("<ScanLine />"));
   assert.ok(newTabSource.indexOf("<ScanLine />") < newTabSource.indexOf("<AppClipQrIcon />"));
   assert.match(newTabSource, /action: "openMobileCapturePopup"/);
-  assert.match(newTabSource, /aria-label="Open Volt App Clip QR code"/);
+  assert.match(newTabSource, /aria-label="Open Donut App Clip QR code"/);
   assert.match(
     scannerMessageHandlerSource,
     /case "openMobileCapturePopup":\s*void handleOpenAppClipPopup/,

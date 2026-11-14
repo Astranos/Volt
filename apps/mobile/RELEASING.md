@@ -1,6 +1,6 @@
 # Release the iOS app
 
-This guide is for maintainers authorized to publish Volt. Ordinary contributions do not need App Store Connect access or release credentials.
+This guide is for maintainers authorized to publish Donut. Ordinary contributions do not need App Store Connect access or release credentials.
 
 ## Prepare the release environment
 

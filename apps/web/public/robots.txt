@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://voltresale.app/sitemap.xml
+Sitemap: https://donut.juanquenga.com/sitemap.xml

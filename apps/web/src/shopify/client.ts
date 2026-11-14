@@ -64,7 +64,7 @@ async function postShopify<T>(
 ): Promise<T> {
   const bridge = window.shopify;
   if (typeof bridge?.idToken !== "function") {
-    throw new Error("Open Volt Resale from Shopify Admin to start the product audit.");
+    throw new Error("Open Donut Resale from Shopify Admin to start the product audit.");
   }
   // Production requests stay on the app origin. Vercel forwards this narrow
   // route to Convex, which still verifies the Shopify bearer token.

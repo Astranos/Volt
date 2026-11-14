@@ -4,12 +4,12 @@ An **environment** is a compatible set of client configuration, identity service
 
 ## Deployment stages
 
-| Term | Meaning in Volt | Use it for |
+| Term | Meaning in Donut | Use it for |
 | --- | --- | --- |
 | **Local** | A process or build running on a contributor's computer or device. | The Vite web server at `localhost:5173`, an unpacked Chrome extension, or an app installed from Xcode. Always name the services it connects to. |
 | **Development (dev)** | Non-production Clerk, Convex, and storage resources used for interactive work. Contributors should use their own development resources. | Testing sign-in, cloud sync, and cross-device behavior without touching production data. |
-| **Preview** | A temporary web deployment for reviewing a branch or checkout. Volt's Vercel previews use development credentials and a development Convex deployment. | An HTTPS web review URL. A preview is not a separate backend stage. |
-| **Staging** | A persistent, isolated stack that mirrors production across the web app, extension, iPhone app, Clerk, Convex, and storage. | Reserve this word for such a stack if Volt provisions one. Do not call the current web previews staging. |
+| **Preview** | A temporary web deployment for reviewing a branch or checkout. Donut's Vercel previews use development credentials and a development Convex deployment. | An HTTPS web review URL. A preview is not a separate backend stage. |
+| **Staging** | A persistent, isolated stack that mirrors production across the web app, extension, iPhone app, Clerk, Convex, and storage. | Reserve this word for such a stack if Donut provisions one. Do not call the current web previews staging. |
 | **Production (prod)** | The live services and published clients used by customers. | The production website, Chrome Web Store release, App Store release, production Clerk instance, Convex deployment, and storage. |
 
 **Build mode is a separate axis.** `Debug` and `Release` are Xcode configurations. WXT and Vite also have development and production build modes. These describe how a client was built, not which Clerk instance or Convex deployment it calls. A Vercel preview is a production-mode Vite build configured with development services.
@@ -20,19 +20,19 @@ An **environment** is a compatible set of client configuration, identity service
 
 ## Services and identity
 
-| Term | Meaning in Volt |
+| Term | Meaning in Donut |
 | --- | --- |
 | **Clerk instance** | The identity system in one stage. Development and production instances have different users, sessions, publishable keys, and frontend API domains. |
 | **Clerk account** | A user within one Clerk instance, identified by its Clerk user ID. The same email in two instances is not the same account or workspace. |
 | **Clerk session** | A client's signed-in state for a Clerk account. Chrome and iPhone each hold their own session. |
-| **Clerk JWT** | A short-lived token issued from Volt's `convex` template. Convex checks its issuer against `CLERK_JWT_ISSUER_DOMAIN`. The extension's cookie mirror helps Clerk sign-in reach the side panel; it is not a workspace record. |
+| **Clerk JWT** | A short-lived token issued from Donut's `convex` template. Convex checks its issuer against `CLERK_JWT_ISSUER_DOMAIN`. The extension's cookie mirror helps Clerk sign-in reach the side panel; it is not a workspace record. |
 | **Convex deployment** | One backend instance with its own functions, data, and environment variables. A `.convex.cloud` URL is for Convex clients; the matching `.convex.site` URL serves HTTP actions. |
 | **Cloudflare R2 bucket** | Private storage for photo bytes. Convex holds photo metadata and grants short-lived upload or download URLs. |
 | **Pro entitlement** | An active, server-verified legacy StoreKit subscription. It provides unlimited monthly AI analyses. Cloud workspace and mobile capture sync are free for every signed-in account, with a rolling seven-day capture history. No web subscription is required. |
 
 ## Product and repository terms
 
-| Term | Meaning in Volt |
+| Term | Meaning in Donut |
 | --- | --- |
 | **Repository workspace** | A package or app in this monorepo, such as `apps/web` or `packages/extension`. Say "package" or "checkout" when that is clearer. |
 | **Cloud Scanner Workspace** | The account-owned data space in Convex. It holds registered devices, capture metadata, presence, and delivery state. One Clerk account owns one Cloud Scanner Workspace within a deployment. |
@@ -42,7 +42,7 @@ An **environment** is a compatible set of client configuration, identity service
 | **Cloud sync** | Moving capture metadata through Convex and private photo bytes through R2 so the account's computers can see them. It is distinct from cursor insertion into one selected computer. |
 | **App Clip guest grant** | Short-lived access to a signed-in Chrome account's workspace from a QR code. The App Clip does not hold a Clerk session or durable Device Credential. |
 
-The product domain definitions, including Result Batch, Capture Result, and Cursor Delivery, live in [Volt Context](../CONTEXT.md#domain-terms).
+The product domain definitions, including Result Batch, Capture Result, and Cursor Delivery, live in [Donut Context](../CONTEXT.md#domain-terms).
 
 ## How to describe a setup or bug
 

@@ -97,7 +97,7 @@ extension ScannerStore {
         await cloudWorkspace.clearDictationDraft(draftId: sessionId.uuidString.lowercased())
         sendCaptureResult(result, insertIntoCursor: true)
         dictationDraftStatus = cloudWorkspace.selectedComputer == nil
-            ? "Saved to Volt"
+            ? "Saved to Donut"
             : "Sent to \(cloudWorkspace.selectedComputer?.label ?? "computer")"
         statusText = cloudWorkspace.selectedComputer == nil
             ? "Dictation saved"

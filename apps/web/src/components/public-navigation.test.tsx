@@ -29,8 +29,8 @@ describe("public discovery navigation", () => {
 
   test("renders the full public header without an auth provider", () => {
     const header = renderToStaticMarkup(<SiteHeaderFrame />);
-    expect(header).toContain('aria-label="Volt home"');
-    expect(header).toContain('src="/favicon.svg"');
+    expect(header).toContain('aria-label="Donut home"');
+    expect(header).toContain('src="/brand/donut.svg"');
     expect(header).toContain("Support");
     expect(header).toContain('href="/sign-in"');
     expect(header).not.toContain('href="/dashboard"');

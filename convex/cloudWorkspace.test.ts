@@ -28,6 +28,24 @@ afterEach(restoreWorkspaceTestEnvironment);
 
 describe("cloud scanner workspace guests", () => {
 
+  test("public App Clip grants keep legacy QR links for distributed binaries and preserve the API origin", async () => {
+    const t = convexTest(schema, modules);
+    const response = await t.withIdentity({ subject: "donut-clip-owner" }).fetch("/api/app-clip/grants/create", {
+      method: "POST",
+      headers: { Authorization: "Bearer test", "Content-Type": "application/json", Origin: "https://donut.juanquenga.com" },
+      body: JSON.stringify({ label: "Counter" }),
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    const body: { qrCodeUrl: string; guestCloudGrant: string; expiresAt: number } = await response.json();
+    const url = new URL(body.qrCodeUrl);
+    expect(`${url.origin}${url.pathname}`).toBe("https://voltresale.app/clip");
+    expect(url.searchParams.get("cloudUrl")).toBe("https://some.convex.site");
+    expect(url.searchParams.get("guestCloudGrant")).toBe(body.guestCloudGrant);
+    expect(url.searchParams.get("guestCloudExpiresAt")).toBe(String(body.expiresAt));
+    expect(url.searchParams.get("label")).toBe("Counter");
+  });
+
   test("uses a hashed session-bound guest grant without creating a durable App Clip device", async () => {
     const t = convexTest(schema, modules);
     const grant = await guestGrant(t, "guest-owner");

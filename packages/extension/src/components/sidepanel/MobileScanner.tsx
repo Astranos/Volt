@@ -273,8 +273,8 @@ function OwnedMobileScanner({ cloudWorkspace }: { cloudWorkspace: ReturnType<typ
               void chrome.runtime.sendMessage({ action: "openMobileCapturePopup" })
             }
             className="sidepanel-results-appclip"
-            aria-label="Open Volt App Clip QR code"
-            title="Connect Volt App Clip"
+            aria-label="Open Donut App Clip QR code"
+            title="Connect Donut App Clip"
           >
             <AppClipQrIcon className="h-4 w-4" />
             <span>App Clip</span>

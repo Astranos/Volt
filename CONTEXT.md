@@ -1,6 +1,6 @@
-# Volt Context
+# Donut Context
 
-Volt is a Chrome extension and companion mobile app for electronic-device resale workflows. It exists to make buying quicker, reduce repetitive lookup work, and make the listing process easier by bringing market search, offer calculation, scanning, and photo capture into one browser-centered workflow.
+Donut is a Chrome extension and companion mobile app for electronic-device resale workflows. It exists to make buying quicker, reduce repetitive lookup work, and make the listing process easier by bringing market search, offer calculation, scanning, and photo capture into one browser-centered workflow.
 
 The product is built for resellers who buy electronics and similar inventory, then list those items for resale. The core loop is: evaluate an item quickly, decide what to pay, capture accurate product details, and prepare listing-friendly text and photos with as little manual re-entry as possible.
 
@@ -19,7 +19,7 @@ For development, preview, staging, production, and service names, use the [envir
 - Search Provider: a configured destination that turns a query into a navigable URL.
 - Search Intent: the resolved action from user input, such as opening a URL, searching a provider, or searching Shopify inventory.
 - Shopify Inventory Search: a search that resolves the current Shopify store and opens the admin products page ordered by available inventory.
-- Connected Shopify Store: a store linked to a Volt account through Shopify OAuth with read-only product access. One account can connect up to five, so a franchise owner can search every location's inventory from one Chrome profile. Hidden products are kept per account and store.
+- Connected Shopify Store: a store linked to a Donut account through Shopify OAuth with read-only product access. One account can connect up to five, so a franchise owner can search every location's inventory from one Chrome profile. Hidden products are kept per account and store.
 - Active Shopify Store: the Connected Shopify Store that live product search, audits, and hidden products use on this computer. It's saved in `chrome.storage.local`, so each store's computer can default to its own store. It falls back to the first-connected store, and can be switched from settings, the new tab's Shopify results, or the audit side panel.
 - Sidepanel Tool: a tool hosted in the extension sidepanel. The live sidepanel switcher currently exposes Offer Calculator and Mobile Scanner.
 - Top Offer: a resale offer value calculated from a projected selling price and configurable rate rules.
@@ -53,7 +53,7 @@ For development, preview, staging, production, and service names, use the [envir
 
 ## Relationships
 
-- One Volt account owns one Cloud Scanner Workspace; every workspace record and R2 object key is tenant-scoped.
+- One Donut account owns one Cloud Scanner Workspace; every workspace record and R2 object key is tenant-scoped.
 - A signed-in Chrome installation becomes an Enrolled Computer and subscribes to the workspace's Result Batches, Capture Results, presence, and delivery state.
 - The full app's Device Credential is issued by a Clerk-authenticated bootstrap call after sign-in; a legacy Chrome-created Enrollment Grant (QR) still expires quickly, redeems once, and yields the same kind of credential, but is compatibility-only and not required. Neither path stores a Clerk JWT on the phone.
 - The full app opens directly into capture. Network reachability, device-bootstrap state, and cloud delivery never disable the shutter or recognition controls.

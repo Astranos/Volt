@@ -89,7 +89,7 @@ export async function requireOrCreateWorkspaceForClerkUser(
   const now = Date.now();
   const workspaceId = await ctx.db.insert("workspaces", {
     ownerClerkUserId: clerkUserId,
-    name: ownerName ? `${ownerName}'s Volt workspace` : "My Volt workspace",
+    name: ownerName ? `${ownerName}'s Donut workspace` : "My Donut workspace",
     createdAt: now,
     updatedAt: now,
   });

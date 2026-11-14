@@ -180,7 +180,7 @@ test("full app main Scan surface exposes the photo-library upload control", () =
   assert.match(rootViewSwiftSource, /@State private var photoSelection: \[PhotosPickerItem\] = \[\]/);
 });
 
-test("full app presents Volt, unified History, and Settings roots", () => {
+test("full app presents Donut, unified History, and Settings roots", () => {
   const enumStart = rootViewSwiftSource.indexOf("enum AppSection");
   const enumEnd = rootViewSwiftSource.indexOf("}", enumStart);
   const enumSource = rootViewSwiftSource.slice(enumStart, enumEnd);
@@ -206,7 +206,7 @@ test("full app presents Volt, unified History, and Settings roots", () => {
   assert.doesNotMatch(cloudTargetPickerSwiftSource, /pencil\.and\.scribble/);
   assert.match(scannerViewSwiftSource, /ScannerHomeHeader\(chip: targetChip\)/);
   assert.match(scannerViewSwiftSource, /private var targetChip: HomeTargetChip[\s\S]*CloudTargetLabel\.targetLabel\(for: store\)[\s\S]*\{ isTargetPickerPresented = true \}/);
-  assert.match(sharedScannerTabComponentsSwiftSource, /struct ScannerHomeHeader: View[\s\S]*Text\("Volt"\)[\s\S]*\.font\(\.largeTitle\.bold\(\)\)/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /struct ScannerHomeHeader: View[\s\S]*Text\("Donut"\)[\s\S]*\.font\(\.largeTitle\.bold\(\)\)/);
   assert.doesNotMatch(scannerViewSwiftSource, /ComputerAvailabilityCard/);
   assert.match(scannerViewSwiftSource, /\.sheet\(isPresented: \$isTargetPickerPresented\)[\s\S]*CloudTargetPickerSheet\(\)/);
   assert.match(scannerViewSwiftSource, /CaptureHistoryView[\s\S]*CloudTargetButton/);

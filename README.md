@@ -1,12 +1,12 @@
-# Volt
+# Donut
 
 Tools for buying and listing electronics, built around the reseller's browser workflow.
 
-Volt combines market search, offer calculation, and listing helpers in a Chrome extension. Its companion iPhone app captures barcodes, text, and photos, with account-based sync to the browser.
+Donut combines market search, offer calculation, and listing helpers in a Chrome extension. Its companion iPhone app captures barcodes, text, and photos, with account-based sync to the browser.
 
-[Website](https://voltresale.app) · [Chrome Web Store](https://chromewebstore.google.com/detail/volt/bmgghhmlflbhlnomgnoodpidekpaaifk) · [iPhone app](https://apps.apple.com/us/app/volt-scanner/id6771770148) · [Contribute](CONTRIBUTING.md)
+[Website](https://donut.juanquenga.com) · [Chrome Web Store](https://chromewebstore.google.com/detail/volt/bmgghhmlflbhlnomgnoodpidekpaaifk) · [iPhone app](https://apps.apple.com/us/app/volt-scanner/id6771770148) · [Contribute](CONTRIBUTING.md)
 
-![Volt website and Chrome extension preview](docs/images/volt-portfolio.png)
+![Donut website and Chrome extension preview](docs/images/volt-portfolio.png)
 
 ## What you can do
 
@@ -16,7 +16,7 @@ Volt combines market search, offer calculation, and listing helpers in a Chrome 
 - Sync captures to your account workspace and insert text into a selected Chrome computer.
 - Open tabs, bookmarks, history, and tools from a keyboard-driven command menu.
 
-Volt is free and actively developed. Every signed-in account gets every feature, including scanning, capture sync, and the cloud workspace, with a rolling seven-day capture history. The App Clip offers temporary capture through a workspace guest grant from signed-in Chrome. See [authentication and access](docs/authentication.md) for how accounts and access work.
+Donut is free and actively developed. Every signed-in account gets every feature, including scanning, capture sync, and the cloud workspace, with a rolling seven-day capture history. The App Clip offers temporary capture through a workspace guest grant from signed-in Chrome. See [authentication and access](docs/authentication.md) for how accounts and access work.
 
 ## Start contributing
 

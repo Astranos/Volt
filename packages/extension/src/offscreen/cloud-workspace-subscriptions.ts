@@ -508,14 +508,14 @@ export class CloudWorkspaceSubscriptions {
   }
 
   async issueMobileSignInQr(requestId: string) {
-    await this.requireSignedIn("Sign in to Volt in Chrome to show this QR code.");
+    await this.requireSignedIn("Sign in to Donut in Chrome to show this QR code.");
     return this.client.mutation(api.mobileSignIn.issueQr, {
       requestId: requestId as Id<"mobileSignInRequests">,
     });
   }
 
   async dismissMobileSignIn(requestId: string) {
-    await this.requireSignedIn("Sign in to Volt in Chrome first.");
+    await this.requireSignedIn("Sign in to Donut in Chrome first.");
     return this.client.mutation(api.mobileSignIn.dismiss, {
       requestId: requestId as Id<"mobileSignInRequests">,
     });
@@ -568,47 +568,47 @@ export class CloudWorkspaceSubscriptions {
   }
 
   async getShopifyConnection() {
-    await this.requireSignedIn("Sign in to Volt before connecting Shopify.");
+    await this.requireSignedIn("Sign in to Donut before connecting Shopify.");
     return this.client.query(shopifyGetConnectionReference, {});
   }
 
   async listShopifyConnections() {
-    await this.requireSignedIn("Sign in to Volt before connecting Shopify.");
+    await this.requireSignedIn("Sign in to Donut before connecting Shopify.");
     return this.client.query(shopifyListConnectionsReference, {});
   }
 
   async startShopifyConnection(shop: string) {
-    await this.requireSignedIn("Sign in to Volt before connecting Shopify.");
+    await this.requireSignedIn("Sign in to Donut before connecting Shopify.");
     return this.client.action(shopifyStartConnectReference, { shop });
   }
 
   async disconnectShopify(shop?: string) {
-    await this.requireSignedIn("Sign in to Volt before disconnecting Shopify.");
+    await this.requireSignedIn("Sign in to Donut before disconnecting Shopify.");
     return this.client.mutation(shopifyDisconnectReference, forShop(shop));
   }
 
   async listShopifyYesterday(startUtc: string, endUtc: string, date: string, shop?: string) {
-    await this.requireSignedIn("Sign in to Volt before auditing Shopify.");
+    await this.requireSignedIn("Sign in to Donut before auditing Shopify.");
     return this.client.action(shopifyListYesterdayReference, { startUtc, endUtc, date, ...forShop(shop) });
   }
 
   async searchShopifyProducts(query: string, shop?: string) {
-    await this.requireSignedIn("Sign in to Volt before searching Shopify.");
+    await this.requireSignedIn("Sign in to Donut before searching Shopify.");
     return this.client.action(shopifySearchProductsReference, { query, ...forShop(shop) });
   }
 
   async getShopifyProductDetails(productIds: string[], shop?: string) {
-    await this.requireSignedIn("Sign in to Volt before comparing Shopify products.");
+    await this.requireSignedIn("Sign in to Donut before comparing Shopify products.");
     return this.client.action(shopifyProductDetailsReference, { productIds, ...forShop(shop) });
   }
 
   async listHiddenShopifyProducts(shop?: string) {
-    await this.requireSignedIn("Sign in to Volt before managing Shopify.");
+    await this.requireSignedIn("Sign in to Donut before managing Shopify.");
     return this.client.query(shopifyListHiddenProductsReference, forShop(shop));
   }
 
   async setShopifyProductHidden(productId: string, title: string, hidden: boolean, shop?: string) {
-    await this.requireSignedIn("Sign in to Volt before managing Shopify.");
+    await this.requireSignedIn("Sign in to Donut before managing Shopify.");
     return this.client.mutation(shopifySetProductHiddenReference, { productId, title, hidden, ...forShop(shop) });
   }
 
@@ -619,10 +619,10 @@ export class CloudWorkspaceSubscriptions {
   // result is refused if the account changed while it ran.
   private async asCurrentAccount<T>(epoch: string, run: () => Promise<T>): Promise<T> {
     if (epoch !== this.accountEpoch) await this.accountChanged(epoch);
-    const subject = await this.requireSignedIn("Sign in to Volt to use the handbook.");
+    const subject = await this.requireSignedIn("Sign in to Donut to use the handbook.");
     const result = await run();
     if (this.accountEpoch !== epoch || this.clientAuthSubject() !== subject) {
-      throw new Error("Volt account changed. Try again.");
+      throw new Error("Donut account changed. Try again.");
     }
     return result;
   }

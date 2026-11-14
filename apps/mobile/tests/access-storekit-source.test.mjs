@@ -169,7 +169,7 @@ test("App Clip has no full-app entitlement blocker, authentication, or checkout"
 test("App Clip treats an invalid cloud workspace grant as retryable", () => {
   assert.match(clipStoreSource, /AppClipGuestCloudSession\(pairingSession: nextSession\)/);
   assert.match(clipStoreSource, /pairingFailureMessage = "This QR does not contain a valid workspace grant\."/);
-  assert.match(clipStoreSource, /targetHint = "Scan a fresh Volt QR code"/);
+  assert.match(clipStoreSource, /targetHint = "Scan a fresh Donut QR code"/);
   assert.match(clipStoreSource, /statusText = "Connection failed"/);
   assert.doesNotMatch(clipStoreSource, /requiresFullApp = true|Full app required/);
 });

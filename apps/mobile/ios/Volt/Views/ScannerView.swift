@@ -33,7 +33,7 @@ struct UnifiedCaptureHomeView: View {
                 .padding(.bottom, 32)
             }
             .background(ScannerTabLayout.background)
-            .navigationTitle("Volt")
+            .navigationTitle("Donut")
             .toolbar(.hidden, for: .navigationBar)
             .fullScreenCover(isPresented: $isCaptureSessionPresented, onDismiss: {
                 store.endCaptureSession(id: resumedBatchId)

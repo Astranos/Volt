@@ -40,7 +40,7 @@ struct SubscriptionActionsView: View {
                 Text("App Store")
             } footer: {
                 if subscriptionStatus == .active {
-                    Text("Volt is free now, so you can cancel your old subscription.")
+                    Text("Donut is free now, so you can cancel your old subscription.")
                 }
             }
         }

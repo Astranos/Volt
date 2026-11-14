@@ -8,7 +8,10 @@ import { CLERK_PUBLISHABLE_KEY } from "../lib/env";
  * into the build, so auth is treated as an optional capability rather than a
  * hard dependency. Anything that calls a Clerk hook must sit behind this flag.
  */
-export const authConfigured = CLERK_PUBLISHABLE_KEY.length > 0;
+// The Donut host serves public pages; account routes redirect to the existing
+// Clerk primary domain until a separate authentication migration is released.
+export const authConfigured = CLERK_PUBLISHABLE_KEY.length > 0 &&
+  (typeof window === "undefined" || window.location.hostname !== "donut.juanquenga.com");
 
 /** Clerk's own components, dressed like the rest of the site. */
 const clerkAppearance = {

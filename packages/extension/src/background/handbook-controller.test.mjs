@@ -35,10 +35,10 @@ test("relays list and reveal requests from the New Tab to the offscreen client",
 
 test("discards a response when the account changed while it was in flight", async () => {
   const { request } = setup([{ _id: "abc" }], { onForward: (state) => { state.epoch += "-next"; } });
-  assert.deepEqual(await request({ action: "handbookList" }), { success: false, error: "Volt account changed. Try again." });
+  assert.deepEqual(await request({ action: "handbookList" }), { success: false, error: "Donut account changed. Try again." });
   assert.deepEqual(await request({ action: "handbookRevealSecret", id: "k57abcdefghijklmnop" }), {
     success: false,
-    error: "Volt account changed. Try again.",
+    error: "Donut account changed. Try again.",
   });
 });
 

@@ -8,11 +8,11 @@ enum StoreKitSubscriptionError: LocalizedError, Sendable {
     var errorDescription: String? {
         switch self {
         case .productUnavailable:
-            "The Volt monthly subscription is not available from the App Store right now."
+            "The Donut monthly subscription is not available from the App Store right now."
         case .unverifiedTransaction:
             "The App Store could not verify this transaction."
         case .mismatchedAppAccountToken:
-            "The purchase was not associated with the signed-in Volt account."
+            "The purchase was not associated with the signed-in Donut account."
         }
     }
 }

@@ -67,7 +67,7 @@ export function createMobileSignInController(options: ControllerOptions) {
       await chromeApi.notifications.create(`${MOBILE_SIGN_IN_NOTIFICATION_PREFIX}${request.requestId}`, {
         type: "basic",
         iconUrl: chromeApi.runtime.getURL("/assets/icons/logo-128.png"),
-        title: "Sign in to Volt on your iPhone?",
+        title: "Sign in to Donut on your iPhone?",
         message: request.mfaRequired
           ? "Your account uses two-step verification. Click for details."
           : "Your iPhone asked to sign in. Click to show a QR code to scan.",

@@ -10,6 +10,8 @@
     <array>
       <string>appclips:voltresale.app</string>
       <string>applinks:voltresale.app</string>
+      <string>appclips:donut.juanquenga.com</string>
+      <string>applinks:donut.juanquenga.com</string>
       <string>webcredentials:$(VOLT_CLERK_FRONTEND_API_DOMAIN)</string>
     </array>
   </dict>

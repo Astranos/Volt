@@ -42,7 +42,7 @@ struct QRSignInView: View {
     private func emailStep(email: Binding<String>) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("Volt in Chrome will show a QR code on your computer. Scan it here to sign in, no password needed.")
+                Text("Donut in Chrome will show a QR code on your computer. Scan it here to sign in, no password needed.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -86,7 +86,7 @@ struct QRSignInView: View {
                 .disabled(!store.canSubmit)
                 .accessibilityIdentifier("volt-qr-sign-in-send")
 
-                Text("Chrome needs to be open on a computer where you're signed in to Volt.")
+                Text("Chrome needs to be open on a computer where you're signed in to Donut.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -100,7 +100,7 @@ struct QRSignInView: View {
     private func scanStep(expiresAt: Date) -> some View {
         ScrollView {
             VStack(spacing: 20) {
-                Text("On your computer, click the Volt notification in Chrome, then scan the QR code it shows.")
+                Text("On your computer, click the Donut notification in Chrome, then scan the QR code it shows.")
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
 

@@ -9,7 +9,7 @@ for (const path of paths) {
 }
 
 if (!process.argv.includes("--source-only")) {
-  for (const base of ["https://sincere-trout-414.convex.site", "https://voltresale.app"]) {
+  for (const base of ["https://sincere-trout-414.convex.site", "https://voltresale.app", "https://donut.juanquenga.com"]) {
     for (const path of paths) {
       const response = await fetch(`${base}${path}`, {
         method: "POST",

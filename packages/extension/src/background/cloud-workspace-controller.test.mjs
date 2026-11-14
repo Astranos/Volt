@@ -89,7 +89,7 @@ test("the phone joins by account, not by an enrollment ceremony in the UI", () =
 
 test("scanner results are cloud-first and launch the App Clip QR", () => {
   assert.match(mobileScanner, /action: "openMobileCapturePopup"/);
-  assert.match(mobileScanner, /aria-label="Open Volt App Clip QR code"/);
+  assert.match(mobileScanner, /aria-label="Open Donut App Clip QR code"/);
   assert.doesNotMatch(mobileScanner, /openVoltDownloadsFolder|openBatchDownloadsFolder|FolderOpen/);
   assert.doesNotMatch(mobileScannerCards, /onOpenBatchFolder|FolderOpen/);
   assert.match(mobileScannerCards, /mobile-scanner-result-section/);

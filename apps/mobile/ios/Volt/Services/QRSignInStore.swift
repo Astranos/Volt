@@ -19,7 +19,7 @@ final class QRSignInStore {
         case signingIn
     }
 
-    static let signInHost = "voltresale.app"
+    static let signInHosts: Set<String> = ["donut.juanquenga.com", "voltresale.app"]
     static let signInPath = "/app-sign-in"
     private static let emailDefaultsKey = "volt.qrSignIn.lastEmail"
     private static let logger = Logger(subsystem: "com.volt.mobile", category: "QRSignIn")
@@ -53,7 +53,7 @@ final class QRSignInStore {
 
     func requestSignIn() async {
         guard let normalized = Self.normalizedEmail(email), phase != .requesting else {
-            errorMessage = "Enter the email you use for Volt."
+            errorMessage = "Enter the email you use for Donut."
             return
         }
         email = normalized
@@ -78,15 +78,15 @@ final class QRSignInStore {
     func handleScannedValue(_ value: String, clerk: Clerk) async -> Bool {
         guard case .waitingForScan = phase else { return false }
         guard let url = URL(string: value.trimmingCharacters(in: .whitespacesAndNewlines)) else {
-            scanHint = "That isn't a Volt sign-in QR code."
+            scanHint = "That isn't a Donut sign-in QR code."
             return false
         }
         if Self.isAppClipURL(url) {
-            scanHint = "That's the App Clip QR. Click the Volt notification in Chrome to show the sign-in QR."
+            scanHint = "That's the App Clip QR. Click the Donut notification in Chrome to show the sign-in QR."
             return false
         }
         guard let code = Self.signInCode(from: url) else {
-            scanHint = "That isn't a Volt sign-in QR code."
+            scanHint = "That isn't a Donut sign-in QR code."
             return false
         }
         await redeem(code: code, clerk: clerk)
@@ -150,11 +150,12 @@ final class QRSignInStore {
         return email
     }
 
-    /// `https://voltresale.app/app-sign-in#code=…` → the code. The code rides in
+    /// `https://donut.juanquenga.com/app-sign-in#code=…` → the code. The code rides in
     /// the fragment so it never reaches a web server.
     static func signInCode(from url: URL) -> String? {
         guard url.scheme == "https",
-              url.host()?.lowercased() == signInHost,
+              let host = url.host()?.lowercased(),
+              signInHosts.contains(host),
               url.path().trimmingTrailingSlash == signInPath,
               let fragment = url.fragment(),
               let code = URLComponents(string: "?\(fragment)")?
@@ -167,7 +168,8 @@ final class QRSignInStore {
     }
 
     static func isAppClipURL(_ url: URL) -> Bool {
-        url.host()?.lowercased() == signInHost && url.path().hasPrefix("/clip")
+        guard let host = url.host()?.lowercased() else { return false }
+        return signInHosts.contains(host) && url.path().hasPrefix("/clip")
     }
 
     private static func message(for error: Error) -> String {
@@ -175,13 +177,13 @@ final class QRSignInStore {
         case MobileSignInAPIError.rejected(429, _):
             return "Too many sign-in requests. Wait a few minutes and try again."
         case MobileSignInAPIError.rejected(_, .some("invalid_email")):
-            return "Enter the email you use for Volt."
+            return "Enter the email you use for Donut."
         case MobileSignInAPIError.rejected(_, .some("request_expired")):
             return "That request expired or was declined in Chrome. Send a new one."
         case MobileSignInAPIError.rejected(_, .some("account_not_allowed")):
             return "This account can't use QR sign-in. Use Sign in instead."
         case is URLError:
-            return "Couldn't reach Volt. Check your connection and try again."
+            return "Couldn't reach Donut. Check your connection and try again."
         default:
             return "QR sign-in didn't work. Try again, or use Sign in instead."
         }

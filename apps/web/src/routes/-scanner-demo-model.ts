@@ -199,7 +199,7 @@ export function reviewCursorTarget() {
   return {
     hasCursorTarget: true,
     label: REVIEW_INPUT_LABEL,
-    tabTitle: "Volt Scanner",
+    tabTitle: "Donut Scanner",
     url: window.location.href,
   };
 }

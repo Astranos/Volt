@@ -389,7 +389,7 @@ extension ScannerStore {
         switch state {
         case .sent:
             captureDeliveryToast = CaptureDeliveryToast(
-                title: "Saved to Volt",
+                title: "Saved to Donut",
                 message: captureDeliveryMessage(for: result),
                 systemImage: "checkmark.circle.fill",
                 tone: .success

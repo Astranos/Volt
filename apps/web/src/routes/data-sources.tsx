@@ -22,10 +22,10 @@ export const Route = createFileRoute("/data-sources")({
       {
         name: "description",
         content:
-          "Every Volt feature and the services it talks to. Volt runs on Chrome, Shopify, and Volt’s own backend.",
+          "Every Donut feature and the services it talks to. Donut runs on Chrome, Shopify, and Donut’s own backend.",
       },
     ],
-    title: "Where Volt Gets Its Data - Volt",
+    title: "Where Donut Gets Its Data - Donut",
   }),
   component: DataSourcesPage,
 });
@@ -48,14 +48,14 @@ const groups: Group[] = [
   {
     icon: Chrome,
     title: "Chrome extension",
-    summary: "Tools that run in your browser and sync with your Volt account.",
+    summary: "Tools that run in your browser and sync with your Donut account.",
     features: [
       {
         icon: RefreshCw,
         name: "Mobile capture sync and QR sign-in",
-        talksTo: ["Volt account", "Clerk sign-in", "Google sign-in"],
+        talksTo: ["Donut account", "Clerk sign-in", "Google sign-in"],
         detail:
-          "Barcodes, text, and photos from the iPhone app arrive through your own Volt account. The older direct pairing connects phone and computer through Google STUN and Cloudflare TURN.",
+          "Barcodes, text, and photos from the iPhone app arrive through your own Donut account. The older direct pairing connects phone and computer through Google STUN and Cloudflare TURN.",
       },
       {
         icon: Search,
@@ -87,8 +87,8 @@ const groups: Group[] = [
       {
         icon: BookOpen,
         name: "Handbook",
-        talksTo: ["Volt account"],
-        detail: "Notes, guides, and saved values live in your own Volt account. Saved secrets are encrypted.",
+        talksTo: ["Donut account"],
+        detail: "Notes, guides, and saved values live in your own Donut account. Saved secrets are encrypted.",
       },
     ],
   },
@@ -100,14 +100,14 @@ const groups: Group[] = [
       {
         icon: Zap,
         name: "Capture, 7-day history, and sync",
-        talksTo: ["Volt account", "Clerk sign-in"],
+        talksTo: ["Donut account", "Clerk sign-in"],
         detail:
-          "Barcode and text recognition run on the iPhone. Synced captures go to your Volt workspace and clear after 7 days.",
+          "Barcode and text recognition run on the iPhone. Synced captures go to your Donut workspace and clear after 7 days.",
       },
       {
         icon: Smartphone,
         name: "App Clip",
-        talksTo: ["Volt account"],
+        talksTo: ["Donut account"],
         detail: "Sends captures to your workspace with a short-lived pass from your signed-in Chrome. No account needed on the phone.",
       },
     ],
@@ -120,14 +120,14 @@ const groups: Group[] = [
       {
         icon: ShoppingBag,
         name: "In-store catalog",
-        talksTo: ["Volt kiosk server", "*.myshopify.com", "cdn.shopify.com"],
+        talksTo: ["Donut kiosk server", "*.myshopify.com", "cdn.shopify.com"],
         detail:
           "Shows a store’s public Shopify listings, read straight from its Shopify store address. Branding is built into the kiosk.",
       },
       {
         icon: MessageSquareMore,
         name: "Ask to see an item",
-        talksTo: ["Volt account"],
+        talksTo: ["Donut account"],
         detail: "Customer requests go to a short-lived staff queue and expire after one hour.",
       },
     ],
@@ -147,10 +147,10 @@ function DataSourcesPage() {
               Updated November 13, 2026
             </p>
             <h1 className="mt-5 text-4xl font-semibold tracking-tight sm:text-5xl">
-              Where Volt gets its data
+              Where Donut gets its data
             </h1>
             <p className="mt-5 max-w-2xl text-lg leading-8 text-zinc-600">
-              Volt runs on Chrome, Shopify, and Volt’s own backend. It doesn’t depend on any
+              Donut runs on Chrome, Shopify, and Donut’s own backend. It doesn’t depend on any
               franchise’s or retailer’s private systems, so it works for any resale business.
             </p>
           </div>

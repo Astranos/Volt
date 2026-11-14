@@ -169,13 +169,13 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
       const connection = await getShopifyAuditConnection();
       if (!connection) {
         setNeedsConnection(true);
-        throw new Error("Connect your Shopify store in Volt settings first.");
+        throw new Error("Connect your Shopify store in Donut settings first.");
       }
       const range = daysRef.current;
       const result = await listShopifyAuditYesterday(range, connection.shop).catch((cause: unknown) => {
         // Production must be updated before it accepts more than one day.
         if (range > 1 && cause instanceof Error && /date range/i.test(cause.message)) {
-          throw new Error("Volt's server doesn't support multiple days yet. Use Yesterday for now.");
+          throw new Error("Donut's server doesn't support multiple days yet. Use Yesterday for now.");
         }
         throw cause;
       });

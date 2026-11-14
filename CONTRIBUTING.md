@@ -1,4 +1,4 @@
-# Contributing to Volt
+# Contributing to Donut
 
 Use the [environment glossary](docs/environment-glossary.md) when describing local builds, previews, Clerk and Convex deployments, and account workspaces.
 

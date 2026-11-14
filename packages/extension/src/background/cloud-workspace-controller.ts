@@ -45,7 +45,7 @@ function parseMessage(value: unknown): WorkspaceMessage | null {
     action: record.action,
     label: typeof record.label === "string" && record.label.trim()
       ? record.label.trim().slice(0, 80)
-      : "Volt for iPhone",
+      : "Donut for iPhone",
   };
 }
 

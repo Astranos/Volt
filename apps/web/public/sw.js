@@ -37,7 +37,7 @@ self.addEventListener("fetch", (event) => {
     fetch(event.request).catch(async () => {
       const cache = await caches.open(OFFLINE_CACHE);
       return (await cache.match(OFFLINE_PAGE)) ?? new Response(
-        "Volt needs an internet connection. Reconnect, then reload this page.",
+        "Donut needs an internet connection. Reconnect, then reload this page.",
         { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } },
       );
     }),

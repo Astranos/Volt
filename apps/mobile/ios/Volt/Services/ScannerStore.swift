@@ -46,7 +46,7 @@ final class ScannerStore {
     var selectedSection: AppSection = .text
     var results: [ScanResult] = []
     var statusText = "Ready to capture"
-    var targetHint = "Captures save on this iPhone and sync to your Volt workspace when signed in."
+    var targetHint = "Captures save on this iPhone and sync to your Donut workspace when signed in."
     var ocrReviewImage: UIImage?
     var ocrReviewText = ""
     var ocrTextRegions: [RecognizedTextRegion] = []
